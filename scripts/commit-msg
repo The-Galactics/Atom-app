@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Regex for Conventional Commits in English
+# Format: type: description (e.g., feat: add new button)
+REGEX="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)((\(.+\))?): .+"
+
+# Get the commit message
+MSG=$(cat "$1")
+
+if [[ ! $MSG =~ $REGEX ]]; then
+    echo -e "\n ERROR: Invalid commit message format."
+    echo -e "You must use the Conventional Commits standard (in English)."
+    echo -e "Examples:"
+    echo -e "  feat: add user authentication"
+    echo -e "  fix: resolve database connection issue"
+    echo -e "  docs: update readme with line limits\n"
+    exit 1
+fi
+
+# Block non-English characters (accents or 'ñ')
+if [[ $MSG =~ [ñáéíóúÁÉÍÓÚ] ]]; then
+    echo -e " ERROR: Do not use special characters or accents. Keep the message in English.\n"
+    exit 1
+fi
+
+echo "✅ Commit format accepted."

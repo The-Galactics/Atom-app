@@ -1,0 +1,35 @@
+name: "Push Validation"
+
+on:
+
+  push:
+    branches:
+      - '**'
+
+jobs:
+  size-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Push validation lines.
+        run: |
+
+          LINES=$(git diff --stat HEAD^ HEAD | grep -vE '\.json|\.md|\.gitignore|mvnw|lock' | awk 'NF > 1 {print $(NF-1)}' | sed 's/[^0-9]*//g' | awk '{s+=$1} END {print s}')
+          
+          LINES=${LINES:-0}
+          
+          echo "### 📊 Push resume" >> $GITHUB_STEP_SUMMARY
+          echo "* **Detected lines:** $LINES" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$LINES" -gt 500 ]; then
+            echo "ERROR: This push exced the 500 of code."
+            echo "Estado: Block" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "Correct validation"
+            echo "Estado: Aceptado" >> $GITHUB_STEP_SUMMARY
+          fi
