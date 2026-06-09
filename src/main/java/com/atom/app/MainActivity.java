@@ -1,5 +1,6 @@
 package com.atom.app;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.ImageButton;
 import android.widget.TextView;
@@ -43,7 +44,8 @@ public class MainActivity extends AppCompatActivity {
         });
         
         btnSettings.setOnClickListener(v -> {
-            // Future navigation to Settings
+            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivity(intent);
         });
     }
 
