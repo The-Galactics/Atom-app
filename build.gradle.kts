@@ -1,50 +1,70 @@
+import java.util.Properties
+
 plugins {
-    java
-    id("org.springframework.boot") version "4.0.6"
-    id("io.spring.dependency-management") version "1.1.7"
+    id("com.android.application") version "8.7.3"
 }
 
-group = "com.Atom.app"
-version = "0.0.1-SNAPSHOT"
-description = "Atom_app"
+// Cargar local.properties para leer variables de entorno
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+android {
+    namespace = "com.atom.app"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "com.atom.app"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 1
+        versionName = "1.0"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-}
 
-repositories {
-    mavenCentral()
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            
+            val baseUrl = localProperties.getProperty("BASE_URL") ?: "http://localhost:8080/"
+            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        }
+        debug {
+            val baseUrl = localProperties.getProperty("BASE_URL") ?: "http://localhost:8080/"
+            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-livedata:2.10.0")
+    
+    // Consumo de API
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    
+    // Animaciones
+    implementation("com.airbnb.android:lottie:6.7.1")
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
-
-tasks.register<Copy>("installGitHooks") {
-    description = "Install git hooks"
-
-    from(file("${rootProject.projectDir}/scripts/commit-msg"))
-    into(file("${rootProject.projectDir}/.git/hooks"))
-
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-
-    filePermissions {
-        unix("rwxr-xr-x")
-    }
-
-    doFirst {
-        println("Installing Git Hooks...")
-    }
-}
-
-tasks.named("compileJava") {
-    dependsOn("installGitHooks")
+    // Testing
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }
