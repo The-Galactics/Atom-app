@@ -2,6 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application") version "8.7.3"
+    id("com.google.protobuf") version "0.9.4"
 }
 
 // Cargar local.properties para leer variables de entorno
@@ -33,18 +34,47 @@ android {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            
-            val baseUrl = localProperties.getProperty("BASE_URL") ?: "http://localhost:8080/"
-            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+
+            val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
+            val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
+            buildConfigField("int", "GRPC_PORT", "$grpcPort")
         }
         debug {
-            val baseUrl = localProperties.getProperty("BASE_URL") ?: "http://localhost:8080/"
-            buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+            val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
+            val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
+            buildConfigField("int", "GRPC_PORT", "$grpcPort")
         }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.25.3"
+    }
+    plugins {
+        create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:1.62.2"
+        }
+    }
+    generateProtoTasks {
+        all().forEach { task ->
+            task.builtins {
+                create("java") {
+                    option("lite")
+                }
+            }
+            task.plugins {
+                create("grpc") {
+                    option("lite")
+                }
+            }
+        }
     }
 }
 
@@ -54,12 +84,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.10.0")
     implementation("androidx.lifecycle:lifecycle-livedata:2.10.0")
-    
-    // Consumo de API
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    
+
     // Animaciones
     implementation("com.airbnb.android:lottie:6.7.1")
 
@@ -67,4 +92,11 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+
+    // gRPC
+    implementation("io.grpc:grpc-okhttp:1.62.2")
+    implementation("io.grpc:grpc-protobuf-lite:1.62.2")
+    implementation("io.grpc:grpc-stub:1.62.2")
+    implementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    implementation("javax.annotation:javax.annotation-api:1.3.2")
 }
