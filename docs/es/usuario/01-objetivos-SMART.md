@@ -1,4 +1,4 @@
-﻿# Alcance (6 semanas) [Atom]:
+# Alcance (6 semanas) [Atom]:
 
 El alcance se centra específicamente en el desarrollo de un agente de acción multicapa que centrifique la complejidad de las diferentes capas de personalización de los dispositivos móviles, las cuales algunas veces dificultan la interacción con el sistema de manera fluida o sencilla. En este ciclo de 6 semanas, el sistema debe ser capaz de crear un flujo de automatización por medio de una instrucción en lenguaje natural, analizar la interfaz visual del dispositivo en tiempo real y ejecutar secuencias de acciones (clics, gestos, escritura) para completar tareas de configuración del sistema en al menos dos capas de personalización distintas (ej. OneUI y HyperOS). Se implementará la lógica de "AI Desarrolladora" para que el sistema aprenda y guarde un nuevo flujo de trabajo (workflow) que no estaba previamente programado. El alcance se limita a la automatización de funciones nativas del sistema y aplicaciones de utilidad masiva (ajustes, calendario, mensajería).
 

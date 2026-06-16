@@ -1,4 +1,4 @@
-﻿# Definition of Done (DoD) - [Atom]:
+# Definition of Done (DoD) - [Atom]:
 
 Este documento establece los criterios mínimos que cada Historia de Usuario (HU) debe cumplir para ser considerada como "Terminada" dentro de un Sprint.
 
