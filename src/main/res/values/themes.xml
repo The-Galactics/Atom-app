@@ -1,7 +1,28 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.AtomApp" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/purple_lavender</item>
+        <!-- Brand color roles mapped onto the Material3 color system. -->
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorOnPrimary">@color/on_accent</item>
+        <item name="colorSurface">@color/surface_1</item>
+        <item name="colorOnSurface">@color/on_surface_high</item>
+        <item name="colorError">@color/status_error</item>
         <item name="android:windowBackground">@color/deep_onyx</item>
         <item name="android:statusBarColor">@color/deep_onyx</item>
+        <item name="android:navigationBarColor">@color/deep_onyx</item>
+
+        <!-- Wire the refined type scale into the Material textAppearance roles. -->
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.Atom.Display</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.Atom.Status</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.Atom.Title</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.Atom.Body</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.Atom.Label</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.Atom.Caption</item>
+    </style>
+
+    <!-- Transparent theme for the floating-overlay panel host (if needed). -->
+    <style name="Theme.AtomApp.Overlay" parent="Theme.AtomApp">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>
