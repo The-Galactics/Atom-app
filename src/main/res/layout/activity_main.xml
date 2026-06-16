@@ -5,30 +5,25 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/deep_onyx"
+    android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
     <ImageButton
         android:id="@+id/btn_history"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="History"
+        style="@style/Widget.Atom.IconButton.Ghost"
+        android:layout_marginStart="@dimen/space_s"
+        android:layout_marginTop="@dimen/space_s"
+        android:contentDescription="@string/cd_history"
         android:src="@drawable/ic_history"
-        android:alpha="0.6"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:tint="@color/white" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
+        android:id="@+id/wordmark"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="ATOM"
-        android:textColor="@color/white"
-        android:textSize="24sp"
-        android:fontFamily="serif"
-        android:letterSpacing="0.2"
+        android:text="@string/wordmark"
+        android:textAppearance="@style/TextAppearance.Atom.Wordmark"
         app:layout_constraintBottom_toBottomOf="@+id/btn_history"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -36,23 +31,37 @@
 
     <ImageButton
         android:id="@+id/btn_settings"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="16dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Settings"
+        style="@style/Widget.Atom.IconButton.Ghost"
+        android:layout_marginTop="@dimen/space_s"
+        android:layout_marginEnd="@dimen/space_s"
+        android:contentDescription="@string/cd_settings"
         android:src="@drawable/ic_settings"
-        android:alpha="0.6"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:tint="@color/white" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guide_core_center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.42" />
+
+    <View
+        android:id="@+id/core_glow"
+        android:layout_width="@dimen/core_glow_size"
+        android:layout_height="@dimen/core_glow_size"
+        android:background="@drawable/bg_core_glow"
+        android:importantForAccessibility="no"
+        app:layout_constraintBottom_toBottomOf="@+id/atom_core_animation"
+        app:layout_constraintEnd_toEndOf="@+id/atom_core_animation"
+        app:layout_constraintStart_toStartOf="@+id/atom_core_animation"
+        app:layout_constraintTop_toTopOf="@+id/atom_core_animation" />
 
     <com.airbnb.lottie.LottieAnimationView
         android:id="@+id/atom_core_animation"
-        android:layout_width="280dp"
-        android:layout_height="280dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_width="@dimen/core_size"
+        android:layout_height="@dimen/core_size"
+        app:layout_constraintBottom_toBottomOf="@+id/guide_core_center"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -63,11 +72,10 @@
         android:id="@+id/status_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Listening..."
-        android:textColor="@color/purple_lavender"
-        android:textSize="18sp"
-        android:fontFamily="serif"
+        android:layout_marginTop="@dimen/space_xl"
+        android:gravity="center"
+        android:text="@string/status_idle"
+        android:textAppearance="@style/TextAppearance.Atom.Status"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/atom_core_animation" />
@@ -76,20 +84,32 @@
         android:id="@+id/sub_status_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:alpha="0.6"
-        android:text="AWAITING PROMPT"
-        android:textColor="@color/white"
-        android:textSize="12sp"
-        android:letterSpacing="0.1"
+        android:layout_marginTop="@dimen/space_s"
+        android:gravity="center"
+        android:text="@string/sub_status_tap_mic"
+        android:textAppearance="@style/TextAppearance.Atom.Overline"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/status_text" />
 
+    <!-- No android:id on <include> — an include id would override the root's id. -->
+    <include
+        layout="@layout/view_input_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_m"
+        android:layout_marginEnd="@dimen/space_m"
+        android:layout_marginBottom="@dimen/space_m"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/control_row"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
     <LinearLayout
+        android:id="@+id/control_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="32dp"
+        android:layout_marginBottom="@dimen/space_xl"
         android:gravity="center"
         android:orientation="horizontal"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -98,34 +118,34 @@
 
         <ImageButton
             android:id="@+id/btn_keyboard"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="32dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Keyboard"
+            style="@style/Widget.Atom.IconButton.Ghost"
+            android:layout_marginEnd="@dimen/space_xl"
+            android:contentDescription="@string/cd_keyboard"
             android:src="@drawable/ic_keyboard"
-            android:alpha="0.4"
-            app:tint="@color/white" />
+            android:tint="@color/on_surface_label" />
 
-        <ImageButton
-            android:id="@+id/btn_mic"
-            android:layout_width="64dp"
-            android:layout_height="64dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Start Listening"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_mic" />
+        <FrameLayout
+            android:layout_width="@dimen/mic_fab_size"
+            android:layout_height="@dimen/mic_fab_size">
+
+            <ImageButton
+                android:id="@+id/btn_mic"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/bg_mic_fab"
+                android:contentDescription="@string/cd_mic"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_mic"
+                app:tint="@color/on_accent" />
+        </FrameLayout>
 
         <ImageButton
             android:id="@+id/btn_volume"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="32dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Volume"
+            style="@style/Widget.Atom.IconButton.Ghost"
+            android:layout_marginStart="@dimen/space_xl"
+            android:contentDescription="@string/cd_volume"
             android:src="@drawable/ic_volume"
-            android:alpha="0.4"
-            app:tint="@color/white" />
+            android:tint="@color/on_surface_label" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
