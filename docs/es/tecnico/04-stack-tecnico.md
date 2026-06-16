@@ -1,4 +1,3 @@
-﻿
 # Documentación del Stack Técnico - []Atom]:
 
 Este documento detalla la arquitectura de software, las tecnologías implementadas y la justificación técnica de las herramientas que componen el ecosistema de **Atom**, garantizando el cumplimiento de los objetivos de rendimiento (inferencias menores a 4 segundos), accesibilidad, escalabilidad y seguridad.
