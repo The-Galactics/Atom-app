@@ -1,13 +1,9 @@
 package com.atom.app.model;
 
-import com.google.gson.annotations.SerializedName;
-
 public class ResponseModel {
-    
-    @SerializedName("response")
+
     private String responseText;
 
-    @SerializedName("status")
     private String status;
 
     // Getters and Setters

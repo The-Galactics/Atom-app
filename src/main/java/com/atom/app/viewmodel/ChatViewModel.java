@@ -7,13 +7,13 @@ import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
 
 public class ChatViewModel extends ViewModel {
-    private ChatRepository repository;
+    private final ChatRepository repository;
     private MutableLiveData<String> chatResponse = new MutableLiveData<>();
     private MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
 
-    public ChatViewModel() {
-        repository = new ChatRepository();
+    public ChatViewModel(ChatRepository repository) {
+        this.repository = repository;
     }
 
     public LiveData<String> getChatResponse() { return chatResponse; }
