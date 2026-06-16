@@ -67,4 +67,5 @@ The architecture employs a **hybrid TTS system** for natural auditory feedback:
 * **Fallback Option (Ultra-Fast): Android Native TTS (`android.speech.tts`)**
   * **Analysis:** Native integration at the SDK level, 100% free and offline.
   * **UX Benefit:** Response latency under 100ms for quick confirmations, prioritizing task execution if the connection is unstable.
-* **Aesthetic Alternative: ElevenLabs (
+* **Aesthetic Alternative: ElevenLabs (Capa Free)**
+  * **Use:** Limited to 10,000 characters for pre-configured, highly expressive system responses ("Understood!", "Task completed").

@@ -1,4 +1,4 @@
-﻿# Guía De Identidad Visual:
+# Guía De Identidad Visual:
 
 ## Tipografia:
 
