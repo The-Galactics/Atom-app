@@ -6,6 +6,7 @@ import android.animation.ObjectAnimator;
 import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -41,6 +42,7 @@ import com.atom.app.AtomApp;
 import com.atom.app.R;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
+import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
@@ -67,6 +69,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private WindowManager.LayoutParams bubbleParams;
 
     private ChatRepository chatRepository;
+    private AndroidSpeechRecognizer speechRecognizer;
     private int touchSlop;
 
     private ObjectAnimator micPulse;  // infinite "listening" pulse on the panel mic
@@ -90,7 +93,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
 
         app = (AtomApp) getApplication();
-        chatRepository = new ChatRepository(app.getAppContainer().getExternalMessageUseCase());
+        chatRepository = new ChatRepository(
+                app.getAppContainer().getExternalMessageUseCase(),
+                app.getAppContainer().getSessionUserId(),
+                app.getAppContainer().getSessionChatId());
+        commandRepository = new CommandRepository(
+                app.getAppContainer().getExternalCommandUseCase(),
+                app.getAppContainer().getActionExecutor());
         app.setForegroundListener(this);
     }
 
@@ -519,14 +528,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return false;
         });
 
-        // FUTURE WORK: real voice capture; for now the mic fires a smoke-test prompt.
-        // The pulse stands in for the "listening" state until STT is wired in.
-        mic.setOnClickListener(v -> {
-            playPressSettle(v);
-            status.setText(R.string.overlay_sending);
-            startMicPulse(v);
-            askAtom("Hello Atom, can you help me?", status, v);
-        });
+        // Tap the mic to dictate: capture speech on-device, then send the transcript.
+        mic.setOnClickListener(v -> startVoiceCapture(status));
 
         close.setOnClickListener(v -> collapseToBubble());
         // Tuck the overlay away to the edge handle while using other apps.

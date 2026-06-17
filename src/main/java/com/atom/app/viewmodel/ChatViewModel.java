@@ -54,12 +54,14 @@ public class ChatViewModel extends ViewModel {
         commandRepository.recognize(order, new CommandRepository.CommandCallback() {
             @Override
             public void onResolved(ResolvedAction action) {
-                isLoading.setValue(false);
                 if (!action.isExecutable()) {
-                    // Conversational turn — just present the reply.
-                    chatResponse.setValue(action.outMessage());
+                    // Not a command -> route to the conversational chat path
+                    // (StreamChat), which keeps in-session context, instead of the
+                    // stateless intent reply. isLoading stays true until it returns.
+                    sendMessage(order);
                     return;
                 }
+                isLoading.setValue(false);
                 if (action.requiresConfirmation()) {
                     pendingConfirmation.setValue(action);
                 } else {
