@@ -13,12 +13,15 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.airbnb.lottie.LottieAnimationView;
 import com.atom.app.di.AppContainer;
+import com.atom.app.permission.PermissionCoordinator;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
@@ -33,6 +36,23 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout inputBarRoot;
     private EditText inputEditText;
     private ImageButton inputSend;
+
+    // Action awaiting a permission grant; resumed in permissionLauncher's callback.
+    private ResolvedAction awaitingPermission;
+
+    private final ActivityResultLauncher<String> permissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                ResolvedAction action = awaitingPermission;
+                awaitingPermission = null;
+                if (action == null) {
+                    return;
+                }
+                if (granted) {
+                    viewModel.runAction(action);
+                } else {
+                    toast(getString(R.string.action_permission_denied));
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -188,8 +208,19 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.action_confirm_title)
                 .setMessage(prompt)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> viewModel.runAction(action))
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> executeWithPermission(action))
                 .setNegativeButton(R.string.action_confirm_no, null)
                 .show();
+    }
+
+    /** Run the action, first requesting its runtime permission if one is missing. */
+    private void executeWithPermission(ResolvedAction action) {
+        String permission = PermissionCoordinator.requiredPermission(action);
+        if (permission == null || PermissionCoordinator.isGranted(this, permission)) {
+            viewModel.runAction(action);
+            return;
+        }
+        awaitingPermission = action;
+        permissionLauncher.launch(permission);
     }
 }
