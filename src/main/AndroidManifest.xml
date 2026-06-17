@@ -14,6 +14,23 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Action catalog permissions. MAKE_CALL: ACTION_CALL needs CALL_PHONE
+         (falls back to the dialer when not granted). TOGGLE_SETTING/do_not_disturb
+         needs notification-policy access. Flashlight (CameraManager.setTorchMode)
+         needs no permission. SET_ALARM/SET_TIMER use AlarmClock intents (no perm).
+         SEND_MESSAGE opens the SMS composer via ACTION_SENDTO (no perm). -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- OPEN_APP must see other apps' launch intents under package visibility
+         (Android 11+). We only need to resolve launchable activities. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".AtomApp"
         android:allowBackup="true"
