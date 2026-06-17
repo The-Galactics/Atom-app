@@ -22,7 +22,12 @@
     <dimen name="mic_fab_size">68dp</dimen>
     <dimen name="ghost_button_size">48dp</dimen>
     <dimen name="input_bar_height">56dp</dimen>
-    <dimen name="bubble_size">60dp</dimen>
+    <dimen name="bubble_size">44dp</dimen>          <!-- compact, low-intrusion floating disc -->
+    <dimen name="bubble_edge_margin">8dp</dimen>     <!-- resting gap from the screen edge -->
+    <dimen name="handle_width">11dp</dimen>          <!-- hidden-state edge line (Game Turbo style): thin & visible -->
+    <dimen name="handle_bar_height">67dp</dimen>     <!-- visible length of the edge line -->
+    <dimen name="handle_touch_width">36dp</dimen>    <!-- invisible grab zone around the line so the tap lands -->
+    <dimen name="handle_height">96dp</dimen>         <!-- height of the grab zone -->
 
     <!-- Type scale (sp) -->
     <dimen name="text_wordmark">26sp</dimen>      <!-- ATOM wordmark -->

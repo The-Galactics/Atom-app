@@ -34,9 +34,20 @@
             android:textAppearance="@style/TextAppearance.Atom.Wordmark" />
 
         <ImageButton
+            android:id="@+id/overlay_hide"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/ripple_borderless"
+            android:contentDescription="@string/cd_hide"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_chevron"
+            app:tint="@color/on_surface_medium" />
+
+        <ImageButton
             android:id="@+id/overlay_close"
             android:layout_width="36dp"
             android:layout_height="36dp"
+            android:layout_marginStart="@dimen/space_xs"
             android:background="@drawable/ripple_borderless"
             android:contentDescription="@string/cd_close"
             android:scaleType="centerInside"
