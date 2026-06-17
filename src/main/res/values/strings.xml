@@ -53,6 +53,7 @@
     <string name="action_confirm_default">Do you want Atom to perform this action?</string>
     <string name="action_confirm_yes">Yes</string>
     <string name="action_confirm_no">Cancel</string>
+    <string name="action_cancelled">Action canceled</string>
     <string name="action_permission_denied">Permission denied — action canceled</string>
 
     <!-- Floating overlay -->
