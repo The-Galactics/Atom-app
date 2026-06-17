@@ -1,5 +1,6 @@
 package com.atom.app.overlay;
 
+import android.Manifest;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ObjectAnimator;
@@ -14,6 +15,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
@@ -42,6 +44,8 @@ import com.atom.app.AtomApp;
 import com.atom.app.R;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
+import com.atom.app.repository.CommandRepository;
+import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
@@ -69,6 +73,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private WindowManager.LayoutParams bubbleParams;
 
     private ChatRepository chatRepository;
+    private CommandRepository commandRepository;
     private AndroidSpeechRecognizer speechRecognizer;
     private int touchSlop;
 
@@ -529,7 +534,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         });
 
         // Tap the mic to dictate: capture speech on-device, then send the transcript.
-        mic.setOnClickListener(v -> startVoiceCapture(status));
+        mic.setOnClickListener(v -> startVoiceCapture(status, mic));
 
         close.setOnClickListener(v -> collapseToBubble());
         // Tuck the overlay away to the edge handle while using other apps.
@@ -547,7 +552,149 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         status.setText(R.string.overlay_sending);
         editText.setText("");
-        askAtom(text, status, null);
+        handlePrompt(text, status);
+    }
+
+    /**
+     * Two-stage dispatch, mirroring the chat screen: first ask the backend to
+     * recognize an order; if it's an executable action (open app, call, alarm…)
+     * run it on the device, otherwise fall back to the conversational chat path
+     * (StreamChat), which keeps in-session context.
+     */
+    private void handlePrompt(String prompt, TextView status) {
+        commandRepository.recognize(prompt, new CommandRepository.CommandCallback() {
+            @Override
+            public void onResolved(ResolvedAction action) {
+                if (!action.isExecutable()) {
+                    askAtom(prompt, status, null);
+                    return;
+                }
+                if (action.requiresConfirmation()) {
+                    confirmAndRun(action, status);
+                } else {
+                    runAction(action, status);
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                if (status.isAttachedToWindow()) {
+                    status.setText(error);
+                }
+            }
+        });
+    }
+
+    /** Executes a resolved action and shows its outcome in the panel status. */
+    private void runAction(ResolvedAction action, TextView status) {
+        commandRepository.run(action, outcome -> {
+            if (status.isAttachedToWindow()) {
+                status.setText(outcome.message());
+            }
+        });
+    }
+
+    /**
+     * Sensitive actions (call, message) are confirmed first. Shown as an overlay
+     * dialog because a Service has no Activity window; relies on the same
+     * SYSTEM_ALERT_WINDOW permission the bubble already requires.
+     */
+    private void confirmAndRun(ResolvedAction action, TextView status) {
+        String message = action.outMessage().isEmpty()
+                ? getString(R.string.action_confirm_default)
+                : action.outMessage();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.action_confirm_title)
+                .setMessage(message)
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> runAction(action, status))
+                .setNegativeButton(R.string.action_confirm_no, (d, w) -> {
+                    if (status.isAttachedToWindow()) {
+                        status.setText(R.string.action_cancelled);
+                    }
+                })
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
+    }
+
+    /**
+     * Capture a spoken phrase on-device and dispatch its transcript to Atom.
+     * Speech recognition needs the RECORD_AUDIO runtime permission, which a
+     * Service cannot request — it must already be granted from the app, so we
+     * fail with a hint when it is missing.
+     */
+    private void startVoiceCapture(TextView status, View mic) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            status.setText(R.string.overlay_mic_denied);
+            return;
+        }
+        playPressSettle(mic);
+        startMicPulse(mic);
+        if (speechRecognizer == null) {
+            speechRecognizer = new AndroidSpeechRecognizer(this, new BubbleSttListener(status, mic));
+        }
+        speechRecognizer.startListening();
+    }
+
+    /** Routes speech-recognition callbacks to the panel and dispatches the transcript. */
+    private final class BubbleSttListener implements AndroidSpeechRecognizer.Listener {
+        private final TextView status;
+        private final View mic;
+
+        BubbleSttListener(TextView status, View mic) {
+            this.status = status;
+            this.mic = mic;
+        }
+
+        @Override
+        public void onReadyForSpeech() {
+            if (status.isAttachedToWindow()) {
+                status.setText(R.string.overlay_listening);
+            }
+        }
+
+        @Override
+        public void onEndOfSpeech() {
+            stopMicPulse(mic);
+            if (status.isAttachedToWindow()) {
+                status.setText(R.string.overlay_thinking);
+            }
+        }
+
+        @Override
+        public void onResult(String text) {
+            stopMicPulse(mic);
+            if (text == null || text.trim().isEmpty()) {
+                if (status.isAttachedToWindow()) {
+                    status.setText(R.string.overlay_voice_error);
+                }
+                return;
+            }
+            handlePrompt(text, status);
+        }
+
+        @Override
+        public void onError(String message) {
+            stopMicPulse(mic);
+            if (!status.isAttachedToWindow()) {
+                return;
+            }
+            status.setText("unavailable".equals(message)
+                    ? R.string.overlay_voice_unavailable
+                    : R.string.overlay_voice_error);
+        }
+    }
+
+    private void destroyRecognizer() {
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+            speechRecognizer = null;
+        }
     }
 
     private void askAtom(String prompt, TextView status, View mic) {
@@ -572,6 +719,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     private void collapseToBubble() {
         stopMicPulse(null);
+        destroyRecognizer();
         removeView(panelView);
         panelView = null;
         showBubble();
@@ -772,6 +920,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (app != null) {
             app.clearForegroundListener(this);
         }
+        destroyRecognizer();
         cancelAnimations();
         removeView(bubbleView);
         removeView(panelView);
