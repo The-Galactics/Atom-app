@@ -1,4 +1,4 @@
-﻿# Backlog historias de usuario [Atom]:
+# Backlog historias de usuario [Atom]:
 
 En este documente se busca dar a conocer el repositorio de nuestras historias de usuario y como se clasificaran los story points para motivar a los desarrolladores cada día.
 

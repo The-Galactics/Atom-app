@@ -1,3 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Atom</string>
+    <string name="accessibility_service_description">Allows Atom to view on-screen content and act on your behalf to assist you across apps.</string>
+
+    <!-- Wordmark / main screen -->
+    <string name="wordmark">ATOM</string>
+    <string name="status_idle">Ready</string>
+    <string name="status_listening">Listening</string>
+    <string name="status_thinking">Thinking</string>
+    <string name="status_error">Something went wrong</string>
+    <string name="sub_status_awaiting">Awaiting prompt</string>
+    <string name="sub_status_tap_mic">Tap the mic or type to begin</string>
+    <string name="sub_status_thinking">Reaching the Atom core</string>
+    <string name="sub_status_responded">Atom responded</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_history">History</string>
+    <string name="cd_settings">Settings</string>
+    <string name="cd_mic">Start listening</string>
+    <string name="cd_keyboard">Type a message</string>
+    <string name="cd_volume">Volume</string>
+    <string name="cd_send">Send</string>
+    <string name="cd_close">Close</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_atom_bubble">Atom floating assistant</string>
+
+    <!-- In-app input bar -->
+    <string name="input_hint">Ask Atom…</string>
+    <string name="input_empty">Type a message first</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_profile">Profile</string>
+    <string name="settings_your_name">Your name</string>
+    <string name="settings_assistant_name">Assistant name</string>
+    <string name="settings_voice_volume">Voice volume</string>
+    <string name="settings_membership">Membership</string>
+    <string name="settings_assistant_access">Assistant access</string>
+    <string name="settings_assistant_access_desc">Grant the permissions Atom needs to assist you across other apps, then turn on the floating bubble.</string>
+    <string name="settings_enable_bubble">Enable floating bubble</string>
+    <string name="settings_disable_bubble">Turn off floating bubble</string>
+    <string name="settings_save">Save changes</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="settings_bubble_needs_overlay">Grant \"Display over other apps\" first</string>
+    <string name="settings_bubble_started">Floating bubble enabled</string>
+    <string name="settings_bubble_stopped">Floating bubble turned off</string>
+
+    <!-- Action confirmation -->
+    <string name="action_confirm_title">Confirm action</string>
+    <string name="action_confirm_default">Do you want Atom to perform this action?</string>
+    <string name="action_confirm_yes">Yes</string>
+    <string name="action_confirm_no">Cancel</string>
+
+    <!-- Floating overlay -->
+    <string name="overlay_notification_title">Atom is floating</string>
+    <string name="overlay_notification_text">Tap the bubble to ask Atom from any app.</string>
+    <string name="overlay_channel_name">Atom floating assistant</string>
+    <string name="overlay_panel_hint">Ask Atom…</string>
+    <string name="overlay_sending">Sending to Atom…</string>
 </resources>

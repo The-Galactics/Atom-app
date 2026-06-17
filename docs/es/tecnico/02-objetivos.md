@@ -1,4 +1,4 @@
-﻿# Objetivos Del Proyecto [Atom].
+# Objetivos Del Proyecto [Atom].
 
 ## Objetivo General:
 
@@ -36,7 +36,7 @@ Desarrollar un sistema multi-agent, basado en AI generativa para crear respuesta
  - [ ] Guardar los pasos de la "AI Desarrolladora" para que la "Orquestadora" los encuentre.
  
 
-### AI (Artificial Inteligence):
+### AI (Artificial Inteligencia):
 
  - [ ] Conexión con las APIs de Nvidia (Sprint 1).
  - [ ] Interpretación de lenguaje natural (Sprint 1).
@@ -52,4 +52,3 @@ Desarrollar un sistema multi-agent, basado en AI generativa para crear respuesta
  - [ ] Prueba intensiva en la AI.
  - [ ] Revisión de lógica de negocio (Always).
  - [ ] Búsqueda de bugs y soluciones.
-

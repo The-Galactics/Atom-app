@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ATOM wordmark in the top bar. Wide tracking, medium emphasis. -->
+    <style name="TextAppearance.Atom.Wordmark" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:fontFamily">serif</item>
+        <item name="android:textSize">@dimen/text_wordmark</item>
+        <item name="android:textColor">@color/on_surface_high</item>
+        <item name="android:letterSpacing">0.28</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <!-- Large serif status / hero line (e.g. "Listening", AI response). -->
+    <style name="TextAppearance.Atom.Display" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="android:fontFamily">serif</item>
+        <item name="android:textSize">@dimen/text_display</item>
+        <item name="android:textColor">@color/on_surface_high</item>
+        <item name="android:letterSpacing">0.0</item>
+        <item name="android:lineSpacingMultiplier">1.1</item>
+    </style>
+
+    <!-- Primary status line under the core. Accent-tinted serif. -->
+    <style name="TextAppearance.Atom.Status" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:fontFamily">serif</item>
+        <item name="android:textSize">@dimen/text_status</item>
+        <item name="android:textColor">@color/accent</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
+
+    <!-- Section / screen serif title (Settings headings). -->
+    <style name="TextAppearance.Atom.Title" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:fontFamily">serif</item>
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:textColor">@color/on_surface_high</item>
+        <item name="android:letterSpacing">0.04</item>
+    </style>
+
+    <!-- Body and input text. -->
+    <style name="TextAppearance.Atom.Body" parent="TextAppearance.Material3.BodyLarge">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/on_surface_high</item>
+        <item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+
+    <!-- List / row label (membership rows etc.). -->
+    <style name="TextAppearance.Atom.Label" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textColor">@color/on_surface_high</item>
+        <item name="android:letterSpacing">0.01</item>
+    </style>
+
+    <!-- Field label / sub-caption (70% white). -->
+    <style name="TextAppearance.Atom.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:textColor">@color/on_surface_label</item>
+    </style>
+
+    <!-- ALL-CAPS micro label (sub-status "AWAITING PROMPT"). -->
+    <style name="TextAppearance.Atom.Overline" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">@dimen/text_overline</item>
+        <item name="android:textColor">@color/on_surface_label</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.18</item>
+    </style>
+
+    <!-- Primary filled (accent) button — Settings SAVE, overlay enable. -->
+    <style name="Widget.Atom.Button.Primary" parent="Widget.Material3.Button">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:textColor">@color/on_accent</item>
+        <item name="backgroundTint">@color/accent</item>
+        <item name="cornerRadius">@dimen/radius_button</item>
+    </style>
+
+    <!-- Tonal / secondary button — outline on a dark surface. -->
+    <style name="Widget.Atom.Button.Tonal" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.06</item>
+        <item name="android:textColor">@color/accent</item>
+        <item name="backgroundTint">@color/surface_2</item>
+        <item name="cornerRadius">@dimen/radius_button</item>
+    </style>
+
+    <!-- Ghost icon button (top-bar / side controls). -->
+    <style name="Widget.Atom.IconButton.Ghost" parent="">
+        <item name="android:layout_width">@dimen/touch_target</item>
+        <item name="android:layout_height">@dimen/touch_target</item>
+        <item name="android:background">@drawable/ripple_borderless</item>
+        <item name="android:scaleType">centerInside</item>
+        <item name="android:tint">@color/on_surface_medium</item>
+    </style>
+
+    <!-- EditText used in the input bar / overlay panel. -->
+    <style name="Widget.Atom.Input" parent="Widget.AppCompat.EditText">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/on_surface_high</item>
+        <item name="android:textColorHint">@color/on_surface_disabled</item>
+        <item name="android:background">@null</item>
+        <item name="android:inputType">textCapSentences</item>
+        <item name="android:maxLines">4</item>
+    </style>
+
+</resources>

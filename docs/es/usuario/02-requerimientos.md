@@ -1,4 +1,4 @@
-﻿# Requisitos funcionales y no funcionales [Atom]:
+# Requisitos funcionales y no funcionales [Atom]:
 
 
 ## Requisitos Funcionales:
@@ -23,4 +23,3 @@
 |RNF-03| Disponibilidad | La aplicación debe funcionar correctamente con una conexión a Internet mínima 3G.|
 |RNF-04 | Rendimiento |El tiempo de respuesta entre la petición y la acción no debe superar los 4 segundos.|
 |RNF-05 | Seguridad |La aplicación debe cifrar contraseñas para proteger la privacidad (AES-256)|
-
