@@ -21,12 +21,15 @@ public class ChatRepository {
     private final ExecutorService executor;
     private final Handler mainHandler;
 
-    // Per-session id satisfies the use-case contract (no app-side auth yet). See ADR-001.
-    private final UUID sessionUserId = UUID.randomUUID();
-    private final UUID sessionChatId = UUID.randomUUID();
+    // Process-scoped conversation identity, injected from AppContainer so every
+    // ChatRepository shares the same session and the backend keeps in-session context.
+    private final UUID sessionUserId;
+    private final UUID sessionChatId;
 
-    public ChatRepository(StreamChatPortIn streamChatUseCase) {
+    public ChatRepository(StreamChatPortIn streamChatUseCase, UUID sessionUserId, UUID sessionChatId) {
         this.streamChatUseCase = streamChatUseCase;
+        this.sessionUserId = sessionUserId;
+        this.sessionChatId = sessionChatId;
         this.executor = Executors.newSingleThreadExecutor();
         this.mainHandler = new Handler(Looper.getMainLooper());
     }

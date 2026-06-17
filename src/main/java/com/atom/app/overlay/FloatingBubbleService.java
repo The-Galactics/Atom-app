@@ -2,6 +2,7 @@ package com.atom.app.overlay;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -63,7 +64,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
 
         app = (AtomApp) getApplication();
-        chatRepository = new ChatRepository(app.getAppContainer().getExternalMessageUseCase());
+        chatRepository = new ChatRepository(
+                app.getAppContainer().getExternalMessageUseCase(),
+                app.getAppContainer().getSessionUserId(),
+                app.getAppContainer().getSessionChatId());
+        commandRepository = new CommandRepository(
+                app.getAppContainer().getExternalCommandUseCase(),
+                app.getAppContainer().getActionExecutor());
         app.setForegroundListener(this);
     }
 
@@ -232,7 +239,74 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         status.setText(R.string.overlay_sending);
         editText.setText("");
-        askAtom(text, status);
+        handlePrompt(text, status);
+    }
+
+    /**
+     * Two-stage dispatch, mirroring the chat screen: first ask the backend to
+     * recognize an order; if it's an executable action (open app, call, alarm…)
+     * run it on the device, otherwise fall back to the conversational chat path
+     * (StreamChat) which keeps in-session context.
+     */
+    private void handlePrompt(String prompt, TextView status) {
+        commandRepository.recognize(prompt, new CommandRepository.CommandCallback() {
+            @Override
+            public void onResolved(ResolvedAction action) {
+                if (!action.isExecutable()) {
+                    // Not a command -> conversational reply with memory.
+                    askAtom(prompt, status);
+                    return;
+                }
+                if (action.requiresConfirmation()) {
+                    confirmAndRun(action, status);
+                } else {
+                    runAction(action, status);
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                if (status.isAttachedToWindow()) {
+                    status.setText(error);
+                }
+            }
+        });
+    }
+
+    /** Executes a resolved action and shows its outcome in the panel status. */
+    private void runAction(ResolvedAction action, TextView status) {
+        commandRepository.run(action, outcome -> {
+            if (status.isAttachedToWindow()) {
+                status.setText(outcome.message());
+            }
+        });
+    }
+
+    /**
+     * Sensitive actions (call, message) are confirmed first. Shown as an overlay
+     * dialog because a Service has no Activity window; this relies on the same
+     * SYSTEM_ALERT_WINDOW permission the bubble already requires.
+     */
+    private void confirmAndRun(ResolvedAction action, TextView status) {
+        String message = action.outMessage().isEmpty()
+                ? getString(R.string.action_confirm_default)
+                : action.outMessage();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.action_confirm_title)
+                .setMessage(message)
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> runAction(action, status))
+                .setNegativeButton(R.string.action_confirm_no, (d, w) -> {
+                    if (status.isAttachedToWindow()) {
+                        status.setText(R.string.action_cancelled);
+                    }
+                })
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
     }
 
     /**
