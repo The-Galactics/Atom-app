@@ -45,8 +45,10 @@ import com.atom.app.R;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
+import com.atom.app.settings.AtomPreferences;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
+import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
@@ -75,6 +77,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private ChatRepository chatRepository;
     private CommandRepository commandRepository;
     private AndroidSpeechRecognizer speechRecognizer;
+    private AndroidTextToSpeech tts;
+    private AtomPreferences preferences;
     private int touchSlop;
 
     private ObjectAnimator micPulse;  // infinite "listening" pulse on the panel mic
@@ -105,6 +109,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         commandRepository = new CommandRepository(
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor());
+        tts = new AndroidTextToSpeech(this);
+        preferences = new AtomPreferences(this);
         app.setForegroundListener(this);
     }
 
@@ -587,11 +593,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     /** Executes a resolved action and shows its outcome in the panel status. */
     private void runAction(ResolvedAction action, TextView status) {
-        commandRepository.run(action, outcome -> {
-            if (status.isAttachedToWindow()) {
-                status.setText(outcome.message());
-            }
-        });
+        commandRepository.run(action, outcome -> respond(outcome.message(), status));
     }
 
     /**
@@ -697,14 +699,26 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
     }
 
+    /**
+     * Shows Atom's reply in the panel and, when voice output is enabled in
+     * Settings, speaks it aloud — same behaviour as the main chat screen.
+     */
+    private void respond(String text, TextView status) {
+        if (status.isAttachedToWindow()) {
+            status.setText(text);
+        }
+        if (text != null && !text.trim().isEmpty()
+                && preferences.isTtsEnabled() && tts != null) {
+            tts.speak(text);
+        }
+    }
+
     private void askAtom(String prompt, TextView status, View mic) {
         chatRepository.askAtom(prompt, new ChatRepository.ChatCallback() {
             @Override
             public void onSuccess(ResponseModel response) {
                 stopMicPulse(mic);
-                if (status.isAttachedToWindow()) {
-                    status.setText(response.getResponseText());
-                }
+                respond(response.getResponseText(), status);
             }
 
             @Override
@@ -921,6 +935,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             app.clearForegroundListener(this);
         }
         destroyRecognizer();
+        if (tts != null) {
+            tts.shutdown();
+            tts = null;
+        }
         cancelAnimations();
         removeView(bubbleView);
         removeView(panelView);
