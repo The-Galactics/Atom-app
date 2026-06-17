@@ -59,7 +59,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         touchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
 
         app = (AtomApp) getApplication();
-        chatRepository = new ChatRepository(app.getAppContainer().getExternalMessageUseCase());
+        chatRepository = new ChatRepository(
+                app.getAppContainer().getExternalMessageUseCase(),
+                app.getAppContainer().getSessionUserId(),
+                app.getAppContainer().getSessionChatId());
         app.setForegroundListener(this);
     }
 
