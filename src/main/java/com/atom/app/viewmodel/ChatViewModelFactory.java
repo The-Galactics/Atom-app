@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.atom.app.di.AppContainer;
 import com.atom.app.repository.ChatRepository;
+import com.atom.app.repository.CommandRepository;
 
 public class ChatViewModelFactory implements ViewModelProvider.Factory {
 
@@ -22,7 +23,10 @@ public class ChatViewModelFactory implements ViewModelProvider.Factory {
         if (modelClass.isAssignableFrom(ChatViewModel.class)) {
             ChatRepository repository =
                     new ChatRepository(appContainer.getExternalMessageUseCase());
-            return (T) new ChatViewModel(repository);
+            CommandRepository commandRepository = new CommandRepository(
+                    appContainer.getExternalCommandUseCase(),
+                    appContainer.getActionExecutor());
+            return (T) new ChatViewModel(repository, commandRepository);
         }
         throw new IllegalArgumentException("Unknown ViewModel class: " + modelClass.getName());
     }

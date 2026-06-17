@@ -13,11 +13,13 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.airbnb.lottie.LottieAnimationView;
 import com.atom.app.di.AppContainer;
+import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
 
@@ -129,7 +131,9 @@ public class MainActivity extends AppCompatActivity {
             toast(getString(R.string.input_empty));
             return;
         }
-        viewModel.sendMessage(text);
+        // Typed input is treated as an ORDER: the backend decides whether it is
+        // an executable action or a plain conversational reply.
+        viewModel.sendOrder(text);
         inputEditText.setText("");
         hideInputBar();
     }
@@ -168,5 +172,24 @@ public class MainActivity extends AppCompatActivity {
             statusText.setText(R.string.status_error);
             subStatusText.setText(error != null ? error.toUpperCase() : getString(R.string.status_error));
         });
+
+        // Sensitive actions (call, message) require explicit confirmation.
+        viewModel.getPendingConfirmation().observe(this, this::confirmAction);
+    }
+
+    /** Asks the user to confirm a sensitive action before executing it. */
+    private void confirmAction(ResolvedAction action) {
+        if (action == null) {
+            return;
+        }
+        String prompt = action.outMessage().isEmpty()
+                ? getString(R.string.action_confirm_default)
+                : action.outMessage();
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.action_confirm_title)
+                .setMessage(prompt)
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> viewModel.runAction(action))
+                .setNegativeButton(R.string.action_confirm_no, null)
+                .show();
     }
 }
