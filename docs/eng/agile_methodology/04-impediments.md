@@ -26,9 +26,9 @@ Each impediment must follow a specific structure to identify the root cause, the
 
 ### Workflow and Resolution Example:
 
-|ID|Date|Type|Description|Impact|Responsible|Status|
-|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-|Imp-01|05-09-2026|Stopper|Compatibility error between the floating bubble and Android 14.|High (Blocks RF-04)|Scrum Master / Dev Team|🔴 Pending|
+|   ID   |    Date    |  Type   |                           Description                           |       Impact        |       Responsible       |   Status   |
+|:------:|:----------:|:-------:|:---------------------------------------------------------------:|:-------------------:|:-----------------------:|:----------:|
+| Imp-01 | 05-09-2026 | Stopper | Compatibility error between the floating bubble and Android 14. | High (Blocks RF-04) | Scrum Master / Dev Team | 🔴 Pending |
 
 ---
 #### [IMP-01] Android 14 Compatibility
@@ -39,3 +39,44 @@ Each impediment must follow a specific structure to identify the root cause, the
 ---
 
 # Impediments - Sprint 1:
+
+|   ID   |    Date    |  Type   |                         Description                         |         Impact          | Responsible  |    Status    |
+|:------:|:----------:|:-------:|:-----------------------------------------------------------:|:-----------------------:|:------------:|:------------:|
+| Imp-01 | 04-06-2026 | Stopper |         Issue creating branches directly from Jira          | High (Blocks git-flow)  | Scrum Master | 🟢 Completed |
+| Imp-02 | 04-06-2026 | Blocker | Missing folder structure due to GitHub's automatic deletion | High (Blocks work-flow) | Scrum Master | 🟢 Completed |
+
+---
+#### [Imp-01] Branch creation from Jira
+
+- **Root Cause:** When attempting to create a branch directly from Jira, the repository was not visible as an option for branch creation.
+- **Action:** Created the linkage for the organization's repository to facilitate branch creation.
+- **Resolution:** *Completed.*
+
+#### [Imp-02] Main structure
+
+- **Root Cause:** When creating the folder structure, due to a lack of awareness regarding GitHub's automatic feature that deletes empty folders, the main project structure was not uploaded.
+- **Action:** With the newly acquired knowledge, the folder structure was recreated, but this time adding template files to ensure folder permanence.
+- **Resolution:** *Completed.*
+
+---
+
+# Impediments - Sprint 2:
+
+|   ID    |    Date    |  Type   |                   Description                    |           Impacto           | Responsible |    Status    |
+|:-------:|:----------:|:-------:|:------------------------------------------------:|:---------------------------:|:-----------:|:------------:|
+| Impl-01 | 11-06-2026 | blocker | Lack of attendance at daily meetings by the team | Medium (unawareness of UHs) | Scrum Team  | 🟢 Completed |
+| Impl-02 | 12-06-2026 | stopper |      Error when compiling the Java backend       |     High (Blocks UH-11)     | Developers  | 🟢 Completed |  
+
+---
+
+### [Impl-01] Team non-attendance at the daily meeting
+
+- **Root Cause:** Communication issues occurred at the time of the daily meeting.
+- **Action:** Remind everyone of the daily meeting time and seek more commitment from all team members.
+- **Resolution:** *Completed*.
+
+### [Impl-02] Typo problems
+
+- **Root Cause:** When testing the Java code, it failed to compile.
+- **Action:** Create branches to resolve the issues.
+- **Resolution:** *Completed*.

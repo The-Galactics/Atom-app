@@ -1,4 +1,4 @@
-﻿# Acuerdos de trabajo [Atom]:
+# Acuerdos de trabajo [Atom]:
 
 Este documento esta diseñado principalmente para atestiguar los acuerdos de trabajo que tenemos en el proyecto de Atom para tener un flujo de trabajo constante y un ambiente de trabajo basado en el resspeto, eficiente y con enfoque en los **sprints goals**.
 

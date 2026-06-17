@@ -1,5 +1,9 @@
 # Project Atom: Minimalist AI Assistant - Technical Documentation
 
+> **See also:** [`Atom-Redesign.md`](./Atom-Redesign.md) — the refined design
+> system, redesigned screens, in-app input bar, and floating overlay that build
+> on the vision below.
+
 ## 1. Executive Summary
 Atom is a high-fidelity mobile AI assistant designed with an emphasis on minimalist aesthetics and low cognitive load. The interface prioritizes voice-first interaction, represented by a central, pulsating "Atom" core, set against a deep-space background.
 
@@ -37,7 +41,7 @@ The visual identity is anchored by the Aether design system, optimized for dark-
 
 ## 5. Technical Scope & Implementation (Native Java Stack)
 - **Frontend Layer (The App):** **Android Native** developed in **Java 21**. This repository contains only the UI/UX and client-side logic.
-- **API Consumption:** **Retrofit 2** + **OkHttp**. This is the standard in Java to consume the Spring Boot API being developed by the backend team.
+- **API Consumption:** **gRPC** (server-streaming `StreamChat` over `ai.proto`) to reach the Python AI agent. _(Originally Retrofit 2 + OkHttp against the Spring Boot REST API; the chat transport was cut over to gRPC — see ADR-001 §6.)_
 - **UI Framework:** **Material Design 3** with custom XML layouts to achieve the "Aether" aesthetics (Gradients, Glassmorphism, and the Atom Core animation).
 - **Image/Animation Loading:** **Lottie** for the pulsating "Atom Core" animation and **Glide** for image processing.
 - **Build Tool:** Gradle (Android-specific configuration).

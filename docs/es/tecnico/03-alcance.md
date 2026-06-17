@@ -1,4 +1,4 @@
-﻿# Scope Sprint-1 [Atom]: Infrastructura y Bases.
+# Scope Sprint-1 [Atom]: Infrastructura y Bases.
 
 ## In-Scope:
 

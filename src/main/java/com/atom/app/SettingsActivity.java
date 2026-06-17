@@ -1,12 +1,57 @@
 package com.atom.app;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.atom.app.overlay.FloatingBubbleService;
+import com.atom.app.permission.PermissionCoordinator;
+import com.atom.infrastructure.adapter.screen.ScreenCaptureService;
+import com.google.android.material.button.MaterialButton;
+
 public class SettingsActivity extends AppCompatActivity {
+
+    private MaterialButton btnToggleBubble;
+    private TextView tvBubbleStatus;
+
+    // Drives the button label/state; the service itself is the source of truth.
+    private boolean bubbleEnabled = false;
+
+    // Overlay ("super position") permission result: re-check on return from Settings.
+    private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (PermissionCoordinator.canDrawOverlays(this)) {
+                            toast("Overlay permission granted");
+                        } else {
+                            toast("Overlay permission denied");
+                        }
+                        refreshBubbleControl();
+                    });
+
+    // FUTURE WORK: consent result just starts the scaffolding service to test the round-trip.
+    private final ActivityResultLauncher<Intent> screenCaptureLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
+                    result -> {
+                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                            Intent serviceIntent = new Intent(this, ScreenCaptureService.class);
+                            serviceIntent.putExtra(
+                                    ScreenCaptureService.EXTRA_RESULT_CODE, result.getResultCode());
+                            serviceIntent.putExtra(
+                                    ScreenCaptureService.EXTRA_RESULT_DATA, result.getData());
+                            startForegroundService(serviceIntent);
+                            toast("Screen capture consent granted (scaffolding)");
+                        } else {
+                            toast("Screen capture consent denied");
+                        }
+                    });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -16,6 +61,9 @@ public class SettingsActivity extends AppCompatActivity {
         ImageButton btnBack = findViewById(R.id.btn_back);
         SeekBar seekBarVolume = findViewById(R.id.seekbar_volume);
         TextView tvVolumeValue = findViewById(R.id.tv_volume_value);
+        MaterialButton btnSave = findViewById(R.id.btn_save);
+        btnToggleBubble = findViewById(R.id.btn_toggle_bubble);
+        tvBubbleStatus = findViewById(R.id.tv_bubble_status);
 
         btnBack.setOnClickListener(v -> finish());
 
@@ -32,5 +80,82 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
+
+        btnSave.setOnClickListener(v -> {
+            // FUTURE WORK: persist profile name / assistant name / volume to storage.
+            toast(getString(R.string.settings_saved));
+            ensureAssistantPermissions();
+        });
+
+        btnToggleBubble.setOnClickListener(v -> toggleFloatingBubble());
+
+        refreshBubbleControl();
+    }
+
+    private void ensureAssistantPermissions() {
+        // Overlay ("super position"): draw the assistant UI on top of other apps.
+        if (!PermissionCoordinator.canDrawOverlays(this)) {
+            overlayPermissionLauncher.launch(
+                    PermissionCoordinator.overlaySettingsIntent(this));
+            return;
+        }
+
+        // Accessibility service: lets Atom read on-screen content and act across apps.
+        if (!PermissionCoordinator.isAccessibilityServiceEnabled(this)) {
+            toast("Enable \"Atom\" under Accessibility");
+            startActivity(PermissionCoordinator.accessibilitySettingsIntent());
+            return;
+        }
+
+        // Screen capture (MediaProjection). FUTURE WORK: capture itself is not implemented.
+        screenCaptureLauncher.launch(
+                PermissionCoordinator.screenCaptureIntent(this));
+    }
+
+    private void toggleFloatingBubble() {
+        if (bubbleEnabled) {
+            startService(new Intent(this, FloatingBubbleService.class)
+                    .setAction(FloatingBubbleService.ACTION_STOP));
+            bubbleEnabled = false;
+            toast(getString(R.string.settings_bubble_stopped));
+            refreshBubbleControl();
+            return;
+        }
+
+        if (!PermissionCoordinator.canDrawOverlays(this)) {
+            toast(getString(R.string.settings_bubble_needs_overlay));
+            overlayPermissionLauncher.launch(
+                    PermissionCoordinator.overlaySettingsIntent(this));
+            return;
+        }
+
+        Intent start = new Intent(this, FloatingBubbleService.class)
+                .setAction(FloatingBubbleService.ACTION_START);
+        startForegroundService(start);
+        bubbleEnabled = true;
+        toast(getString(R.string.settings_bubble_started));
+        refreshBubbleControl();
+    }
+
+    /** Syncs the toggle's label and the status line with overlay-permission/run state. */
+    private void refreshBubbleControl() {
+        boolean canDraw = PermissionCoordinator.canDrawOverlays(this);
+        btnToggleBubble.setText(bubbleEnabled
+                ? R.string.settings_disable_bubble
+                : R.string.settings_enable_bubble);
+
+        if (!canDraw) {
+            tvBubbleStatus.setVisibility(TextView.VISIBLE);
+            tvBubbleStatus.setText(R.string.settings_bubble_needs_overlay);
+        } else if (bubbleEnabled) {
+            tvBubbleStatus.setVisibility(TextView.VISIBLE);
+            tvBubbleStatus.setText(R.string.settings_bubble_started);
+        } else {
+            tvBubbleStatus.setVisibility(TextView.GONE);
+        }
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 }
