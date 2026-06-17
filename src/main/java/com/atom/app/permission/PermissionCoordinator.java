@@ -1,18 +1,38 @@
 package com.atom.app.permission;
 
+import android.Manifest;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.provider.Settings;
 import android.text.TextUtils;
 
+import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 
 public final class PermissionCoordinator {
 
     private PermissionCoordinator() { }
+
+    /** Dangerous runtime permission an action needs before it runs, or null if none. */
+    public static String requiredPermission(ResolvedAction action) {
+        if (action == null) {
+            return null;
+        }
+        // MAKE_CALL with ACTION_CALL needs CALL_PHONE; other actions use
+        // permissionless Intents (dialer, SMS composer, settings panels).
+        return switch (action.type()) {
+            case MAKE_CALL -> Manifest.permission.CALL_PHONE;
+            default -> null;
+        };
+    }
+
+    public static boolean isGranted(Context context, String permission) {
+        return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
 
     /** True if the app may draw overlays on top of other apps. */
     public static boolean canDrawOverlays(Context context) {
