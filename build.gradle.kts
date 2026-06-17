@@ -51,6 +51,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
     }
+
+    testOptions {
+        // Tests use JUnit 5 (Jupiter); AGP runs them on the JUnit Platform.
+        unitTests.all { it.useJUnitPlatform() }
+    }
 }
 
 protobuf {
@@ -88,8 +93,14 @@ dependencies {
     // Animaciones
     implementation("com.airbnb.android:lottie:6.7.1")
 
-    // Testing
-    testImplementation("junit:junit:4.13.2")
+    // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:launcher")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
+    testImplementation("org.assertj:assertj-core:3.27.3")
+    testImplementation("io.grpc:grpc-testing:1.62.2")
+    testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 
