@@ -27,7 +27,7 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
     @Override
     public void onCreate() {
         super.onCreate();
-        appContainer = new AppContainer();
+        appContainer = new AppContainer(this);
         registerActivityLifecycleCallbacks(this);
     }
 

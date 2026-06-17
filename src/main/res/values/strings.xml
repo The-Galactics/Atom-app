@@ -46,6 +46,12 @@
     <string name="settings_bubble_started">Floating bubble enabled</string>
     <string name="settings_bubble_stopped">Floating bubble turned off</string>
 
+    <!-- Action confirmation -->
+    <string name="action_confirm_title">Confirm action</string>
+    <string name="action_confirm_default">Do you want Atom to perform this action?</string>
+    <string name="action_confirm_yes">Yes</string>
+    <string name="action_confirm_no">Cancel</string>
+
     <!-- Floating overlay -->
     <string name="overlay_notification_title">Atom is floating</string>
     <string name="overlay_notification_text">Tap the bubble to ask Atom from any app.</string>
