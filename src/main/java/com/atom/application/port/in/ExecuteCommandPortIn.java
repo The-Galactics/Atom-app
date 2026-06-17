@@ -1,10 +1,12 @@
 package com.atom.application.port.in;
 
+import com.atom.domain.action.ResolvedAction;
+
 import java.util.UUID;
 
 public interface ExecuteCommandPortIn {
 
-    //Method to execute commands through python.
-    String execute(UUID userId, String command);
+    //Interpret a user order through python and return the action to execute.
+    ResolvedAction execute(UUID userId, String command);
 
 }
