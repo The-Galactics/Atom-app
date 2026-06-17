@@ -24,6 +24,8 @@
     <string name="cd_close">Close</string>
     <string name="cd_back">Back</string>
     <string name="cd_atom_bubble">Atom floating assistant</string>
+    <string name="cd_hide">Hide while using other apps</string>
+    <string name="cd_show_bubble">Show Atom bubble</string>
 
     <!-- In-app input bar -->
     <string name="input_hint">Ask Atom…</string>
@@ -58,6 +60,9 @@
     <!-- Floating overlay -->
     <string name="overlay_notification_title">Atom is floating</string>
     <string name="overlay_notification_text">Tap the bubble to ask Atom from any app.</string>
+    <string name="overlay_notification_text_hidden">Hidden. Tap to show Atom over your apps.</string>
+    <string name="overlay_action_show">Show</string>
+    <string name="overlay_action_stop">Turn off</string>
     <string name="overlay_channel_name">Atom floating assistant</string>
     <string name="overlay_panel_hint">Ask Atom…</string>
     <string name="overlay_sending">Sending to Atom…</string>
