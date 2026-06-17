@@ -1,6 +1,7 @@
 package com.atom.app.di;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import java.util.UUID;
 
@@ -33,13 +34,22 @@ public class AppContainer {
     private final DeviceSecurityPort deviceSecurityUseCase;
     private final InputValidationPort inputValidationUsecase;
 
-    // Process-scoped conversation identity. Generated once per app process so every
-    // ChatRepository (chat screen + floating bubble) shares the same session and the
-    // backend can keep in-session context. Resets on app restart (no auth yet).
-    private final UUID sessionUserId = UUID.randomUUID();
-    private final UUID sessionChatId = UUID.randomUUID();
+    // Persistent conversation identity. Stored in SharedPreferences and reused across
+    // app restarts so the backend keeps the same session (and its memory) for this
+    // device. Shared by every ChatRepository (chat screen + floating bubble).
+    private static final String SESSION_PREFS = "atom_session";
+    private static final String KEY_USER_ID = "session_user_id";
+    private static final String KEY_CHAT_ID = "session_chat_id";
+    private final UUID sessionUserId;
+    private final UUID sessionChatId;
 
     public AppContainer(Context context) {
+
+        // Load (or lazily create + persist) the device-scoped conversation identity.
+        SharedPreferences sessionPrefs =
+                context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE);
+        this.sessionUserId = loadOrCreateUuid(sessionPrefs, KEY_USER_ID);
+        this.sessionChatId = loadOrCreateUuid(sessionPrefs, KEY_CHAT_ID);
 
         // gRPC adapter -> external interaction out-port. Host/port from BuildConfig.
         this.interactionGrpcAdapter = new InteractionGrpcAdapter(
@@ -82,6 +92,21 @@ public class AppContainer {
 
     public InputValidationPort getInputValidationUsecase() {
         return inputValidationUsecase;
+    }
+
+    /** Returns the stored UUID for {@code key}, creating and persisting one if absent. */
+    private static UUID loadOrCreateUuid(SharedPreferences prefs, String key) {
+        String stored = prefs.getString(key, null);
+        if (stored != null) {
+            try {
+                return UUID.fromString(stored);
+            } catch (IllegalArgumentException ignored) {
+                // Corrupted value — fall through and regenerate.
+            }
+        }
+        UUID generated = UUID.randomUUID();
+        prefs.edit().putString(key, generated.toString()).apply();
+        return generated;
     }
 
     public UUID getSessionUserId() {
