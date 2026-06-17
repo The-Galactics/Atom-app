@@ -13,8 +13,10 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.permission.PermissionCoordinator;
+import com.atom.app.settings.AtomPreferences;
 import com.atom.infrastructure.adapter.screen.ScreenCaptureService;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
 
 public class SettingsActivity extends AppCompatActivity {
 
@@ -23,6 +25,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     // Drives the button label/state; the service itself is the source of truth.
     private boolean bubbleEnabled = false;
+
+    private AtomPreferences preferences;
 
     // Overlay ("super position") permission result: re-check on return from Settings.
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
@@ -64,6 +68,14 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialButton btnSave = findViewById(R.id.btn_save);
         btnToggleBubble = findViewById(R.id.btn_toggle_bubble);
         tvBubbleStatus = findViewById(R.id.tv_bubble_status);
+        MaterialSwitch switchTts = findViewById(R.id.switch_tts);
+
+        preferences = new AtomPreferences(this);
+
+        // Spoken responses toggle: reflect stored value and persist immediately.
+        switchTts.setChecked(preferences.isTtsEnabled());
+        switchTts.setOnCheckedChangeListener(
+                (button, checked) -> preferences.setTtsEnabled(checked));
 
         btnBack.setOnClickListener(v -> finish());
 

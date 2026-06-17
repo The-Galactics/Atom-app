@@ -22,12 +22,26 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
+    <!-- Speech-to-text: capture microphone audio for voice orders. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- OPEN_APP must see other apps' launch intents under package visibility
          (Android 11+). We only need to resolve launchable activities. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!-- Speech: TTS engine and the speech-recognition service must be visible
+         under package visibility (Android 11+). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 

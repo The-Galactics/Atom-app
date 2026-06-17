@@ -1,7 +1,9 @@
 package com.atom.app;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.os.Bundle;
 import android.view.View;
@@ -13,15 +15,21 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.airbnb.lottie.LottieAnimationView;
 import com.atom.app.di.AppContainer;
+import com.atom.app.permission.PermissionCoordinator;
+import com.atom.app.settings.AtomPreferences;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
+import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
+import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,6 +42,36 @@ public class MainActivity extends AppCompatActivity {
     private EditText inputEditText;
     private ImageButton inputSend;
 
+    // Action awaiting a permission grant; resumed in permissionLauncher's callback.
+    private ResolvedAction awaitingPermission;
+
+    private final ActivityResultLauncher<String> permissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                ResolvedAction action = awaitingPermission;
+                awaitingPermission = null;
+                if (action == null) {
+                    return;
+                }
+                if (granted) {
+                    viewModel.runAction(action);
+                } else {
+                    toast(getString(R.string.action_permission_denied));
+                }
+            });
+
+    private AndroidTextToSpeech tts;
+    private AtomPreferences preferences;
+    private AndroidSpeechRecognizer speechRecognizer;
+
+    private final ActivityResultLauncher<String> micPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) {
+                    startListening();
+                } else {
+                    toast(getString(R.string.mic_permission_denied));
+                }
+            });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -43,6 +81,9 @@ public class MainActivity extends AppCompatActivity {
         AppContainer appContainer = ((AtomApp) getApplication()).getAppContainer();
         viewModel = new ViewModelProvider(this, new ChatViewModelFactory(appContainer))
                 .get(ChatViewModel.class);
+
+        tts = new AndroidTextToSpeech(this);
+        preferences = new AtomPreferences(this);
 
         // Initialize UI Components
         atomCore = findViewById(R.id.atom_core_animation);
@@ -61,9 +102,7 @@ public class MainActivity extends AppCompatActivity {
         setupObservers();
         setupInputBar();
 
-        // FUTURE WORK: capture real microphone audio; until then this sends a fixed prompt.
-        btnMic.setOnClickListener(v ->
-                viewModel.sendMessage("Hello Atom, can you help me?"));
+        btnMic.setOnClickListener(v -> onMicTapped());
 
         btnSettings.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
@@ -148,6 +187,67 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** Start listening, requesting the microphone permission first if needed. */
+    private void onMicTapped() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED) {
+            startListening();
+        } else {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+        }
+    }
+
+    private void startListening() {
+        if (speechRecognizer == null) {
+            speechRecognizer = new AndroidSpeechRecognizer(this, new SttListener());
+        }
+        statusText.setText(R.string.status_listening);
+        subStatusText.setText(R.string.sub_status_listening);
+        speechRecognizer.startListening();
+    }
+
+    /** Routes recognizer callbacks to UI state and dispatches the transcript as an order. */
+    private final class SttListener implements AndroidSpeechRecognizer.Listener {
+        @Override
+        public void onReadyForSpeech() {
+            statusText.setText(R.string.status_listening);
+            subStatusText.setText(R.string.sub_status_listening);
+        }
+
+        @Override
+        public void onEndOfSpeech() {
+            statusText.setText(R.string.status_thinking);
+            subStatusText.setText(R.string.sub_status_thinking);
+        }
+
+        @Override
+        public void onResult(String text) {
+            // Speech is treated as an ORDER, same as typed input.
+            viewModel.sendOrder(text);
+        }
+
+        @Override
+        public void onError(String message) {
+            int msg = "unavailable".equals(message)
+                    ? R.string.stt_unavailable
+                    : R.string.stt_error;
+            statusText.setText(R.string.status_idle);
+            subStatusText.setText(R.string.sub_status_tap_mic);
+            toast(getString(msg));
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (tts != null) {
+            tts.shutdown();
+        }
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+        }
+        super.onDestroy();
+    }
+
     private void toast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
@@ -157,6 +257,10 @@ public class MainActivity extends AppCompatActivity {
         viewModel.getChatResponse().observe(this, response -> {
             statusText.setText(response);
             subStatusText.setText(R.string.sub_status_responded);
+            // Speak the assistant reply aloud when enabled in Settings.
+            if (preferences.isTtsEnabled()) {
+                tts.speak(response);
+            }
         });
 
         // When waiting for the back-end
@@ -188,8 +292,19 @@ public class MainActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.action_confirm_title)
                 .setMessage(prompt)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> viewModel.runAction(action))
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> executeWithPermission(action))
                 .setNegativeButton(R.string.action_confirm_no, null)
                 .show();
+    }
+
+    /** Run the action, first requesting its runtime permission if one is missing. */
+    private void executeWithPermission(ResolvedAction action) {
+        String permission = PermissionCoordinator.requiredPermission(action);
+        if (permission == null || PermissionCoordinator.isGranted(this, permission)) {
+            viewModel.runAction(action);
+            return;
+        }
+        awaitingPermission = action;
+        permissionLauncher.launch(permission);
     }
 }
