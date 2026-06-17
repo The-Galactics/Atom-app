@@ -1,5 +1,7 @@
 package com.atom.grpc;
 
+import com.atom.domain.action.ActionType;
+import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.grpc.*;
 import io.grpc.ManagedChannel;
 import io.grpc.inprocess.InProcessChannelBuilder;
@@ -108,8 +110,8 @@ class InteractionGrpcAdapterTest {
     }
 
     @Test
-    void shouldReturnCommandResponseSuccessfully() {
-        // GIVEN
+    void shouldReturnConversationalResolvedActionWhenNoActionType() {
+        // GIVEN a conversational response (no action_type / parameters).
         UUID userId = UUID.randomUUID();
         String command = "system:status";
 
@@ -119,11 +121,38 @@ class InteractionGrpcAdapterTest {
                 .build();
 
         // WHEN
-        String result = adapter.commandResponse(userId, command);
+        ResolvedAction result = adapter.commandResponse(userId, command);
+
+        // THEN it maps to a non-executable (NONE) action carrying the reply.
+        assertNotNull(result);
+        assertEquals(ActionType.NONE, result.type());
+        assertFalse(result.isExecutable());
+        assertEquals("System operational on Linux Mint", result.outMessage());
+        assertTrue(result.parameters().isEmpty());
+    }
+
+    @Test
+    void shouldMapActionTypeAndConfirmationFlagFromWire() {
+        // GIVEN an executable action response (empty parameters_json keeps the
+        // JVM test off org.json, which is only stubbed in unit tests).
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setOutMessage("¿Llamo a mamá?")
+                .setActionType("MAKE_CALL")
+                .setConfidence(1.0f)
+                .setRequiresConfirmation(true)
+                .build();
+
+        // WHEN
+        ResolvedAction result = adapter.commandResponse(userId, "llama a mamá");
 
         // THEN
-        assertNotNull(result);
-        assertEquals("System operational on Linux Mint", result);
+        assertEquals(ActionType.MAKE_CALL, result.type());
+        assertTrue(result.isExecutable());
+        assertTrue(result.requiresConfirmation());
+        assertEquals(1.0f, result.confidence());
     }
 
     @Test
