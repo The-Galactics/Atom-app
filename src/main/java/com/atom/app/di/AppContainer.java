@@ -2,6 +2,8 @@ package com.atom.app.di;
 
 import android.content.Context;
 
+import java.util.UUID;
+
 import com.atom.app.BuildConfig;
 import com.atom.application.port.in.ExecuteCommandPortIn;
 import com.atom.application.port.in.StreamChatPortIn;
@@ -30,6 +32,12 @@ public class AppContainer {
     private final ExecuteCommandPortIn externalCommandUseCase;
     private final DeviceSecurityPort deviceSecurityUseCase;
     private final InputValidationPort inputValidationUsecase;
+
+    // Process-scoped conversation identity. Generated once per app process so every
+    // ChatRepository (chat screen + floating bubble) shares the same session and the
+    // backend can keep in-session context. Resets on app restart (no auth yet).
+    private final UUID sessionUserId = UUID.randomUUID();
+    private final UUID sessionChatId = UUID.randomUUID();
 
     public AppContainer(Context context) {
 
@@ -74,6 +82,14 @@ public class AppContainer {
 
     public InputValidationPort getInputValidationUsecase() {
         return inputValidationUsecase;
+    }
+
+    public UUID getSessionUserId() {
+        return sessionUserId;
+    }
+
+    public UUID getSessionChatId() {
+        return sessionChatId;
     }
 
     /** Releases process-scoped resources. Call once on application teardown. */

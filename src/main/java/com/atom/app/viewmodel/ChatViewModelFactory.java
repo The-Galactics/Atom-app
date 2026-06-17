@@ -22,7 +22,10 @@ public class ChatViewModelFactory implements ViewModelProvider.Factory {
     public <T extends ViewModel> T create(@NonNull Class<T> modelClass) {
         if (modelClass.isAssignableFrom(ChatViewModel.class)) {
             ChatRepository repository =
-                    new ChatRepository(appContainer.getExternalMessageUseCase());
+                    new ChatRepository(
+                            appContainer.getExternalMessageUseCase(),
+                            appContainer.getSessionUserId(),
+                            appContainer.getSessionChatId());
             CommandRepository commandRepository = new CommandRepository(
                     appContainer.getExternalCommandUseCase(),
                     appContainer.getActionExecutor());
