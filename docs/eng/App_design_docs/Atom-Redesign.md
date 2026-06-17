@@ -151,6 +151,10 @@ Pressing the IME "Send" action mirrors the send button.
 
 ## 4. Floating system overlay (configure → use)
 
+> **See also:** [`Atom-Overlay-Motion.md`](./Atom-Overlay-Motion.md) — the motion &
+> identity pass on this overlay: the bubble wears the Atom mark, the mic breathes
+> while listening, and the bubble can tuck into a screen border.
+
 Files: `FloatingBubbleService.java` (`com.atom.app.overlay`),
 `view_overlay_bubble.xml`, `view_overlay_panel.xml`; manifest service entry with
 `foregroundServiceType="specialUse"`.

@@ -154,6 +154,11 @@ de entrada. La acción "Enviar" del IME refleja el botón de enviar.
 
 ## 4. Overlay flotante del sistema (configurar → usar)
 
+> **Ver tambien:** [`Atom-Overlay-Motion.md`](./Atom-Overlay-Motion.md) — la pasada de
+> movimiento e identidad sobre este overlay: la burbuja lleva la marca Atom, el
+> microfono respira mientras escucha, y la burbuja puede esconderse en un borde de la
+> pantalla.
+
 Archivos: `FloatingBubbleService.java` (`com.atom.app.overlay`),
 `view_overlay_bubble.xml`, `view_overlay_panel.xml`; entrada de servicio en el
 manifest con `foregroundServiceType="specialUse"`.
