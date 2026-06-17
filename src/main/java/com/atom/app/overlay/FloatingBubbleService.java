@@ -1,5 +1,6 @@
 package com.atom.app.overlay;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -8,6 +9,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.IBinder;
@@ -29,6 +31,7 @@ import com.atom.app.AtomApp;
 import com.atom.app.R;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
+import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
@@ -46,6 +49,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private WindowManager.LayoutParams bubbleParams;
 
     private ChatRepository chatRepository;
+    private AndroidSpeechRecognizer speechRecognizer;
     private int touchSlop;
 
     private AtomApp app;
@@ -92,6 +96,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     private void hideOverlayViews() {
+        destroyRecognizer();
         removeView(panelView);
         panelView = null;
         removeView(bubbleView);
@@ -210,11 +215,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return false;
         });
 
-        // FUTURE WORK: real voice capture; for now the mic fires a smoke-test prompt.
-        mic.setOnClickListener(v -> {
-            status.setText(R.string.overlay_sending);
-            askAtom("Hello Atom, can you help me?", status);
-        });
+        // Tap the mic to dictate: capture speech on-device, then send the transcript.
+        mic.setOnClickListener(v -> startVoiceCapture(status));
 
         close.setOnClickListener(v -> collapseToBubble());
 
@@ -231,6 +233,68 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         status.setText(R.string.overlay_sending);
         editText.setText("");
         askAtom(text, status);
+    }
+
+    /**
+     * Capture a spoken phrase on-device and dispatch its transcript to Atom.
+     * Speech recognition needs the RECORD_AUDIO runtime permission, which a
+     * Service cannot request — it must already be granted from the app, so we
+     * fail with a hint when it is missing.
+     */
+    private void startVoiceCapture(TextView status) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            status.setText(R.string.overlay_mic_denied);
+            return;
+        }
+        if (speechRecognizer == null) {
+            speechRecognizer = new AndroidSpeechRecognizer(this, new BubbleSttListener(status));
+        }
+        speechRecognizer.startListening();
+    }
+
+    /** Routes speech-recognition callbacks to the panel status and dispatches the transcript. */
+    private final class BubbleSttListener implements AndroidSpeechRecognizer.Listener {
+        private final TextView status;
+
+        BubbleSttListener(TextView status) {
+            this.status = status;
+        }
+
+        @Override
+        public void onReadyForSpeech() {
+            if (status.isAttachedToWindow()) {
+                status.setText(R.string.overlay_listening);
+            }
+        }
+
+        @Override
+        public void onEndOfSpeech() {
+            if (status.isAttachedToWindow()) {
+                status.setText(R.string.overlay_thinking);
+            }
+        }
+
+        @Override
+        public void onResult(String text) {
+            if (text == null || text.trim().isEmpty()) {
+                if (status.isAttachedToWindow()) {
+                    status.setText(R.string.overlay_voice_error);
+                }
+                return;
+            }
+            askAtom(text, status);
+        }
+
+        @Override
+        public void onError(String message) {
+            if (!status.isAttachedToWindow()) {
+                return;
+            }
+            status.setText("unavailable".equals(message)
+                    ? R.string.overlay_voice_unavailable
+                    : R.string.overlay_voice_error);
+        }
     }
 
     private void askAtom(String prompt, TextView status) {
@@ -252,9 +316,17 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     private void collapseToBubble() {
+        destroyRecognizer();
         removeView(panelView);
         panelView = null;
         showBubble();
+    }
+
+    private void destroyRecognizer() {
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+            speechRecognizer = null;
+        }
     }
 
     private WindowManager.LayoutParams baseLayoutParams() {
@@ -291,6 +363,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (app != null) {
             app.clearForegroundListener(this);
         }
+        destroyRecognizer();
         removeView(bubbleView);
         removeView(panelView);
         bubbleView = null;
