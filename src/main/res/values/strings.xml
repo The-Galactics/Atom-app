@@ -61,6 +61,11 @@
     <string name="overlay_channel_name">Atom floating assistant</string>
     <string name="overlay_panel_hint">Ask Atom…</string>
     <string name="overlay_sending">Sending to Atom…</string>
+    <string name="overlay_listening">Listening…</string>
+    <string name="overlay_thinking">Thinking…</string>
+    <string name="overlay_mic_denied">Grant microphone permission in the Atom app first.</string>
+    <string name="overlay_voice_unavailable">Voice recognition is not available on this device.</string>
+    <string name="overlay_voice_error">I didn\'t catch that — try again.</string>
 
     <!-- Voice (STT) -->
     <string name="sub_status_listening">Listening… speak now</string>
