@@ -1,12 +1,14 @@
 package com.atom.application.port.out;
 
+import com.atom.domain.action.ResolvedAction;
+
 import java.util.UUID;
 import java.util.stream.Stream;
 
 public interface ExternalInteractionPortOut {
 
-    //Get the command response of python to show to the user.
-    String commandResponse (UUID userId, String command);
+    //Interpret a user order via python and return the resolved action to execute.
+    ResolvedAction commandResponse (UUID userId, String command);
 
     //Get the message response of python to display token per token to the user.
     Stream<String> messageResponse (UUID userId, UUID chatId, String message);
