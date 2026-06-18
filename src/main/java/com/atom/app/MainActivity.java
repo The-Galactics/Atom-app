@@ -1,6 +1,7 @@
 package com.atom.app;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -616,6 +617,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Override
     protected void onResume() {
         super.onResume();
@@ -630,7 +632,7 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(wakeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
-            registerReceiver(wakeReceiver, filter);
+                registerReceiver(wakeReceiver, filter);
         }
     }
 
