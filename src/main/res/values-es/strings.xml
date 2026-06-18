@@ -28,6 +28,8 @@
     <string name="cd_atom_bubble">Asistente flotante de Atom</string>
     <string name="cd_hide">Ocultar mientras usas otras apps</string>
     <string name="cd_show_bubble">Mostrar la burbuja de Atom</string>
+    <string name="cd_chat_user">Tú dijiste: %1$s</string>
+    <string name="cd_chat_assistant">Atom dijo: %1$s</string>
 
     <!-- Barra de entrada -->
     <string name="input_hint">Pregúntale a Atom…</string>

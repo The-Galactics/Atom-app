@@ -60,7 +60,12 @@ public class ChatHistoryAdapter extends ListAdapter<ChatMessage, ChatHistoryAdap
 
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
-        holder.text.setText(getItem(position).text);
+        ChatMessage message = getItem(position);
+        holder.text.setText(message.text);
+        // Prefix the spoken text with the sender so TalkBack distinguishes turns.
+        int cd = ChatMessage.ROLE_USER.equals(message.role)
+                ? R.string.cd_chat_user : R.string.cd_chat_assistant;
+        holder.text.setContentDescription(holder.text.getContext().getString(cd, message.text));
     }
 
     static final class MessageViewHolder extends RecyclerView.ViewHolder {
