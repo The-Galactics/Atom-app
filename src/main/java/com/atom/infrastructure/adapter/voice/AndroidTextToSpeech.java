@@ -134,6 +134,14 @@ public class AndroidTextToSpeech {
         engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID);
     }
 
+    /** Silences any in-progress or queued speech without tearing down the engine. */
+    public void stop() {
+        pending = null;
+        if (ready) {
+            engine.stop();
+        }
+    }
+
     public void shutdown() {
         engine.stop();
         engine.shutdown();
