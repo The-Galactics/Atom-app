@@ -180,6 +180,39 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_m"
+                android:text="@string/settings_tts_speed"
+                android:textAppearance="@style/TextAppearance.Atom.Caption" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_s"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <SeekBar
+                    android:id="@+id/seekbar_speed"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="@dimen/space_s"
+                    android:max="100"
+                    android:progressDrawable="@drawable/volume_track"
+                    android:thumb="@drawable/volume_thumb"
+                    android:splitTrack="false" />
+
+                <TextView
+                    android:id="@+id/tv_speed_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0.9x"
+                    android:textAppearance="@style/TextAppearance.Atom.Caption" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_xl"
                 android:text="@string/settings_assistant_access"
                 android:textAppearance="@style/TextAppearance.Atom.Title" />

@@ -24,13 +24,16 @@ public class AndroidTextToSpeech {
 
     private final TextToSpeech engine;
     private final String preferredVoiceName;
+    private final float speechRate;
     private boolean ready;
 
     // Text requested before init completed; spoken once the engine is ready.
     private String pending;
 
-    public AndroidTextToSpeech(Context context, String preferredVoiceName) {
+    public AndroidTextToSpeech(Context context, String preferredVoiceName, float speechRate) {
         this.preferredVoiceName = preferredVoiceName == null ? "" : preferredVoiceName;
+        // Clamp to a sane range; 0 or negative would make the engine ignore it.
+        this.speechRate = speechRate > 0f ? speechRate : 0.9f;
         this.engine = new TextToSpeech(context.getApplicationContext(), this::onInit);
     }
 
@@ -56,9 +59,9 @@ public class AndroidTextToSpeech {
         // robotic "compact" one). A slightly slower rate + neutral pitch reads
         // more naturally.
         selectBestSpanishVoice();
-        // A slightly lower pitch and gentler pace read warmer / less robotic.
+        // A slightly lower pitch reads warmer; the pace is user-configurable.
         engine.setPitch(0.95f);
-        engine.setSpeechRate(0.9f);
+        engine.setSpeechRate(speechRate);
         ready = true;
         if (pending != null) {
             speak(pending);
