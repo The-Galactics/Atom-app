@@ -39,12 +39,18 @@ android {
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+
+            val picovoiceKey = localProperties.getProperty("PICOVOICE_ACCESS_KEY") ?: ""
+            buildConfigField("String", "PICOVOICE_ACCESS_KEY", "\"$picovoiceKey\"")
         }
         debug {
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+
+            val picovoiceKey = localProperties.getProperty("PICOVOICE_ACCESS_KEY") ?: ""
+            buildConfigField("String", "PICOVOICE_ACCESS_KEY", "\"$picovoiceKey\"")
         }
     }
     compileOptions {
@@ -100,6 +106,9 @@ dependencies {
     testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+
+    // Wake-word detection ("Hey Atom") — Porcupine on-device hotword engine.
+    implementation("ai.picovoice:porcupine-android:3.0.3")
 
     // gRPC
     implementation("io.grpc:grpc-okhttp:1.62.2")

@@ -214,6 +214,91 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_xl"
+                android:text="@string/settings_wake_title"
+                android:textAppearance="@style/TextAppearance.Atom.Title" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_m"
+                android:background="@drawable/bg_surface_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="@dimen/space_m">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_wake_enable"
+                    android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switch_wake"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_m"
+                android:text="@string/settings_wake_name"
+                android:textAppearance="@style/TextAppearance.Atom.Caption" />
+
+            <EditText
+                android:id="@+id/et_wake_name"
+                style="@style/Widget.Atom.Input"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/input_bar_height"
+                android:layout_marginTop="@dimen/space_s"
+                android:background="@drawable/bg_surface_card"
+                android:hint="Atom"
+                android:inputType="textPersonName"
+                android:paddingHorizontal="@dimen/space_m" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_import_ppn"
+                style="@style/Widget.Atom.Button.Tonal"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/input_bar_height"
+                android:layout_marginTop="@dimen/space_s"
+                android:text="@string/settings_wake_import" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_s"
+                android:background="@drawable/bg_surface_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="@dimen/space_m">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_wake_screen_on"
+                    android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switch_wake_screen"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_wake_battery"
+                style="@style/Widget.Atom.Button.Tonal"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/input_bar_height"
+                android:layout_marginTop="@dimen/space_s"
+                android:text="@string/settings_wake_battery" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
                 android:text="@string/settings_assistant_access"
                 android:textAppearance="@style/TextAppearance.Atom.Title" />
 
