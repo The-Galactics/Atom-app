@@ -17,6 +17,13 @@ public class AtomPreferences {
     private static final String KEY_WAKE_SCREEN_ON_ONLY = "wake_word_screen_on_only";
     private static final String KEY_USER_NAME = "user_name";
     private static final String KEY_ASSISTANT_NAME = "assistant_name";
+    private static final String KEY_ONBOARDING_COMPLETE = "onboarding_complete";
+    private static final String KEY_LANGUAGE = "app_language";
+
+    /** Language follows the system locale until the user picks a specific one. */
+    public static final String LANGUAGE_SYSTEM = "system";
+    public static final String LANGUAGE_ENGLISH = "en";
+    public static final String LANGUAGE_SPANISH = "es";
 
     private final SharedPreferences prefs;
 
@@ -86,6 +93,10 @@ public class AtomPreferences {
         return prefs.getBoolean(KEY_WAKE_SCREEN_ON_ONLY, false);
     }
 
+    public void setWakeWordScreenOnOnly(boolean screenOnOnly) {
+        prefs.edit().putBoolean(KEY_WAKE_SCREEN_ON_ONLY, screenOnOnly).apply();
+    }
+
     /** Voice input defaults to unmuted (mic available). */
     public boolean isMicMuted() {
         return prefs.getBoolean(KEY_MIC_MUTED, false);
@@ -112,6 +123,28 @@ public class AtomPreferences {
     public void setAssistantName(String name) {
         prefs.edit().putString(KEY_ASSISTANT_NAME, name == null || name.trim().isEmpty()
                 ? "Atom" : name.trim()).apply();
+    }
+
+    /** True once the user has finished the first-run onboarding flow. */
+    public boolean isOnboardingComplete() {
+        return prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false);
+    }
+
+    public void setOnboardingComplete(boolean complete) {
+        prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETE, complete).apply();
+    }
+
+    /**
+     * UI language preference: {@link #LANGUAGE_SYSTEM} (follow the device),
+     * {@link #LANGUAGE_ENGLISH}, or {@link #LANGUAGE_SPANISH}. Drives
+     * AppCompat's per-app locale at startup and when changed in Settings.
+     */
+    public String getLanguage() {
+        return prefs.getString(KEY_LANGUAGE, LANGUAGE_SYSTEM);
+    }
+
+    public void setLanguage(String language) {
+        prefs.edit().putString(KEY_LANGUAGE, language == null ? LANGUAGE_SYSTEM : language).apply();
     }
 
     /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */
