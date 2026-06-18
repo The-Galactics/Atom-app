@@ -90,6 +90,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.10.0")
     implementation("androidx.lifecycle:lifecycle-livedata:2.10.0")
 
+    // Conversation history UI: a scrolling transcript list and the multi-step onboarding pager.
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
+
+    // Room: on-device persistence for the conversation transcript (Java uses annotationProcessor).
+    implementation("androidx.room:room-runtime:2.6.1")
+    annotationProcessor("androidx.room:room-compiler:2.6.1")
+
     // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:launcher")

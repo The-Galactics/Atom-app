@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One onboarding step. The optional input field is shown only for the name steps. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/space_xl">
+
+    <TextView
+        android:id="@+id/onboarding_page_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.Atom.Display" />
+
+    <TextView
+        android:id="@+id/onboarding_page_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_m"
+        android:gravity="center"
+        android:textAppearance="@style/TextAppearance.Atom.Caption" />
+
+    <EditText
+        android:id="@+id/onboarding_page_input"
+        style="@style/Widget.Atom.Input"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/input_bar_height"
+        android:layout_marginTop="@dimen/space_l"
+        android:background="@drawable/bg_surface_card"
+        android:inputType="textPersonName"
+        android:paddingHorizontal="@dimen/space_m"
+        android:visibility="gone" />
+
+</LinearLayout>

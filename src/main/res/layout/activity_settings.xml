@@ -62,7 +62,7 @@
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
                 android:background="@drawable/bg_surface_card"
-                android:hint="Julian"
+                android:hint="@string/settings_your_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
 
@@ -80,50 +80,9 @@
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
                 android:background="@drawable/bg_surface_card"
-                android:hint="Atom"
+                android:hint="@string/settings_assistant_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_xl"
-                android:text="@string/settings_voice_volume"
-                android:textAppearance="@style/TextAppearance.Atom.Title" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_m"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_volume"
-                    android:importantForAccessibility="no"
-                    app:tint="@color/on_surface_label" />
-
-                <SeekBar
-                    android:id="@+id/seekbar_volume"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginHorizontal="@dimen/space_s"
-                    android:max="100"
-                    android:progress="70"
-                    android:progressDrawable="@drawable/volume_track"
-                    android:thumb="@drawable/volume_thumb"
-                    android:splitTrack="false" />
-
-                <TextView
-                    android:id="@+id/tv_volume_value"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="70%"
-                    android:textAppearance="@style/TextAppearance.Atom.Caption" />
-            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -210,11 +169,13 @@
                     android:textAppearance="@style/TextAppearance.Atom.Caption" />
             </LinearLayout>
 
+            <!-- Permission dashboard: live status + one-tap fix for the three
+                 capabilities Atom relies on. Status chips refresh in onResume. -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_xl"
-                android:text="@string/settings_wake_title"
+                android:text="@string/settings_permissions"
                 android:textAppearance="@style/TextAppearance.Atom.Title" />
 
             <LinearLayout
@@ -222,78 +183,192 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_m"
                 android:background="@drawable/bg_surface_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:padding="@dimen/space_m">
 
-                <TextView
-                    android:layout_width="0dp"
+                <!-- Overlay row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/settings_wake_enable"
-                    android:textAppearance="@style/TextAppearance.Atom.Label" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/switch_wake"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_overlay"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_overlay_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_overlay"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix" />
+                </LinearLayout>
+
+                <!-- Accessibility row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_accessibility"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_accessibility_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_accessibility"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix" />
+                </LinearLayout>
+
+                <!-- Microphone row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_microphone"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_microphone_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_microphone"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix" />
+                </LinearLayout>
             </LinearLayout>
 
+            <!-- Wake word section: enable + battery-saver toggle. -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_m"
-                android:text="@string/settings_wake_name"
-                android:textAppearance="@style/TextAppearance.Atom.Caption" />
-
-            <EditText
-                android:id="@+id/et_wake_name"
-                style="@style/Widget.Atom.Input"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/input_bar_height"
-                android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
-                android:hint="Atom"
-                android:inputType="textPersonName"
-                android:paddingHorizontal="@dimen/space_m" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_wake_save"
-                style="@style/Widget.Atom.Button.Tonal"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/input_bar_height"
-                android:layout_marginTop="@dimen/space_s"
-                android:text="@string/settings_wake_save" />
+                android:layout_marginTop="@dimen/space_xl"
+                android:text="@string/settings_wake_word"
+                android:textAppearance="@style/TextAppearance.Atom.Title" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_s"
+                android:layout_marginTop="@dimen/space_m"
                 android:background="@drawable/bg_surface_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:padding="@dimen/space_m">
 
-                <TextView
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/settings_wake_screen_on"
-                    android:textAppearance="@style/TextAppearance.Atom.Label" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
 
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/switch_wake_screen"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/settings_wake_enable"
+                        android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_wake_enable"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/label_wake_screen_on"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/settings_wake_screen_on"
+                        android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switch_wake_screen_on"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
             </LinearLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_wake_battery"
-                style="@style/Widget.Atom.Button.Tonal"
+            <!-- Language section: System default / English / Español. -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xl"
+                android:text="@string/settings_language"
+                android:textAppearance="@style/TextAppearance.Atom.Title" />
+
+            <Spinner
+                android:id="@+id/spinner_language"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/input_bar_height"
-                android:layout_marginTop="@dimen/space_s"
-                android:text="@string/settings_wake_battery" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_m"
+                android:background="@drawable/bg_surface_card"
+                android:padding="@dimen/space_s" />
 
             <TextView
                 android:layout_width="wrap_content"
@@ -359,19 +434,19 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Free"
+                        android:text="@string/settings_plan_free"
                         android:textAppearance="@style/TextAppearance.Atom.Label" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
-                        android:text="Basic features"
+                        android:text="@string/settings_plan_free_desc"
                         android:textAppearance="@style/TextAppearance.Atom.Caption" />
                 </LinearLayout>
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="$0"
+                    android:text="@string/settings_plan_free_price"
                     android:textAppearance="@style/TextAppearance.Atom.Label" />
             </LinearLayout>
 
@@ -391,19 +466,19 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Pro"
+                        android:text="@string/settings_plan_pro"
                         android:textAppearance="@style/TextAppearance.Atom.Label" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
-                        android:text="Advanced AI, faster responses"
+                        android:text="@string/settings_plan_pro_desc"
                         android:textAppearance="@style/TextAppearance.Atom.Caption" />
                 </LinearLayout>
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="$9.99"
+                    android:text="@string/settings_plan_pro_price"
                     android:textAppearance="@style/TextAppearance.Atom.Label" />
             </LinearLayout>
 

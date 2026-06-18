@@ -11,6 +11,7 @@ import android.provider.AlarmClock;
 import android.provider.Settings;
 import android.util.Log;
 
+import com.atom.app.R;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ResolvedAction;
@@ -57,7 +58,7 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
             };
         } catch (Exception e) {
             Log.e(TAG, "Action execution failed: " + action.type(), e);
-            return ActionOutcome.failed("No pude completar la acción: " + e.getMessage());
+            return ActionOutcome.failed(appContext.getString(R.string.action_failed, e.getMessage()));
         }
     }
 
@@ -65,19 +66,21 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
 
     private ActionOutcome openApp(String appName) {
         if (isBlank(appName)) {
-            return ActionOutcome.failed("No entendí qué aplicación abrir.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_open_app_unknown));
         }
         String packageName = resolvePackage(appName);
         if (packageName == null) {
-            return ActionOutcome.failed("No encontré la aplicación '" + appName + "'.");
+            return ActionOutcome.failed(
+                    appContext.getString(R.string.action_open_app_not_found, appName));
         }
         Intent launch = appContext.getPackageManager().getLaunchIntentForPackage(packageName);
         if (launch == null) {
-            return ActionOutcome.failed("No pude abrir '" + appName + "'.");
+            return ActionOutcome.failed(
+                    appContext.getString(R.string.action_open_app_failed, appName));
         }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(launch);
-        return ActionOutcome.ok("Abriendo " + appName + ".");
+        return ActionOutcome.ok(appContext.getString(R.string.action_opening_app, appName));
     }
 
     /** Best-effort label/package fuzzy match against launchable apps. */
@@ -104,7 +107,7 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
 
     private ActionOutcome makeCall(String target) {
         if (isBlank(target)) {
-            return ActionOutcome.failed("No entendí a quién llamar.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_call_unknown));
         }
         // Requires the CALL_PHONE runtime permission. Without it, fall back to
         // the dialer (ACTION_DIAL needs no permission) so the order still helps.
@@ -114,12 +117,12 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         Intent intent = new Intent(action, Uri.parse("tel:" + Uri.encode(target)));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
-        return ActionOutcome.ok("Llamando a " + target + ".");
+        return ActionOutcome.ok(appContext.getString(R.string.action_calling, target));
     }
 
     private ActionOutcome sendMessage(String recipient, String body) {
         if (isBlank(recipient)) {
-            return ActionOutcome.failed("No entendí a quién enviar el mensaje.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_message_unknown));
         }
         // Open the SMS composer pre-filled (ACTION_SENDTO needs no permission;
         // the user taps send). SmsManager could send silently but needs SEND_SMS.
@@ -129,12 +132,12 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
-        return ActionOutcome.ok("Preparando un mensaje para " + recipient + ".");
+        return ActionOutcome.ok(appContext.getString(R.string.action_message_preparing, recipient));
     }
 
     private ActionOutcome setAlarm(String time, String label) {
         if (isBlank(time) || !time.contains(":")) {
-            return ActionOutcome.failed("No entendí la hora de la alarma.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_alarm_unknown));
         }
         String[] parts = time.trim().split(":");
         int hour = Integer.parseInt(parts[0].trim());
@@ -149,16 +152,16 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
-        return ActionOutcome.ok("Alarma puesta a las " + time + ".");
+        return ActionOutcome.ok(appContext.getString(R.string.action_alarm_set, time));
     }
 
     private ActionOutcome setTimer(String durationSeconds, String label) {
         if (isBlank(durationSeconds)) {
-            return ActionOutcome.failed("No entendí la duración del temporizador.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_timer_unknown));
         }
         int seconds = (int) Math.round(Double.parseDouble(durationSeconds.trim()));
         if (seconds <= 0) {
-            return ActionOutcome.failed("La duración del temporizador no es válida.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_timer_invalid));
         }
         Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER)
                 .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
@@ -168,28 +171,32 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
-        return ActionOutcome.ok("Temporizador iniciado.");
+        return ActionOutcome.ok(appContext.getString(R.string.action_timer_started));
     }
 
     private ActionOutcome toggleSetting(String setting, String state) {
         if (isBlank(setting)) {
-            return ActionOutcome.failed("No entendí qué ajuste cambiar.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_setting_unknown));
         }
         boolean enable = !"off".equalsIgnoreCase(state); // "on"/"toggle"/null -> enable
         return switch (setting.toLowerCase(Locale.ROOT)) {
             case "flashlight" -> toggleFlashlight(enable);
-            case "wifi" -> openSettingsPanel(panelOrFallback(Settings.Panel.ACTION_WIFI), "Wi‑Fi");
-            case "bluetooth" -> openSettingsPanel(Settings.ACTION_BLUETOOTH_SETTINGS, "Bluetooth");
+            case "wifi" -> openSettingsPanel(panelOrFallback(Settings.Panel.ACTION_WIFI),
+                    appContext.getString(R.string.setting_label_wifi));
+            case "bluetooth" -> openSettingsPanel(Settings.ACTION_BLUETOOTH_SETTINGS,
+                    appContext.getString(R.string.setting_label_bluetooth));
             case "do_not_disturb" -> openSettingsPanel(
-                    Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS, "No molestar");
-            default -> ActionOutcome.failed("Ajuste no soportado: " + setting + ".");
+                    Settings.ACTION_ZEN_MODE_PRIORITY_SETTINGS,
+                    appContext.getString(R.string.setting_label_dnd));
+            default -> ActionOutcome.failed(
+                    appContext.getString(R.string.action_setting_unsupported, setting));
         };
     }
 
     private ActionOutcome toggleFlashlight(boolean enable) {
         CameraManager cameraManager = (CameraManager) appContext.getSystemService(Context.CAMERA_SERVICE);
         if (cameraManager == null) {
-            return ActionOutcome.failed("Este dispositivo no tiene linterna controlable.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_torch_unavailable));
         }
         try {
             for (String id : cameraManager.getCameraIdList()) {
@@ -197,12 +204,14 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
                         .get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE);
                 if (Boolean.TRUE.equals(hasFlash)) {
                     cameraManager.setTorchMode(id, enable);
-                    return ActionOutcome.ok(enable ? "Linterna encendida." : "Linterna apagada.");
+                    return ActionOutcome.ok(appContext.getString(
+                            enable ? R.string.action_torch_on : R.string.action_torch_off));
                 }
             }
-            return ActionOutcome.failed("No encontré una linterna en este dispositivo.");
+            return ActionOutcome.failed(appContext.getString(R.string.action_torch_none));
         } catch (Exception e) {
-            return ActionOutcome.failed("No pude cambiar la linterna: " + e.getMessage());
+            return ActionOutcome.failed(
+                    appContext.getString(R.string.action_torch_failed, e.getMessage()));
         }
     }
 
@@ -214,7 +223,7 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         Intent intent = new Intent(action);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
-        return ActionOutcome.ok("Abriendo ajustes de " + label + ".");
+        return ActionOutcome.ok(appContext.getString(R.string.action_opening_settings, label));
     }
 
     private static String panelOrFallback(String panelAction) {

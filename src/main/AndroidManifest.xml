@@ -69,6 +69,12 @@
 
         <activity android:name=".SettingsActivity" />
 
+        <!-- Conversation transcript screen. -->
+        <activity android:name=".HistoryActivity" />
+
+        <!-- First-run onboarding (name + assistant name + permissions intro). -->
+        <activity android:name=".OnboardingActivity" />
+
         <!-- Accessibility service: enabled by the user from system Settings. -->
         <service
             android:name="com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService"
