@@ -18,21 +18,18 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
-import com.atom.app.BuildConfig;
 import com.atom.app.R;
 import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.settings.AtomPreferences;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import org.vosk.Model;
+import org.vosk.android.StorageService;
 
 /**
- * Foreground service that listens for the wake word ("Atom") with Porcupine and,
- * on detection, hands the microphone to the floating bubble to capture the
- * actual command — then resumes listening. Only Porcupine runs continuously
- * (cheap); everything heavy (STT, network, TTS) runs only after a detection.
+ * Foreground service that listens for the wake word (default "Atom") with Vosk
+ * on-device recognition and, on detection, hands the microphone to the floating
+ * bubble to capture the actual command — then resumes. The wake word is just a
+ * string the user types (no model file), matched against what Vosk hears.
  */
 public class WakeWordService extends Service implements WakeWordEngine.Listener {
 
@@ -45,17 +42,18 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
 
     private static final String CHANNEL_ID = "atom_wake_word";
     private static final int NOTIF_ID = 4711;
-    private static final String DEFAULT_KEYWORD_ASSET = "atom.ppn";
-    private static final float SENSITIVITY = 0.6f;
+    private static final String MODEL_ASSET_DIR = "model-es";
+    private static final String MODEL_TARGET_DIR = "vosk-model-es";
     // Safety net: resume listening even if the bubble never signals completion.
     private static final long RESUME_FALLBACK_MS = 10_000L;
     // Give the bubble's SpeechRecognizer time to fully release the mic before
-    // Porcupine re-opens it, so the two never contend for the microphone.
+    // Vosk re-opens it, so the two never contend for the microphone.
     private static final long RESUME_DELAY_MS = 600L;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private AtomPreferences preferences;
     private WakeWordEngine engine;
+    private Model voskModel;
 
     // True while the mic is handed off to the bubble (so a stray DONE is ignored).
     private boolean handingOff;
@@ -94,7 +92,7 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             return START_NOT_STICKY;
         }
         startForegroundNotification();
-        if (engine == null) {
+        if (engine == null && voskModel == null) {
             configureAndStart();
         }
         return START_STICKY;
@@ -102,30 +100,31 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
 
     private void configureAndStart() {
         preferences = new AtomPreferences(this);
-
-        String accessKey = BuildConfig.PICOVOICE_ACCESS_KEY;
-        if (accessKey == null || accessKey.trim().isEmpty()) {
-            Log.w(TAG, "No Picovoice access key configured — wake word disabled.");
-            stopSelf();
-            return;
-        }
-        String keywordPath = resolveKeywordPath();
-        if (keywordPath == null) {
-            Log.w(TAG, "No wake-word keyword (.ppn) available — wake word disabled.");
-            stopSelf();
-            return;
-        }
-
-        engine = new PorcupineWakeWordEngine(this, accessKey, keywordPath, SENSITIVITY, this);
-        startEngineSafely();
-
         registerDoneReceiver();
         if (preferences.isWakeWordScreenOnOnly()) {
             registerScreenReceiver();
         }
+        // Unpack the bundled model to internal storage (one-time), then listen.
+        StorageService.unpack(this, MODEL_ASSET_DIR, MODEL_TARGET_DIR,
+                model -> {
+                    voskModel = model;
+                    buildAndStartEngine();
+                },
+                exception -> {
+                    Log.e(TAG, "Vosk model unpack failed", exception);
+                    stopSelf();
+                });
+    }
+
+    private void buildAndStartEngine() {
+        engine = new VoskWakeWordEngine(voskModel, preferences.getWakeWordName(), this);
+        startEngineSafely();
     }
 
     private void startEngineSafely() {
+        if (engine == null) {
+            return;
+        }
         try {
             engine.start();
         } catch (Exception e) {
@@ -152,13 +151,10 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
                         .setAction(FloatingBubbleService.ACTION_LISTEN);
                 startForegroundService(listen);
             } catch (Exception e) {
-                // e.g. ForegroundServiceStartNotAllowedException if overlay perm
-                // was revoked. Don't crash — just resume listening.
                 Log.e(TAG, "Could not summon bubble to listen", e);
                 resumeListening();
                 return;
             }
-            // Resume even if the bubble never reports back (user cancels, etc.).
             mainHandler.removeCallbacks(resumeFallback);
             mainHandler.postDelayed(resumeFallback, RESUME_FALLBACK_MS);
         });
@@ -169,7 +165,7 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         Log.e(TAG, "Wake-word error: " + message);
     }
 
-    /** Resumes Porcupine after the bubble has freed the mic. Idempotent. */
+    /** Resumes listening after the bubble has freed the mic. Idempotent. */
     private void resumeListening() {
         mainHandler.removeCallbacks(resumeFallback);
         if (!handingOff) {
@@ -183,30 +179,6 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     }
 
     // --- setup helpers ---
-
-    @Nullable
-    private String resolveKeywordPath() {
-        String custom = preferences.getWakeWordPpnPath();
-        if (!custom.isEmpty() && new File(custom).exists()) {
-            return custom;
-        }
-        // Fall back to the bundled default keyword, copied to internal storage.
-        File out = new File(getFilesDir(), DEFAULT_KEYWORD_ASSET);
-        if (!out.exists()) {
-            try (InputStream in = getAssets().open(DEFAULT_KEYWORD_ASSET);
-                 FileOutputStream fos = new FileOutputStream(out)) {
-                byte[] buffer = new byte[4096];
-                int read;
-                while ((read = in.read(buffer)) > 0) {
-                    fos.write(buffer, 0, read);
-                }
-            } catch (IOException e) {
-                Log.w(TAG, "Bundled keyword asset missing", e);
-                return null;
-            }
-        }
-        return out.getAbsolutePath();
-    }
 
     private void registerDoneReceiver() {
         IntentFilter filter = new IntentFilter(ACTION_LISTEN_DONE);
@@ -270,6 +242,10 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         if (engine != null) {
             engine.release();
             engine = null;
+        }
+        if (voskModel != null) {
+            voskModel.close();
+            voskModel = null;
         }
         super.onDestroy();
     }

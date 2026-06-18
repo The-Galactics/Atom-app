@@ -7,8 +7,6 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -19,9 +17,6 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -62,13 +57,6 @@ public class SettingsActivity extends AppCompatActivity {
     private static final float MIN_RATE = 0.5f;
     private static final float MAX_RATE = 1.5f;
 
-    // Picks a custom Porcupine keyword (.ppn) the user generated for their name.
-    private final ActivityResultLauncher<String[]> importPpnLauncher =
-            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
-                if (uri != null) {
-                    importPpn(uri);
-                }
-            });
 
     // Overlay ("super position") permission result: re-check on return from Settings.
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
@@ -330,17 +318,12 @@ public class SettingsActivity extends AppCompatActivity {
     private void setupWakeWordControls() {
         MaterialSwitch switchWake = findViewById(R.id.switch_wake);
         EditText etWakeName = findViewById(R.id.et_wake_name);
-        MaterialButton btnImportPpn = findViewById(R.id.btn_import_ppn);
+        MaterialButton btnWakeSave = findViewById(R.id.btn_wake_save);
         MaterialSwitch switchWakeScreen = findViewById(R.id.switch_wake_screen);
         MaterialButton btnWakeBattery = findViewById(R.id.btn_wake_battery);
 
         switchWake.setChecked(preferences.isWakeWordEnabled());
         switchWake.setOnCheckedChangeListener((button, checked) -> {
-            if (checked && BuildConfig.PICOVOICE_ACCESS_KEY.trim().isEmpty()) {
-                toast(getString(R.string.settings_wake_needs_key));
-                button.setChecked(false);
-                return;
-            }
             if (checked && !PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
                 toast(getString(R.string.mic_permission_denied));
                 button.setChecked(false);
@@ -355,18 +338,13 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         etWakeName.setText(preferences.getWakeWordName());
-        etWakeName.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override
-            public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override
-            public void afterTextChanged(Editable s) {
-                preferences.setWakeWordName(s.toString());
-            }
+        // Type any name + Save: persist it and reload the listener with the new word.
+        btnWakeSave.setOnClickListener(v -> {
+            preferences.setWakeWordName(etWakeName.getText().toString());
+            etWakeName.setText(preferences.getWakeWordName());
+            toast(getString(R.string.settings_wake_saved));
+            restartWakeServiceIfEnabled();
         });
-
-        btnImportPpn.setOnClickListener(v -> importPpnLauncher.launch(new String[]{"*/*"}));
 
         switchWakeScreen.setChecked(preferences.isWakeWordScreenOnOnly());
         switchWakeScreen.setOnCheckedChangeListener((button, checked) -> {
@@ -375,27 +353,6 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         btnWakeBattery.setOnClickListener(v -> openWakeBatterySettings());
-    }
-
-    /** Copies the chosen .ppn into app storage and points the wake word at it. */
-    private void importPpn(Uri uri) {
-        File out = new File(getFilesDir(), "custom_wakeword.ppn");
-        try (InputStream in = getContentResolver().openInputStream(uri);
-             FileOutputStream fos = new FileOutputStream(out)) {
-            if (in == null) {
-                throw new java.io.IOException("could not open uri");
-            }
-            byte[] buffer = new byte[4096];
-            int read;
-            while ((read = in.read(buffer)) > 0) {
-                fos.write(buffer, 0, read);
-            }
-            preferences.setWakeWordPpnPath(out.getAbsolutePath());
-            toast(getString(R.string.settings_wake_imported));
-            restartWakeServiceIfEnabled();
-        } catch (Exception e) {
-            toast(getString(R.string.settings_wake_import_failed));
-        }
     }
 
     private void startWakeService() {
