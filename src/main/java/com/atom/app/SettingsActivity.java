@@ -340,7 +340,13 @@ public class SettingsActivity extends AppCompatActivity {
         etWakeName.setText(preferences.getWakeWordName());
         // Type any name + Save: persist it and reload the listener with the new word.
         btnWakeSave.setOnClickListener(v -> {
-            preferences.setWakeWordName(etWakeName.getText().toString());
+            String name = etWakeName.getText().toString().trim();
+            // Very short names match too much speech -> constant false triggers.
+            if (name.length() < 3) {
+                toast(getString(R.string.settings_wake_name_too_short));
+                return;
+            }
+            preferences.setWakeWordName(name);
             etWakeName.setText(preferences.getWakeWordName());
             toast(getString(R.string.settings_wake_saved));
             restartWakeServiceIfEnabled();
