@@ -25,6 +25,9 @@
     <!-- Speech-to-text: capture microphone audio for voice orders. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Always-on wake word ("Hey Atom") runs as a microphone foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
     <!-- OPEN_APP must see other apps' launch intents under package visibility
          (Android 11+). We only need to resolve launchable activities. -->
     <queries>
@@ -84,6 +87,12 @@
             android:name="com.atom.infrastructure.adapter.screen.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Always-on wake-word listener (Porcupine), microphone foreground service. -->
+        <service
+            android:name="com.atom.infrastructure.adapter.wake.WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Floating "bubble" assistant overlay (draw over other apps). -->
         <service
