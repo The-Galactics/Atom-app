@@ -10,6 +10,8 @@
     <string name="status_thinking">Thinking</string>
     <string name="status_error">Something went wrong</string>
     <string name="sub_status_tap_mic">Tap the mic or type to begin</string>
+    <string name="sub_status_muted">Mic muted — long-press the mic to turn it back on</string>
+    <string name="mic_muted_hint">Mic is muted. Long-press to unmute.</string>
     <string name="sub_status_thinking">Reaching the Atom core</string>
     <string name="sub_status_responded">Atom responded</string>
 
@@ -17,6 +19,7 @@
     <string name="cd_history">History</string>
     <string name="cd_settings">Settings</string>
     <string name="cd_mic">Start listening</string>
+    <string name="cd_mic_muted">Microphone muted, long-press to unmute</string>
     <string name="cd_keyboard">Type a message</string>
     <string name="cd_volume">Volume</string>
     <string name="cd_send">Send</string>
