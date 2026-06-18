@@ -434,6 +434,10 @@ public class MainActivity extends AppCompatActivity {
         }
         btnMic.setImageResource(muted ? R.drawable.ic_mic_off : R.drawable.ic_mic);
         btnMic.setContentDescription(getString(muted ? R.string.cd_mic_muted : R.string.cd_mic));
+        // Desaturate/dim the core so a muted mic doesn't look like plain idle.
+        if (atomCore != null) {
+            atomCore.setMuted(muted);
+        }
     }
 
     private void startListening() {
