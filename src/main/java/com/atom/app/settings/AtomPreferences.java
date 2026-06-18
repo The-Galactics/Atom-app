@@ -8,6 +8,7 @@ public class AtomPreferences {
 
     private static final String PREFS_NAME = "atom_prefs";
     private static final String KEY_TTS_ENABLED = "tts_enabled";
+    private static final String KEY_REMOTE_TTS_ENABLED = "remote_tts_enabled";
     private static final String KEY_MIC_MUTED = "mic_muted";
 
     private final SharedPreferences prefs;
@@ -25,6 +26,15 @@ public class AtomPreferences {
 
     public void setTtsEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_TTS_ENABLED, enabled).apply();
+    }
+
+    /** Neural backend (Kokoro) voice defaults to ON; falls back to on-device TTS on failure. */
+    public boolean isRemoteTtsEnabled() {
+        return prefs.getBoolean(KEY_REMOTE_TTS_ENABLED, true);
+    }
+
+    public void setRemoteTtsEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_REMOTE_TTS_ENABLED, enabled).apply();
     }
 
     /** Voice input defaults to unmuted (mic available). */
