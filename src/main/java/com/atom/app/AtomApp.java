@@ -2,12 +2,15 @@ package com.atom.app;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.atom.app.di.AppContainer;
+import com.atom.app.settings.AtomPreferences;
+import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class AtomApp extends Application implements Application.ActivityLifecycleCallbacks {
 
@@ -21,6 +24,9 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
 
     private int startedActivities = 0;
     private boolean foreground = false;
+    // Attempt the wake-word FGS once per foreground session, at onResume (when
+    // the app is mic-eligible). Reset when we go to the background.
+    private boolean wakeAttempted = false;
     @Nullable
     private ForegroundListener foregroundListener;
 
@@ -71,6 +77,18 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
         }
     }
 
+    /** Starts the wake-word service if the user enabled it. Safe to call repeatedly. */
+    private void maybeStartWakeWord() {
+        try {
+            if (new AtomPreferences(this).isWakeWordEnabled()) {
+                startForegroundService(new Intent(this, WakeWordService.class)
+                        .setAction(WakeWordService.ACTION_START));
+            }
+        } catch (Exception ignored) {
+            // Background-start restrictions etc. — the Settings toggle still works.
+        }
+    }
+
     @Override
     public void onActivityStopped(@NonNull Activity activity) {
         if (startedActivities > 0) {
@@ -78,6 +96,7 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
         }
         if (startedActivities == 0 && foreground) {
             foreground = false;
+            wakeAttempted = false;
             if (foregroundListener != null) {
                 foregroundListener.onAppBackground();
             }
@@ -90,6 +109,11 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
 
     @Override
     public void onActivityResumed(@NonNull Activity activity) {
+        // At onResume the app is truly foreground, so a microphone FGS is allowed.
+        if (!wakeAttempted) {
+            wakeAttempted = true;
+            maybeStartWakeWord();
+        }
     }
 
     @Override

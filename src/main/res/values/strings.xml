@@ -45,6 +45,22 @@
     <string name="settings_tts_voice_auto">Automatic (best available)</string>
     <string name="settings_tts_preview">Preview voice</string>
     <string name="settings_tts_speed">Speech speed</string>
+
+    <!-- Wake word ("Hey Atom") -->
+    <string name="wake_channel_name">Atom wake word</string>
+    <string name="wake_notification_title">Atom is listening</string>
+    <string name="wake_notification_text">Say your wake word to summon Atom.</string>
+    <string name="settings_wake_title">Wake word</string>
+    <string name="settings_wake_enable">Listen for the wake word</string>
+    <string name="settings_wake_name">Wake word name</string>
+    <string name="settings_wake_save">Save wake word</string>
+    <string name="settings_wake_saved">Wake word saved</string>
+    <string name="settings_wake_screen_on">Only listen while screen is on</string>
+    <string name="settings_wake_battery">Keep Atom running (battery)</string>
+    <string name="settings_wake_imported">Custom wake word imported</string>
+    <string name="settings_wake_import_failed">Could not import the .ppn file</string>
+    <string name="settings_wake_needs_key">Wake word needs a Picovoice key — not configured yet</string>
+
     <string name="settings_membership">Membership</string>
     <string name="settings_assistant_access">Assistant access</string>
     <string name="settings_assistant_access_desc">Grant the permissions Atom needs to assist you across other apps, then turn on the floating bubble.</string>

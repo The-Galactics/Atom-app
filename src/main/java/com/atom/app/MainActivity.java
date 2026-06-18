@@ -1,10 +1,13 @@
 package com.atom.app;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.graphics.Rect;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -40,6 +43,7 @@ import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
+import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -120,6 +124,18 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void handleOnBackPressed() {
             hideInputBar();
+        }
+    };
+
+    // Wake word fired while the app is open: capture with the in-app mic.
+    private final BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!isListening
+                    && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                            == PackageManager.PERMISSION_GRANTED) {
+                startListening();
+            }
         }
     };
 
@@ -510,6 +526,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onResult(String text) {
+            notifyWakeDone();
             // Speech is treated as an ORDER, same as typed input.
             viewModel.sendOrder(text);
         }
@@ -517,6 +534,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onError(String message) {
             isListening = false;
+            notifyWakeDone();
             int msg = "unavailable".equals(message)
                     ? R.string.stt_unavailable
                     : R.string.stt_error;
@@ -527,6 +545,32 @@ public class MainActivity extends AppCompatActivity {
             applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
             toast(getString(msg));
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Listen for the wake word so it drives the in-app mic while we're visible.
+        IntentFilter filter = new IntentFilter(WakeWordService.ACTION_WAKE_IN_APP);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(wakeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(wakeReceiver, filter);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            unregisterReceiver(wakeReceiver);
+        } catch (IllegalArgumentException ignored) {
+        }
+    }
+
+    /** Tells the wake-word service the mic is free so it can resume listening. */
+    private void notifyWakeDone() {
+        sendBroadcast(new Intent(WakeWordService.ACTION_LISTEN_DONE).setPackage(getPackageName()));
     }
 
     @Override
