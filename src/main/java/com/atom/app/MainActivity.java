@@ -7,6 +7,9 @@ import android.content.pm.PackageManager;
 import android.graphics.Rect;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -52,6 +55,12 @@ public class MainActivity extends AppCompatActivity {
     private static final long INPUT_BAR_ANIM_MS = 200;
     private static final float INPUT_BAR_FALLBACK_SLIDE_DP = 64f;
 
+    // Send disc opacity while disabled (no text to send).
+    private static final float SEND_DISABLED_ALPHA = 0.4f;
+
+    // Delay before an error message fades back to the idle resting state.
+    private static final long ERROR_AUTO_RECOVER_MS = 4000;
+
     private AtomCoreView atomCore;
     private View coreGlow;
     private ImageButton btnMic, btnSettings, btnHistory, btnKeyboard, btnVolume;
@@ -85,6 +94,12 @@ public class MainActivity extends AppCompatActivity {
     private AndroidTextToSpeech tts;
     private AtomPreferences preferences;
     private AndroidSpeechRecognizer speechRecognizer;
+
+    // True while a recognition is in flight; lets a tap cancel it and gates error recovery.
+    private boolean isListening;
+
+    // Posted after an error to ease the status line back to idle.
+    private final Runnable errorRecoverRunnable = this::recoverFromError;
 
     private final ActivityResultLauncher<String> micPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
@@ -136,6 +151,17 @@ public class MainActivity extends AppCompatActivity {
 
         btnMic.setOnClickListener(v -> onMicTapped());
 
+        // Long-press the mic FAB to mute/unmute voice input. A regular tap still starts
+        // listening; muting gates that so a muted mic can't be triggered accidentally.
+        btnMic.setOnLongClickListener(v -> {
+            toggleMicMuted();
+            return true;
+        });
+
+        // Restore the persisted mute state so the icon matches reality after a cold
+        // start, process death, or configuration change (the pref outlives the Activity).
+        applyMicMutedState(preferences.isMicMuted());
+
         btnSettings.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
 
@@ -155,6 +181,16 @@ public class MainActivity extends AppCompatActivity {
 
         // Send via the trailing accent disc.
         inputSend.setOnClickListener(v -> sendFromInputBar());
+
+        // Keep send disabled/dimmed until there's non-whitespace text.
+        setSendEnabled(false);
+        inputEditText.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                setSendEnabled(s.toString().trim().length() > 0);
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
 
         // IME "Send" action mirrors the send button.
         inputEditText.setOnEditorActionListener((v, actionId, event) -> {
@@ -257,11 +293,18 @@ public class MainActivity extends AppCompatActivity {
             toast(getString(R.string.input_empty));
             return;
         }
+        inputSend.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
         // Typed input is treated as an ORDER: the backend decides whether it is
         // an executable action or a plain conversational reply.
         viewModel.sendOrder(text);
         inputEditText.setText("");
         hideInputBar();
+    }
+
+    /** Enables or dims the send disc based on whether there's text to send. */
+    private void setSendEnabled(boolean enabled) {
+        inputSend.setEnabled(enabled);
+        inputSend.setAlpha(enabled ? 1f : SEND_DISABLED_ALPHA);
     }
 
     private void showVolumeSlider() {
@@ -274,10 +317,21 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /** Start listening, requesting the microphone permission first if needed. */
+    /** Handles a mic tap: cancel if listening, hint if muted, otherwise start listening. */
     private void onMicTapped() {
-        // Acknowledge the tap with a quick scale dip-and-recover.
+        btnMic.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
         MicAnimations.playPressSettle(btnMic);
+        // Muted mic can't listen: hint and bail.
+        if (preferences.isMicMuted()) {
+            toast(getString(R.string.mic_muted_hint));
+            return;
+        }
+        // Tapping mid-listen cancels the in-flight recognition.
+        if (isListening) {
+            tearDownRecognizer();
+            fadeSwap(subStatusText, getString(R.string.sub_status_tap_mic));
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED) {
             startListening();
@@ -286,10 +340,49 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /** Stops any active recognition and eases the core back to idle. */
+    private void tearDownRecognizer() {
+        if (speechRecognizer != null) {
+            // AndroidSpeechRecognizer has no stopListening(); destroy() is its stop path.
+            speechRecognizer.destroy();
+            speechRecognizer = null;
+        }
+        isListening = false;
+        micAnimations.stopMicPulse(btnMic);
+        applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
+        fadeSwap(statusText, getString(R.string.status_idle));
+    }
+
+    /** Flips the persisted mute flag, refreshes the FAB, and stops capture if muting mid-listen. */
+    private void toggleMicMuted() {
+        boolean muted = !preferences.isMicMuted();
+        preferences.setMicMuted(muted);
+        applyMicMutedState(muted);
+        btnMic.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        MicAnimations.playPressSettle(btnMic);
+        if (muted && isListening) {
+            tearDownRecognizer();
+        }
+        fadeSwap(subStatusText, getString(
+                muted ? R.string.sub_status_muted : R.string.sub_status_tap_mic));
+    }
+
+    /** Swaps the mic FAB icon and content description to match the persisted mute flag. */
+    private void applyMicMutedState(boolean muted) {
+        if (btnMic == null) {
+            return;
+        }
+        btnMic.setImageResource(muted ? R.drawable.ic_mic_off : R.drawable.ic_mic);
+        btnMic.setContentDescription(getString(muted ? R.string.cd_mic_muted : R.string.cd_mic));
+    }
+
     private void startListening() {
         if (speechRecognizer == null) {
             speechRecognizer = new AndroidSpeechRecognizer(this, new SttListener());
         }
+        isListening = true;
+        // Drop any pending error recovery now that we're active again.
+        statusText.removeCallbacks(errorRecoverRunnable);
         fadeSwap(statusText, getString(R.string.status_listening));
         fadeSwap(subStatusText, getString(R.string.sub_status_listening));
         // Drive the atom core brighter/faster and start the listening mic pulse.
@@ -309,6 +402,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onEndOfSpeech() {
+            isListening = false;
             fadeSwap(statusText, getString(R.string.status_thinking));
             fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
             // Speech captured: settle the mic pulse and ease the core to thinking.
@@ -324,6 +418,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onError(String message) {
+            isListening = false;
             int msg = "unavailable".equals(message)
                     ? R.string.stt_unavailable
                     : R.string.stt_error;
@@ -338,6 +433,8 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        // Drop any pending error recovery so it can't fire after teardown.
+        statusText.removeCallbacks(errorRecoverRunnable);
         // Stop any running mic pulse so its animator doesn't outlive the view.
         micAnimations.stopMicPulse(btnMic);
         if (tts != null) {
@@ -347,6 +444,16 @@ public class MainActivity extends AppCompatActivity {
             speechRecognizer.destroy();
         }
         super.onDestroy();
+    }
+
+    /** Eases the status line back to its resting state after an error, unless we're listening. */
+    private void recoverFromError() {
+        if (isListening) {
+            return;
+        }
+        fadeSwap(statusText, getString(R.string.status_idle));
+        fadeSwap(subStatusText, getString(preferences.isMicMuted()
+                ? R.string.sub_status_muted : R.string.sub_status_tap_mic));
     }
 
     private void toast(String message) {
@@ -414,6 +521,9 @@ public class MainActivity extends AppCompatActivity {
             fadeSwap(subStatusText,
                     error != null ? error.toUpperCase() : getString(R.string.status_error));
             applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
+            // Don't leave the error on screen: ease back to idle after a short delay.
+            statusText.removeCallbacks(errorRecoverRunnable);
+            statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
         });
 
         // Sensitive actions (call, message) require explicit confirmation.
