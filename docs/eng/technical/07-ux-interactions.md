@@ -31,3 +31,20 @@ This document describes the quality-of-life interactions on the main screen (`Ma
 
 - After an error is shown, a delayed `errorRecoverRunnable` eases the status line back to idle after `ERROR_AUTO_RECOVER_MS` (4 s).
 - Recovery is skipped if the user has started listening again, is cancelled when a new recognition starts, and is removed in `onDestroy` so it cannot fire after teardown. The resting sub-status respects the current mute state.
+
+## State persistence across configuration changes
+
+- `onSaveInstanceState` stores the visible status text, sub-status text, and the last core energy/glow (tracked in `currentEnergy` / `currentGlow`, updated by `applyCoreState`).
+- `restoreUiState` reapplies them in `onCreate`, so a rotation mid-"Thinking" (or any state) no longer snaps back to "Ready".
+
+## App-wide mute (overlay)
+
+- The floating bubble (`FloatingBubbleService`) reads the same persisted `mic_muted` flag.
+- On panel build, `applyOverlayMicMuted` sets the `overlay_mic` icon/label to match. A long-press toggles the shared flag (parity with the main screen), and `startVoiceCapture` refuses to listen while muted, showing `mic_muted_hint`.
+- Because the flag lives in `AtomPreferences`, muting in either surface mutes both.
+
+## Microphone-permission rationale
+
+- On denial, `onMicPermissionDenied` checks `shouldShowRequestPermissionRationale`:
+  - re-askable → shows `mic_permission_rationale` (retry on the next tap);
+  - permanently denied → an `AlertDialog` routes to the app's system settings via `openAppSettings` (`ACTION_APPLICATION_DETAILS_SETTINGS`), so the mic isn't a dead end.

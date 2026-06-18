@@ -31,3 +31,20 @@ Este documento describe las interacciones de calidad de vida en la pantalla prin
 
 - Tras mostrar un error, un `errorRecoverRunnable` diferido devuelve la línea de estado al reposo después de `ERROR_AUTO_RECOVER_MS` (4 s).
 - La recuperación se omite si el usuario ha vuelto a escuchar, se cancela cuando inicia un nuevo reconocimiento y se elimina en `onDestroy` para que no se dispare tras el desmontaje. El subestado de reposo respeta el estado de silencio actual.
+
+## Persistencia de estado ante cambios de configuración
+
+- `onSaveInstanceState` guarda el texto de estado visible, el subestado y la última energía/brillo del núcleo (rastreados en `currentEnergy` / `currentGlow`, actualizados por `applyCoreState`).
+- `restoreUiState` los reaplica en `onCreate`, de modo que una rotación a mitad de "Pensando" (o cualquier estado) ya no vuelve de golpe a "Listo".
+
+## Silencio en toda la app (overlay)
+
+- La burbuja flotante (`FloatingBubbleService`) lee el mismo indicador persistido `mic_muted`.
+- Al construir el panel, `applyOverlayMicMuted` ajusta el icono/etiqueta de `overlay_mic`. Una pulsación larga alterna el indicador compartido (paridad con la pantalla principal) y `startVoiceCapture` se niega a escuchar mientras está silenciado, mostrando `mic_muted_hint`.
+- Como el indicador vive en `AtomPreferences`, silenciar en cualquiera de las dos superficies silencia ambas.
+
+## Justificación del permiso de micrófono
+
+- Ante una denegación, `onMicPermissionDenied` comprueba `shouldShowRequestPermissionRationale`:
+  - se puede volver a pedir → muestra `mic_permission_rationale` (reintento en el siguiente toque);
+  - denegado permanentemente → un `AlertDialog` lleva a los ajustes del sistema de la app mediante `openAppSettings` (`ACTION_APPLICATION_DETAILS_SETTINGS`), para que el micrófono no quede sin salida.
