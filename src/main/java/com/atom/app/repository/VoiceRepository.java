@@ -25,7 +25,7 @@ import java.util.stream.Stream;
 public class VoiceRepository {
 
     private static final String TAG = "AtomVoice";
-    private static final String DEFAULT_VOICE = "af_heart";
+    private static final String DEFAULT_VOICE = "ef_dora";
     private static final String DEFAULT_LANGUAGE = "es";
     private static final String DEFAULT_FORMAT = "wav";
     private static final float DEFAULT_SPEED = 1.0f;
@@ -72,6 +72,7 @@ public class VoiceRepository {
                 if (audio.length == 0) {
                     throw new IllegalStateException("empty audio from backend");
                 }
+                fixWavHeader(audio);
                 file = File.createTempFile("atom_tts", ".wav", context.getCacheDir());
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     fos.write(audio);
@@ -88,6 +89,49 @@ public class VoiceRepository {
                 }
             }
         });
+    }
+
+    /**
+     * Kokoro streams WAV with placeholder size fields (0xFFFFFFFF) because it
+     * doesn't know the final length up front; Android's MediaPlayer rejects
+     * that ("Prepare failed"). Since we already have the full buffer, rewrite
+     * the RIFF ChunkSize and the {@code data} Subchunk2Size to the real byte
+     * counts. No-op if the buffer isn't a RIFF/WAVE stream.
+     */
+    private static void fixWavHeader(byte[] wav) {
+        if (wav.length < 44
+                || wav[0] != 'R' || wav[1] != 'I' || wav[2] != 'F' || wav[3] != 'F'
+                || wav[8] != 'W' || wav[9] != 'A' || wav[10] != 'V' || wav[11] != 'E') {
+            return;
+        }
+        // RIFF ChunkSize = total length - 8.
+        putLittleEndianInt(wav, 4, wav.length - 8);
+        // Walk the subchunks to find "data" and set its size = trailing bytes.
+        int offset = 12;
+        while (offset + 8 <= wav.length) {
+            boolean isData = wav[offset] == 'd' && wav[offset + 1] == 'a'
+                    && wav[offset + 2] == 't' && wav[offset + 3] == 'a';
+            if (isData) {
+                putLittleEndianInt(wav, offset + 4, wav.length - (offset + 8));
+                return;
+            }
+            // Advance by this subchunk's declared (valid) size, word-aligned.
+            long size = ((long) (wav[offset + 4] & 0xFF))
+                    | ((long) (wav[offset + 5] & 0xFF) << 8)
+                    | ((long) (wav[offset + 6] & 0xFF) << 16)
+                    | ((long) (wav[offset + 7] & 0xFF) << 24);
+            if (size <= 0 || offset + 8 + size > wav.length) {
+                return; // placeholder/garbage size: stop rather than loop.
+            }
+            offset += 8 + (int) size + ((size & 1L) == 1L ? 1 : 0);
+        }
+    }
+
+    private static void putLittleEndianInt(byte[] buf, int pos, int value) {
+        buf[pos] = (byte) (value & 0xFF);
+        buf[pos + 1] = (byte) ((value >>> 8) & 0xFF);
+        buf[pos + 2] = (byte) ((value >>> 16) & 0xFF);
+        buf[pos + 3] = (byte) ((value >>> 24) & 0xFF);
     }
 
     private void play(File file, Runnable onFailure) {
