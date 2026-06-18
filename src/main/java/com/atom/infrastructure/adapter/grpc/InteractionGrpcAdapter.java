@@ -139,7 +139,9 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
                 .setSpeed(speed)
                 .build();
 
-        Iterator<SynthesizeResponse> responseIterator = this.blockingStub.synthesize(request);
+        Iterator<SynthesizeResponse> responseIterator = this.blockingStub
+                .withDeadlineAfter(60, java.util.concurrent.TimeUnit.SECONDS)
+                .synthesize(request);
 
         return StreamSupport.stream(
                 Spliterators.spliteratorUnknownSize(responseIterator, 0), false)
