@@ -2,9 +2,11 @@ package com.atom.infrastructure.adapter.voice;
 
 import android.content.Context;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
 import android.util.Log;
 
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Android adapter over {@link TextToSpeech}: speaks assistant replies aloud.
@@ -15,13 +17,23 @@ public class AndroidTextToSpeech {
     private static final String TAG = "AtomTts";
     private static final String UTTERANCE_ID = "atom_reply";
 
+    // Exact Google TTS voice to use when present (offline, natural Spain voice).
+    // Swap this name to try a different speaker; falls back to best-quality
+    // Spanish voice if the device doesn't have it.
+    private static final String PREFERRED_VOICE_NAME = "es-es-x-eed-local";
+
     private final TextToSpeech engine;
+    private final String preferredVoiceName;
+    private final float speechRate;
     private boolean ready;
 
     // Text requested before init completed; spoken once the engine is ready.
     private String pending;
 
-    public AndroidTextToSpeech(Context context) {
+    public AndroidTextToSpeech(Context context, String preferredVoiceName, float speechRate) {
+        this.preferredVoiceName = preferredVoiceName == null ? "" : preferredVoiceName;
+        // Clamp to a sane range; 0 or negative would make the engine ignore it.
+        this.speechRate = speechRate > 0f ? speechRate : 0.9f;
         this.engine = new TextToSpeech(context.getApplicationContext(), this::onInit);
     }
 
@@ -30,17 +42,84 @@ public class AndroidTextToSpeech {
             Log.w(TAG, "TTS init failed: " + status);
             return;
         }
-        // Fall back gracefully if the device default locale is unsupported.
-        int result = engine.setLanguage(Locale.getDefault());
+        // Force Spanish so replies aren't read with the device's (often English)
+        // accent. Fall back to generic Spanish, then the device default.
+        Locale spanish = new Locale("es", "ES");
+        int result = engine.setLanguage(spanish);
         if (result == TextToSpeech.LANG_MISSING_DATA
                 || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            engine.setLanguage(Locale.US);
+            result = engine.setLanguage(new Locale("es"));
+            if (result == TextToSpeech.LANG_MISSING_DATA
+                    || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "Spanish TTS data unavailable; using device default locale");
+                engine.setLanguage(Locale.getDefault());
+            }
         }
+        // Pick the most natural Spanish voice instead of the default (often the
+        // robotic "compact" one). A slightly slower rate + neutral pitch reads
+        // more naturally.
+        selectBestSpanishVoice();
+        // A slightly lower pitch reads warmer; the pace is user-configurable.
+        engine.setPitch(0.95f);
+        engine.setSpeechRate(speechRate);
         ready = true;
         if (pending != null) {
             speak(pending);
             pending = null;
         }
+    }
+
+    /**
+     * Selects the highest-quality Spanish voice the engine offers, preferring
+     * offline voices so playback stays instant. Avoids the low-quality
+     * "compact" voice that sounds robotic. No-op if no Spanish voice is found.
+     */
+    private void selectBestSpanishVoice() {
+        try {
+            Set<Voice> voices = engine.getVoices();
+            if (voices == null) {
+                return;
+            }
+            String wanted = preferredVoiceName.isEmpty() ? PREFERRED_VOICE_NAME : preferredVoiceName;
+            Voice best = null;
+            Voice exact = null;
+            for (Voice v : voices) {
+                if (v == null || v.getLocale() == null
+                        || !"es".equalsIgnoreCase(v.getLocale().getLanguage())) {
+                    continue;
+                }
+                if (v.getFeatures() != null
+                        && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) {
+                    continue;
+                }
+                if (wanted.equalsIgnoreCase(v.getName())) {
+                    exact = v;
+                }
+                best = preferred(best, v);
+            }
+            // Use the hand-picked voice when available; otherwise the best one.
+            if (exact != null) {
+                best = exact;
+            }
+            if (best != null) {
+                engine.setVoice(best);
+                Log.i(TAG, "TTS voice: " + best.getName() + " quality=" + best.getQuality()
+                        + " network=" + best.isNetworkConnectionRequired());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Spanish voice selection failed; using engine default", e);
+        }
+    }
+
+    /** Prefers offline voices (zero latency), then higher synthesis quality. */
+    private static Voice preferred(Voice current, Voice candidate) {
+        if (current == null) {
+            return candidate;
+        }
+        if (current.isNetworkConnectionRequired() != candidate.isNetworkConnectionRequired()) {
+            return candidate.isNetworkConnectionRequired() ? current : candidate;
+        }
+        return candidate.getQuality() > current.getQuality() ? candidate : current;
     }
 
     /** Speaks {@code text}, replacing anything currently being spoken. */

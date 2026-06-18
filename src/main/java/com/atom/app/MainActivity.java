@@ -132,8 +132,8 @@ public class MainActivity extends AppCompatActivity {
         viewModel = new ViewModelProvider(this, new ChatViewModelFactory(appContainer))
                 .get(ChatViewModel.class);
 
-        tts = new AndroidTextToSpeech(this);
         preferences = new AtomPreferences(this);
+        tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
 
         // Initialize UI Components
         atomCore = findViewById(R.id.atom_core_animation);
