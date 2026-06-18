@@ -2,12 +2,15 @@ package com.atom.app;
 
 import android.app.Activity;
 import android.app.Application;
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.atom.app.di.AppContainer;
+import com.atom.app.settings.AtomPreferences;
+import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class AtomApp extends Application implements Application.ActivityLifecycleCallbacks {
 
@@ -68,6 +71,21 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
             if (foregroundListener != null) {
                 foregroundListener.onAppForeground();
             }
+            // Resume the always-on wake word when the app is opened (foreground,
+            // so the FGS start is allowed). No-op if already running/disabled.
+            maybeStartWakeWord();
+        }
+    }
+
+    /** Starts the wake-word service if the user enabled it. Safe to call repeatedly. */
+    private void maybeStartWakeWord() {
+        try {
+            if (new AtomPreferences(this).isWakeWordEnabled()) {
+                startForegroundService(new Intent(this, WakeWordService.class)
+                        .setAction(WakeWordService.ACTION_START));
+            }
+        } catch (Exception ignored) {
+            // Background-start restrictions etc. — the Settings toggle still works.
         }
     }
 
