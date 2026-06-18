@@ -536,8 +536,21 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return false;
         });
 
+        // Reflect the shared mute state so the bubble matches the main screen.
+        applyOverlayMicMuted(mic, preferences.isMicMuted());
+
         // Tap the mic to dictate: capture speech on-device, then send the transcript.
         mic.setOnClickListener(v -> startVoiceCapture(status, mic));
+
+        // Long-press toggles the same app-wide mute flag the main screen uses.
+        mic.setOnLongClickListener(v -> {
+            boolean muted = !preferences.isMicMuted();
+            preferences.setMicMuted(muted);
+            applyOverlayMicMuted(mic, muted);
+            MicAnimations.playPressSettle(mic);
+            status.setText(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint);
+            return true;
+        });
 
         close.setOnClickListener(v -> collapseToBubble());
         // Tuck the overlay away to the edge handle while using other apps.
@@ -620,6 +633,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         dialog.show();
     }
 
+    /** Swaps the overlay mic icon and label to match the shared mute state. */
+    private void applyOverlayMicMuted(ImageButton mic, boolean muted) {
+        mic.setImageResource(muted ? R.drawable.ic_mic_off : R.drawable.ic_mic);
+        mic.setContentDescription(getString(muted ? R.string.cd_mic_muted : R.string.cd_mic));
+    }
+
     /**
      * Capture a spoken phrase on-device and dispatch its transcript to Atom.
      * Speech recognition needs the RECORD_AUDIO runtime permission, which a
@@ -627,6 +646,11 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      * fail with a hint when it is missing.
      */
     private void startVoiceCapture(TextView status, View mic) {
+        // Respect the app-wide mute: a muted mic can't dictate from the bubble either.
+        if (preferences.isMicMuted()) {
+            status.setText(R.string.mic_muted_hint);
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             status.setText(R.string.overlay_mic_denied);
