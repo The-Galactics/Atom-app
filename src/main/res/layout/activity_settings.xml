@@ -62,7 +62,7 @@
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
                 android:background="@drawable/bg_surface_card"
-                android:hint="Julian"
+                android:hint="@string/settings_your_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
 
@@ -80,50 +80,9 @@
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
                 android:background="@drawable/bg_surface_card"
-                android:hint="Atom"
+                android:hint="@string/settings_assistant_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_xl"
-                android:text="@string/settings_voice_volume"
-                android:textAppearance="@style/TextAppearance.Atom.Title" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_m"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_volume"
-                    android:importantForAccessibility="no"
-                    app:tint="@color/on_surface_label" />
-
-                <SeekBar
-                    android:id="@+id/seekbar_volume"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginHorizontal="@dimen/space_s"
-                    android:max="100"
-                    android:progress="70"
-                    android:progressDrawable="@drawable/volume_track"
-                    android:thumb="@drawable/volume_thumb"
-                    android:splitTrack="false" />
-
-                <TextView
-                    android:id="@+id/tv_volume_value"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="70%"
-                    android:textAppearance="@style/TextAppearance.Atom.Caption" />
-            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -214,91 +173,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_xl"
-                android:text="@string/settings_wake_title"
-                android:textAppearance="@style/TextAppearance.Atom.Title" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_m"
-                android:background="@drawable/bg_surface_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/space_m">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/settings_wake_enable"
-                    android:textAppearance="@style/TextAppearance.Atom.Label" />
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/switch_wake"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_m"
-                android:text="@string/settings_wake_name"
-                android:textAppearance="@style/TextAppearance.Atom.Caption" />
-
-            <EditText
-                android:id="@+id/et_wake_name"
-                style="@style/Widget.Atom.Input"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/input_bar_height"
-                android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
-                android:hint="Atom"
-                android:inputType="textPersonName"
-                android:paddingHorizontal="@dimen/space_m" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_wake_save"
-                style="@style/Widget.Atom.Button.Tonal"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/input_bar_height"
-                android:layout_marginTop="@dimen/space_s"
-                android:text="@string/settings_wake_save" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/space_m">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/settings_wake_screen_on"
-                    android:textAppearance="@style/TextAppearance.Atom.Label" />
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/switch_wake_screen"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_wake_battery"
-                style="@style/Widget.Atom.Button.Tonal"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/input_bar_height"
-                android:layout_marginTop="@dimen/space_s"
-                android:text="@string/settings_wake_battery" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/space_xl"
                 android:text="@string/settings_assistant_access"
                 android:textAppearance="@style/TextAppearance.Atom.Title" />
 
@@ -359,19 +233,19 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Free"
+                        android:text="@string/settings_plan_free"
                         android:textAppearance="@style/TextAppearance.Atom.Label" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
-                        android:text="Basic features"
+                        android:text="@string/settings_plan_free_desc"
                         android:textAppearance="@style/TextAppearance.Atom.Caption" />
                 </LinearLayout>
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="$0"
+                    android:text="@string/settings_plan_free_price"
                     android:textAppearance="@style/TextAppearance.Atom.Label" />
             </LinearLayout>
 
@@ -391,19 +265,19 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Pro"
+                        android:text="@string/settings_plan_pro"
                         android:textAppearance="@style/TextAppearance.Atom.Label" />
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="@dimen/space_xs"
-                        android:text="Advanced AI, faster responses"
+                        android:text="@string/settings_plan_pro_desc"
                         android:textAppearance="@style/TextAppearance.Atom.Caption" />
                 </LinearLayout>
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="$9.99"
+                    android:text="@string/settings_plan_pro_price"
                     android:textAppearance="@style/TextAppearance.Atom.Label" />
             </LinearLayout>
 

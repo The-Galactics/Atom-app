@@ -38,7 +38,6 @@
     <string name="settings_profile">Profile</string>
     <string name="settings_your_name">Your name</string>
     <string name="settings_assistant_name">Assistant name</string>
-    <string name="settings_voice_volume">Voice volume</string>
     <string name="settings_voice_output">Voice output</string>
     <string name="settings_tts_toggle">Speak responses aloud</string>
     <string name="settings_tts_voice">Voice</string>
@@ -50,18 +49,17 @@
     <string name="wake_channel_name">Atom wake word</string>
     <string name="wake_notification_title">Atom is listening</string>
     <string name="wake_notification_text">Say your wake word to summon Atom.</string>
-    <string name="settings_wake_title">Wake word</string>
-    <string name="settings_wake_enable">Listen for the wake word</string>
-    <string name="settings_wake_name">Wake word name</string>
-    <string name="settings_wake_save">Save wake word</string>
-    <string name="settings_wake_saved">Wake word saved</string>
-    <string name="settings_wake_screen_on">Only listen while screen is on</string>
-    <string name="settings_wake_battery">Keep Atom running (battery)</string>
-    <string name="settings_wake_imported">Custom wake word imported</string>
-    <string name="settings_wake_import_failed">Could not import the .ppn file</string>
-    <string name="settings_wake_needs_key">Wake word needs a Picovoice key — not configured yet</string>
+
+    <string name="settings_your_name_hint">Enter your name</string>
+    <string name="settings_assistant_name_hint">Atom</string>
 
     <string name="settings_membership">Membership</string>
+    <string name="settings_plan_free">Free</string>
+    <string name="settings_plan_free_desc">Basic features</string>
+    <string name="settings_plan_free_price">$0</string>
+    <string name="settings_plan_pro">Pro</string>
+    <string name="settings_plan_pro_desc">Advanced AI, faster responses</string>
+    <string name="settings_plan_pro_price">$9.99</string>
     <string name="settings_assistant_access">Assistant access</string>
     <string name="settings_assistant_access_desc">Grant the permissions Atom needs to assist you across other apps, then turn on the floating bubble.</string>
     <string name="settings_enable_bubble">Enable floating bubble</string>
@@ -97,7 +95,6 @@
 
     <!-- Voice (STT) -->
     <string name="sub_status_listening">Listening… speak now</string>
-    <string name="mic_permission_denied">Microphone permission is required to listen</string>
     <string name="mic_permission_rationale">Atom needs the microphone to hear you. Tap the mic to allow access.</string>
     <string name="mic_permission_title">Microphone needed</string>
     <string name="mic_permission_settings">Microphone access is turned off. Enable it in Settings to use voice.</string>

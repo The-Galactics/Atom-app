@@ -1,10 +1,7 @@
 package com.atom.app;
 
-import android.Manifest;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
 import android.view.View;
@@ -93,14 +90,18 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
 
         ImageButton btnBack = findViewById(R.id.btn_back);
-        SeekBar seekBarVolume = findViewById(R.id.seekbar_volume);
-        TextView tvVolumeValue = findViewById(R.id.tv_volume_value);
         MaterialButton btnSave = findViewById(R.id.btn_save);
         btnToggleBubble = findViewById(R.id.btn_toggle_bubble);
         tvBubbleStatus = findViewById(R.id.tv_bubble_status);
         MaterialSwitch switchTts = findViewById(R.id.switch_tts);
+        EditText etUserName = findViewById(R.id.et_user_name);
+        EditText etAiName = findViewById(R.id.et_ai_name);
 
         preferences = new AtomPreferences(this);
+
+        // Prefill name fields from storage.
+        etUserName.setText(preferences.getUserName());
+        etAiName.setText(preferences.getAssistantName());
 
         spinnerVoice = findViewById(R.id.spinner_voice);
         com.google.android.material.button.MaterialButton btnPreviewVoice =
@@ -127,8 +128,6 @@ public class SettingsActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        setupWakeWordControls();
-
         // Spoken responses toggle: reflect stored value and persist immediately.
         switchTts.setChecked(preferences.isTtsEnabled());
         switchTts.setOnCheckedChangeListener(
@@ -136,22 +135,20 @@ public class SettingsActivity extends AppCompatActivity {
 
         btnBack.setOnClickListener(v -> finish());
 
-        // Handle Volume Changes
-        seekBarVolume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                tvVolumeValue.setText(progress + "%");
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-
         btnSave.setOnClickListener(v -> {
-            // FUTURE WORK: persist profile name / assistant name / volume to storage.
+            // Persist profile + assistant names. (TTS on/off, voice and speed are
+            // already persisted live by their own listeners.)
+            preferences.setUserName(etUserName.getText().toString());
+            preferences.setAssistantName(etAiName.getText().toString());
+
+            // The assistant name IS the wake word: store it and (re)start the
+            // always-on listener so Vosk picks up the new name. setAssistantName
+            // falls back to "Atom" when blank, mirrored here for the wake word.
+            preferences.setWakeWordName(preferences.getAssistantName());
+            preferences.setWakeWordEnabled(true);
+            stopWakeService();
+            startWakeService();
+
             toast(getString(R.string.settings_saved));
             ensureAssistantPermissions();
         });
@@ -314,47 +311,6 @@ public class SettingsActivity extends AppCompatActivity {
                 TextToSpeech.QUEUE_FLUSH, null, "atom_voice_preview");
     }
 
-    /** Wires the wake-word section: enable switch, name, import, screen-only, battery. */
-    private void setupWakeWordControls() {
-        MaterialSwitch switchWake = findViewById(R.id.switch_wake);
-        EditText etWakeName = findViewById(R.id.et_wake_name);
-        MaterialButton btnWakeSave = findViewById(R.id.btn_wake_save);
-        MaterialSwitch switchWakeScreen = findViewById(R.id.switch_wake_screen);
-        MaterialButton btnWakeBattery = findViewById(R.id.btn_wake_battery);
-
-        switchWake.setChecked(preferences.isWakeWordEnabled());
-        switchWake.setOnCheckedChangeListener((button, checked) -> {
-            if (checked && !PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
-                toast(getString(R.string.mic_permission_denied));
-                button.setChecked(false);
-                return;
-            }
-            preferences.setWakeWordEnabled(checked);
-            if (checked) {
-                startWakeService();
-            } else {
-                stopWakeService();
-            }
-        });
-
-        etWakeName.setText(preferences.getWakeWordName());
-        // Type any name + Save: persist it and reload the listener with the new word.
-        btnWakeSave.setOnClickListener(v -> {
-            preferences.setWakeWordName(etWakeName.getText().toString());
-            etWakeName.setText(preferences.getWakeWordName());
-            toast(getString(R.string.settings_wake_saved));
-            restartWakeServiceIfEnabled();
-        });
-
-        switchWakeScreen.setChecked(preferences.isWakeWordScreenOnOnly());
-        switchWakeScreen.setOnCheckedChangeListener((button, checked) -> {
-            preferences.setWakeWordScreenOnOnly(checked);
-            restartWakeServiceIfEnabled();
-        });
-
-        btnWakeBattery.setOnClickListener(v -> openWakeBatterySettings());
-    }
-
     private void startWakeService() {
         startForegroundService(new Intent(this, WakeWordService.class)
                 .setAction(WakeWordService.ACTION_START));
@@ -363,27 +319,6 @@ public class SettingsActivity extends AppCompatActivity {
     private void stopWakeService() {
         startService(new Intent(this, WakeWordService.class)
                 .setAction(WakeWordService.ACTION_STOP));
-    }
-
-    private void restartWakeServiceIfEnabled() {
-        if (preferences.isWakeWordEnabled()) {
-            stopWakeService();
-            startWakeService();
-        }
-    }
-
-    /** Opens the OS battery-optimization screen so the user can exempt Atom (MIUI kills FGS). */
-    private void openWakeBatterySettings() {
-        try {
-            startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-        } catch (Exception e) {
-            try {
-                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + getPackageName())));
-            } catch (Exception ignored) {
-                toast("Open battery settings manually");
-            }
-        }
     }
 
     private static int rateToProgress(float rate) {

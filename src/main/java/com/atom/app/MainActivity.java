@@ -13,8 +13,6 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -37,6 +35,7 @@ import com.atom.app.di.AppContainer;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
+import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
@@ -63,9 +62,6 @@ public class MainActivity extends AppCompatActivity {
     private static final long INPUT_BAR_ANIM_MS = 200;
     private static final float INPUT_BAR_FALLBACK_SLIDE_DP = 64f;
 
-    // Send disc opacity while disabled (no text to send).
-    private static final float SEND_DISABLED_ALPHA = 0.4f;
-
     // Delay before an error message fades back to the idle resting state.
     private static final long ERROR_AUTO_RECOVER_MS = 4000;
 
@@ -78,7 +74,7 @@ public class MainActivity extends AppCompatActivity {
     private AtomCoreView atomCore;
     private View coreGlow;
     private ImageButton btnMic, btnSettings, btnHistory, btnKeyboard, btnVolume;
-    private TextView statusText, subStatusText;
+    private TextView statusText, subStatusText, wordmark;
     private ChatViewModel viewModel;
 
     // Shared mic feedback (press-settle + breathing pulse) reused from the overlay.
@@ -179,6 +175,7 @@ public class MainActivity extends AppCompatActivity {
         btnVolume = findViewById(R.id.btn_volume);
         statusText = findViewById(R.id.status_text);
         subStatusText = findViewById(R.id.sub_status_text);
+        wordmark = findViewById(R.id.wordmark);
 
         inputBarRoot = findViewById(R.id.input_bar_root);
         inputEditText = findViewById(R.id.input_edit_text);
@@ -259,14 +256,8 @@ public class MainActivity extends AppCompatActivity {
         inputSend.setOnClickListener(v -> sendFromInputBar());
 
         // Keep send disabled/dimmed until there's non-whitespace text.
-        setSendEnabled(false);
-        inputEditText.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                setSendEnabled(s.toString().trim().length() > 0);
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
+        InputBarUtils.setSendEnabled(inputSend, false);
+        inputEditText.addTextChangedListener(InputBarUtils.enableSendOnText(inputSend));
 
         // IME "Send" action mirrors the send button.
         inputEditText.setOnEditorActionListener((v, actionId, event) -> {
@@ -381,12 +372,6 @@ public class MainActivity extends AppCompatActivity {
         viewModel.sendOrder(text);
         inputEditText.setText("");
         hideInputBar();
-    }
-
-    /** Enables or dims the send disc based on whether there's text to send. */
-    private void setSendEnabled(boolean enabled) {
-        inputSend.setEnabled(enabled);
-        inputSend.setAlpha(enabled ? 1f : SEND_DISABLED_ALPHA);
     }
 
     private void showVolumeSlider() {
@@ -550,6 +535,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Show the chosen assistant name as the wordmark; fall back to "ATOM".
+        if (wordmark != null) {
+            String name = preferences.getAssistantName();
+            wordmark.setText(name == null || name.trim().isEmpty()
+                    ? getString(R.string.wordmark) : name);
+        }
         // Listen for the wake word so it drives the in-app mic while we're visible.
         IntentFilter filter = new IntentFilter(WakeWordService.ACTION_WAKE_IN_APP);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -664,7 +655,7 @@ public class MainActivity extends AppCompatActivity {
         viewModel.getErrorMessage().observe(this, error -> {
             fadeSwap(statusText, getString(R.string.status_error));
             fadeSwap(subStatusText,
-                    error != null ? error.toUpperCase() : getString(R.string.status_error));
+                    error != null ? error.toUpperCase(java.util.Locale.getDefault()) : getString(R.string.status_error));
             applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
             // Don't leave the error on screen: ease back to idle after a short delay.
             statusText.removeCallbacks(errorRecoverRunnable);
