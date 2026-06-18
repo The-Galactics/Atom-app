@@ -108,9 +108,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         commandRepository = new CommandRepository(
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor());
-        tts = new AndroidTextToSpeech(this);
-        voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         preferences = new AtomPreferences(this);
+        tts = new AndroidTextToSpeech(this, preferences.getTtsVoice());
+        voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         app.setForegroundListener(this);
     }
 
