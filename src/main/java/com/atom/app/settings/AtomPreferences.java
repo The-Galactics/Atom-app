@@ -8,6 +8,7 @@ public class AtomPreferences {
 
     private static final String PREFS_NAME = "atom_prefs";
     private static final String KEY_TTS_ENABLED = "tts_enabled";
+    private static final String KEY_MIC_MUTED = "mic_muted";
 
     private final SharedPreferences prefs;
 
@@ -24,5 +25,14 @@ public class AtomPreferences {
 
     public void setTtsEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_TTS_ENABLED, enabled).apply();
+    }
+
+    /** Voice input defaults to unmuted (mic available). */
+    public boolean isMicMuted() {
+        return prefs.getBoolean(KEY_MIC_MUTED, false);
+    }
+
+    public void setMicMuted(boolean muted) {
+        prefs.edit().putBoolean(KEY_MIC_MUTED, muted).apply();
     }
 }
