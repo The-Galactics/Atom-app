@@ -3,6 +3,7 @@ package com.atom.app;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
 import android.media.AudioManager;
@@ -22,6 +23,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
@@ -113,6 +115,22 @@ public class MainActivity extends AppCompatActivity {
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
 
+    // Back press collapses the input bar instead of leaving the screen; only enabled while it's open.
+    private final OnBackPressedCallback backCallback = new OnBackPressedCallback(false) {
+        @Override
+        public void handleOnBackPressed() {
+            hideInputBar();
+        }
+    };
+
+    // Keeps the mute icon/core in sync when the flag is toggled from the overlay.
+    private final SharedPreferences.OnSharedPreferenceChangeListener muteListener =
+            (sp, key) -> {
+                if (AtomPreferences.KEY_MIC_MUTED.equals(key)) {
+                    applyMicMutedState(preferences.isMicMuted());
+                }
+            };
+
     private final ActivityResultLauncher<String> micPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
                 if (granted) {
@@ -176,6 +194,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Bring back the status line and core state after a configuration change.
         restoreUiState(savedInstanceState);
+
+        // Back collapses the input bar (when open) instead of leaving the screen.
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
+
+        // Track mute changes made elsewhere (e.g. the floating bubble).
+        preferences.registerChangeListener(muteListener);
 
         btnSettings.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
@@ -278,6 +302,7 @@ public class MainActivity extends AppCompatActivity {
                 .alpha(1f)
                 .setDuration(INPUT_BAR_ANIM_MS)
                 .start();
+        backCallback.setEnabled(true);
         inputEditText.requestFocus();
         // Post the IME show to the next frame so the adjustResize layout pass (which lifts the
         // bar above the keyboard) settles independently of the slide-in, avoiding a first-open
@@ -298,6 +323,7 @@ public class MainActivity extends AppCompatActivity {
             imm.hideSoftInputFromWindow(inputEditText.getWindowToken(), 0);
         }
         inputEditText.clearFocus();
+        backCallback.setEnabled(false);
         // Slide down + fade out, then actually collapse the view and reset it so the
         // next show() starts from a clean resting transform.
         inputBarRoot.animate()
@@ -330,6 +356,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         inputSend.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+        // Silence any reply still being spoken so it doesn't talk over the next turn.
+        if (tts != null) {
+            tts.stop();
+        }
         // Typed input is treated as an ORDER: the backend decides whether it is
         // an executable action or a plain conversational reply.
         viewModel.sendOrder(text);
@@ -445,6 +475,10 @@ public class MainActivity extends AppCompatActivity {
             speechRecognizer = new AndroidSpeechRecognizer(this, new SttListener());
         }
         isListening = true;
+        // Silence any reply still being spoken before capturing the next one.
+        if (tts != null) {
+            tts.stop();
+        }
         // Drop any pending error recovery now that we're active again.
         statusText.removeCallbacks(errorRecoverRunnable);
         fadeSwap(statusText, getString(R.string.status_listening));
@@ -499,6 +533,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         // Drop any pending error recovery so it can't fire after teardown.
         statusText.removeCallbacks(errorRecoverRunnable);
+        preferences.unregisterChangeListener(muteListener);
         // Stop any running mic pulse so its animator doesn't outlive the view.
         micAnimations.stopMicPulse(btnMic);
         if (tts != null) {
