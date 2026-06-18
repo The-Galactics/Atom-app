@@ -11,6 +11,7 @@ public class AtomPreferences {
     private static final String KEY_REMOTE_TTS_ENABLED = "remote_tts_enabled";
     private static final String KEY_MIC_MUTED = "mic_muted";
     private static final String KEY_TTS_VOICE = "tts_voice";
+    private static final String KEY_TTS_RATE = "tts_rate";
 
     private final SharedPreferences prefs;
 
@@ -49,6 +50,15 @@ public class AtomPreferences {
 
     public void setTtsVoice(String voiceName) {
         prefs.edit().putString(KEY_TTS_VOICE, voiceName == null ? "" : voiceName).apply();
+    }
+
+    /** Speech rate multiplier (1.0 = normal). Defaults to a gentle 0.9. */
+    public float getTtsRate() {
+        return prefs.getFloat(KEY_TTS_RATE, 0.9f);
+    }
+
+    public void setTtsRate(float rate) {
+        prefs.edit().putFloat(KEY_TTS_RATE, rate).apply();
     }
 
     /** Voice input defaults to unmuted (mic available). */
