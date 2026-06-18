@@ -9,7 +9,7 @@ public class AtomPreferences {
     private static final String PREFS_NAME = "atom_prefs";
     private static final String KEY_TTS_ENABLED = "tts_enabled";
     private static final String KEY_REMOTE_TTS_ENABLED = "remote_tts_enabled";
-    private static final String KEY_MIC_MUTED = "mic_muted";
+    public static final String KEY_MIC_MUTED = "mic_muted";
     private static final String KEY_TTS_VOICE = "tts_voice";
     private static final String KEY_TTS_RATE = "tts_rate";
 
@@ -68,5 +68,14 @@ public class AtomPreferences {
 
     public void setMicMuted(boolean muted) {
         prefs.edit().putBoolean(KEY_MIC_MUTED, muted).apply();
+    }
+
+    /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */
+    public void registerChangeListener(SharedPreferences.OnSharedPreferenceChangeListener listener) {
+        prefs.registerOnSharedPreferenceChangeListener(listener);
+    }
+
+    public void unregisterChangeListener(SharedPreferences.OnSharedPreferenceChangeListener listener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener);
     }
 }

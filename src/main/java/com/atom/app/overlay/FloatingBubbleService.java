@@ -13,14 +13,18 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
@@ -63,6 +67,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final long SNAP_DURATION_MS = 220;       // edge snap glide
     private static final float PUSH_OFF_FRACTION = 0.4f;    // drag this far past an edge to hide
     private static final float HANDLE_IDLE_ALPHA = 0.5f;    // dimmed handle when untouched
+    private static final float SEND_DISABLED_ALPHA = 0.4f;  // send disc opacity with no text
+    private static final long STATUS_RESET_MS = 4000;       // settle status back to the resting hint
 
     private WindowManager windowManager;
     private LayoutInflater inflater;
@@ -93,6 +99,27 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private AtomApp app;
     private boolean overlayEnabled; // set between START and STOP
 
+    // Keeps the panel mic icon in sync when mute is toggled from the main screen.
+    private final SharedPreferences.OnSharedPreferenceChangeListener muteListener =
+            (sp, key) -> {
+                if (AtomPreferences.KEY_MIC_MUTED.equals(key) && panelView != null) {
+                    ImageButton mic = panelView.findViewById(R.id.overlay_mic);
+                    if (mic != null) {
+                        applyOverlayMicMuted(mic, preferences.isMicMuted());
+                    }
+                }
+            };
+
+    // Eases a transient status (error/cancel) back to the resting panel hint.
+    private final Runnable statusResetRunnable = () -> {
+        if (panelView != null) {
+            TextView status = panelView.findViewById(R.id.overlay_status);
+            if (status != null && status.isAttachedToWindow()) {
+                status.setText(R.string.overlay_panel_hint);
+            }
+        }
+    };
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -109,6 +136,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor());
         preferences = new AtomPreferences(this);
+        preferences.registerChangeListener(muteListener);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         app.setForegroundListener(this);
@@ -530,7 +558,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         editText.setOnFocusChangeListener((view, hasFocus) -> inputRoot.setActivated(hasFocus));
 
-        send.setOnClickListener(v -> dispatchPrompt(editText, status));
+        send.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            dispatchPrompt(editText, status);
+        });
         editText.setOnEditorActionListener((view, actionId, e) -> {
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 dispatchPrompt(editText, status);
@@ -539,8 +570,35 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return false;
         });
 
+        // Keep send disabled/dimmed until there's non-whitespace text.
+        setSendEnabled(send, false);
+        editText.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                setSendEnabled(send, s.toString().trim().length() > 0);
+            }
+            @Override public void afterTextChanged(Editable s) {}
+        });
+
+        // Reflect the shared mute state so the bubble matches the main screen.
+        applyOverlayMicMuted(mic, preferences.isMicMuted());
+
         // Tap the mic to dictate: capture speech on-device, then send the transcript.
-        mic.setOnClickListener(v -> startVoiceCapture(status, mic));
+        mic.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            startVoiceCapture(status, mic);
+        });
+
+        // Long-press toggles the same app-wide mute flag the main screen uses.
+        mic.setOnLongClickListener(v -> {
+            boolean muted = !preferences.isMicMuted();
+            preferences.setMicMuted(muted);
+            applyOverlayMicMuted(mic, muted);
+            v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+            MicAnimations.playPressSettle(mic);
+            status.setText(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint);
+            return true;
+        });
 
         close.setOnClickListener(v -> collapseToBubble());
         // Tuck the overlay away to the edge handle while using other apps.
@@ -556,9 +614,26 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             status.setText(R.string.input_empty);
             return;
         }
+        // Silence any reply still being spoken so it doesn't talk over the next turn.
+        if (tts != null) {
+            tts.stop();
+        }
+        status.removeCallbacks(statusResetRunnable);
         status.setText(R.string.overlay_sending);
         editText.setText("");
         handlePrompt(text, status);
+    }
+
+    /** Enables or dims the overlay send disc based on whether there's text to send. */
+    private void setSendEnabled(ImageButton send, boolean enabled) {
+        send.setEnabled(enabled);
+        send.setAlpha(enabled ? 1f : SEND_DISABLED_ALPHA);
+    }
+
+    /** Settles a transient status (error/cancel) back to the resting hint after a delay. */
+    private void scheduleStatusReset(TextView status) {
+        status.removeCallbacks(statusResetRunnable);
+        status.postDelayed(statusResetRunnable, STATUS_RESET_MS);
     }
 
     /**
@@ -586,6 +661,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             public void onError(String error) {
                 if (status.isAttachedToWindow()) {
                     status.setText(error);
+                    scheduleStatusReset(status);
                 }
             }
         });
@@ -612,6 +688,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 .setNegativeButton(R.string.action_confirm_no, (d, w) -> {
                     if (status.isAttachedToWindow()) {
                         status.setText(R.string.action_cancelled);
+                        scheduleStatusReset(status);
                     }
                 })
                 .create();
@@ -623,6 +700,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         dialog.show();
     }
 
+    /** Swaps the overlay mic icon and label to match the shared mute state. */
+    private void applyOverlayMicMuted(ImageButton mic, boolean muted) {
+        mic.setImageResource(muted ? R.drawable.ic_mic_off : R.drawable.ic_mic);
+        mic.setContentDescription(getString(muted ? R.string.cd_mic_muted : R.string.cd_mic));
+    }
+
     /**
      * Capture a spoken phrase on-device and dispatch its transcript to Atom.
      * Speech recognition needs the RECORD_AUDIO runtime permission, which a
@@ -630,11 +713,21 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      * fail with a hint when it is missing.
      */
     private void startVoiceCapture(TextView status, View mic) {
+        // Respect the app-wide mute: a muted mic can't dictate from the bubble either.
+        if (preferences.isMicMuted()) {
+            status.setText(R.string.mic_muted_hint);
+            return;
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             status.setText(R.string.overlay_mic_denied);
             return;
         }
+        // Silence any reply still being spoken before capturing the next one.
+        if (tts != null) {
+            tts.stop();
+        }
+        status.removeCallbacks(statusResetRunnable);
         MicAnimations.playPressSettle(mic);
         micAnimations.startMicPulse(mic);
         if (speechRecognizer == null) {
@@ -674,6 +767,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
                     status.setText(R.string.overlay_voice_error);
+                    scheduleStatusReset(status);
                 }
                 return;
             }
@@ -689,6 +783,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             status.setText("unavailable".equals(message)
                     ? R.string.overlay_voice_unavailable
                     : R.string.overlay_voice_error);
+            scheduleStatusReset(status);
         }
     }
 
@@ -736,6 +831,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 micAnimations.stopMicPulse(mic);
                 if (status.isAttachedToWindow()) {
                     status.setText(error);
+                    scheduleStatusReset(status);
                 }
             }
         });
@@ -892,6 +988,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     public void onDestroy() {
         if (app != null) {
             app.clearForegroundListener(this);
+        }
+        if (preferences != null) {
+            preferences.unregisterChangeListener(muteListener);
         }
         destroyRecognizer();
         if (tts != null) {
