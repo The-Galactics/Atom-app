@@ -28,3 +28,6 @@ cmake-build-*/
 
 # Vosk wake-word model (large; fetched via scripts/fetch-wakeword-model.sh)
 src/main/assets/model-es/
+
+#Local documentation
+QA_FOLLOWUPS.md
