@@ -18,11 +18,4 @@
         <item name="textAppearanceLabelLarge">@style/TextAppearance.Atom.Label</item>
         <item name="textAppearanceBodySmall">@style/TextAppearance.Atom.Caption</item>
     </style>
-
-    <!-- Transparent theme for the floating-overlay panel host (if needed). -->
-    <style name="Theme.AtomApp.Overlay" parent="Theme.AtomApp">
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowNoTitle">true</item>
-    </style>
 </resources>
