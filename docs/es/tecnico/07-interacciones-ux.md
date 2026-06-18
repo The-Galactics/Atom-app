@@ -9,6 +9,7 @@ Este documento describe las interacciones de calidad de vida en la pantalla prin
 - **Pulsar estando silenciado:** no escucha; muestra el toast `mic_muted_hint`.
 - **Silenciar durante la escucha:** desmonta el reconocedor activo y devuelve el núcleo al estado de reposo.
 - **Persistencia:** se guarda en `AtomPreferences` (`mic_muted`), por lo que el icono es correcto tras rotar, volver de Ajustes o un arranque en frío. Se restaura una vez en `onCreate` mediante `applyMicMutedState`.
+- **Identidad del núcleo:** `applyMicMutedState` también llama a `AtomCoreView.setMuted`, que aplica un filtro de color casi en escala de grises (`MUTED_SATURATION`) y atenuado (`MUTED_ALPHA`) sobre la capa de software del núcleo, de modo que un micrófono silenciado se ve distinto del reposo lavanda vívido.
 
 ## Cancelar con un toque durante la escucha
 
@@ -31,3 +32,38 @@ Este documento describe las interacciones de calidad de vida en la pantalla prin
 
 - Tras mostrar un error, un `errorRecoverRunnable` diferido devuelve la línea de estado al reposo después de `ERROR_AUTO_RECOVER_MS` (4 s).
 - La recuperación se omite si el usuario ha vuelto a escuchar, se cancela cuando inicia un nuevo reconocimiento y se elimina en `onDestroy` para que no se dispare tras el desmontaje. El subestado de reposo respeta el estado de silencio actual.
+
+## Persistencia de estado ante cambios de configuración
+
+- `onSaveInstanceState` guarda el texto de estado visible, el subestado y la última energía/brillo del núcleo (rastreados en `currentEnergy` / `currentGlow`, actualizados por `applyCoreState`).
+- `restoreUiState` los reaplica en `onCreate`, de modo que una rotación a mitad de "Pensando" (o cualquier estado) ya no vuelve de golpe a "Listo".
+
+## Silencio en toda la app (overlay)
+
+- La burbuja flotante (`FloatingBubbleService`) lee el mismo indicador persistido `mic_muted`.
+- Al construir el panel, `applyOverlayMicMuted` ajusta el icono/etiqueta de `overlay_mic`. Una pulsación larga alterna el indicador compartido (paridad con la pantalla principal) y `startVoiceCapture` se niega a escuchar mientras está silenciado, mostrando `mic_muted_hint`.
+- Como el indicador vive en `AtomPreferences`, silenciar en cualquiera de las dos superficies silencia ambas.
+
+## Justificación del permiso de micrófono
+
+- Ante una denegación, `onMicPermissionDenied` comprueba `shouldShowRequestPermissionRationale`:
+  - se puede volver a pedir → muestra `mic_permission_rationale` (reintento en el siguiente toque);
+  - denegado permanentemente → un `AlertDialog` lleva a los ajustes del sistema de la app mediante `openAppSettings` (`ACTION_APPLICATION_DETAILS_SETTINGS`), para que el micrófono no quede sin salida.
+
+## Detener el habla al iniciar un nuevo turno
+
+- `AndroidTextToSpeech.stop()` silencia el habla en curso o en cola sin desmontar el motor.
+- Se invoca al iniciar un nuevo turno — `startListening` y `sendFromInputBar` en la pantalla principal, y `startVoiceCapture`/`dispatchPrompt` en el overlay — para que una respuesta larga no se solape con la siguiente petición.
+
+## Atrás cierra la barra de entrada
+
+- `MainActivity` registra un `OnBackPressedCallback` habilitado solo mientras la barra de entrada está abierta (`showInputBar` lo habilita, `hideInputBar` lo deshabilita). Pulsar Atrás cierra la barra en lugar de salir de la pantalla, igual que el descarte al tocar fuera.
+
+## Paridad del panel del overlay
+
+- El panel flotante refleja el pulido de la pantalla principal: `overlay_send` se deshabilita/atenúa (`SEND_DISABLED_ALPHA`) hasta que hay texto, enviar/micrófono/silencio emiten hápticos, y los estados transitorios de error/cancelación vuelven a `overlay_panel_hint` tras `STATUS_RESET_MS` mediante `scheduleStatusReset` (se cancela al iniciar un nuevo turno).
+
+## Sincronización de silencio entre superficies en vivo
+
+- `AtomPreferences` expone `registerChangeListener`/`unregisterChangeListener` sobre su `SharedPreferences`.
+- Tanto `MainActivity` como `FloatingBubbleService` escuchan `KEY_MIC_MUTED`; como comparten un único proceso y un único archivo de preferencias, alternar el silencio en cualquiera de las dos superficies actualiza al instante el icono del micrófono de la otra (el overlay vuelve a leer `overlay_mic` del `panelView` vivo).
