@@ -7,7 +7,6 @@
     <dimen name="space_m">16dp</dimen>
     <dimen name="space_l">24dp</dimen>
     <dimen name="space_xl">32dp</dimen>
-    <dimen name="space_xxl">48dp</dimen>
 
     <!-- Corner radii -->
     <dimen name="radius_card">16dp</dimen>
@@ -20,7 +19,7 @@
     <dimen name="core_glow_size">360dp</dimen>
     <dimen name="touch_target">48dp</dimen>
     <dimen name="mic_fab_size">68dp</dimen>
-    <dimen name="ghost_button_size">48dp</dimen>
+    <dimen name="mic_touch_size">88dp</dimen>     <!-- touch cell: headroom so the pulsed disc stays tappable -->
     <dimen name="input_bar_height">56dp</dimen>
     <dimen name="bubble_size">44dp</dimen>          <!-- compact, low-intrusion floating disc -->
     <dimen name="bubble_edge_margin">8dp</dimen>     <!-- resting gap from the screen edge -->

@@ -57,16 +57,14 @@
         app:layout_constraintStart_toStartOf="@+id/atom_core_animation"
         app:layout_constraintTop_toTopOf="@+id/atom_core_animation" />
 
-    <com.airbnb.lottie.LottieAnimationView
+    <com.atom.app.ui.AtomCoreView
         android:id="@+id/atom_core_animation"
         android:layout_width="@dimen/core_size"
         android:layout_height="@dimen/core_size"
         app:layout_constraintBottom_toBottomOf="@+id/guide_core_center"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:lottie_autoPlay="true"
-        app:lottie_loop="true" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/status_text"
@@ -110,6 +108,8 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="@dimen/space_xl"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:gravity="center"
         android:orientation="horizontal"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -124,14 +124,25 @@
             android:src="@drawable/ic_keyboard"
             android:tint="@color/on_surface_label" />
 
+        <!-- Touch cell larger than the disc so the pulse-grown circle stays fully tappable. -->
         <FrameLayout
-            android:layout_width="@dimen/mic_fab_size"
-            android:layout_height="@dimen/mic_fab_size">
+            android:layout_width="@dimen/mic_touch_size"
+            android:layout_height="@dimen/mic_touch_size"
+            android:clipChildren="false"
+            android:clipToPadding="false">
 
-            <ImageButton
+            <!--
+              MicButton gives the FAB a circular hitbox that tracks the pulse animation.
+              No ripple (background or foreground) on purpose: a RippleDrawable renders
+              as a rounded-rect/squircle while the view is scaled up by the listening
+              pulse. The background is a plain oval that scales as a true circle, and tap
+              feedback comes from the press-settle scale dip in MicAnimations.
+            -->
+            <com.atom.app.ui.MicButton
                 android:id="@+id/btn_mic"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_width="@dimen/mic_fab_size"
+                android:layout_height="@dimen/mic_fab_size"
+                android:layout_gravity="center"
                 android:background="@drawable/bg_mic_fab"
                 android:contentDescription="@string/cd_mic"
                 android:scaleType="centerInside"
