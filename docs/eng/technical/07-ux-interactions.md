@@ -9,6 +9,7 @@ This document describes the quality-of-life interactions on the main screen (`Ma
 - **Tap while muted:** does not listen; shows the `mic_muted_hint` toast.
 - **Muting mid-listen:** tears down the active recognizer and settles the core back to idle.
 - **Persistence:** stored in `AtomPreferences` (`mic_muted`), so the icon is correct after rotation, returning from Settings, or a cold start. Restored once in `onCreate` via `applyMicMutedState`.
+- **Core identity:** `applyMicMutedState` also calls `AtomCoreView.setMuted`, which applies a near-grayscale (`MUTED_SATURATION`) and dimmed (`MUTED_ALPHA`) color filter to the core's software layer, so a muted mic reads differently from the vivid lavender idle.
 
 ## Tap-to-cancel while listening
 

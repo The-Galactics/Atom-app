@@ -9,6 +9,7 @@ Este documento describe las interacciones de calidad de vida en la pantalla prin
 - **Pulsar estando silenciado:** no escucha; muestra el toast `mic_muted_hint`.
 - **Silenciar durante la escucha:** desmonta el reconocedor activo y devuelve el núcleo al estado de reposo.
 - **Persistencia:** se guarda en `AtomPreferences` (`mic_muted`), por lo que el icono es correcto tras rotar, volver de Ajustes o un arranque en frío. Se restaura una vez en `onCreate` mediante `applyMicMutedState`.
+- **Identidad del núcleo:** `applyMicMutedState` también llama a `AtomCoreView.setMuted`, que aplica un filtro de color casi en escala de grises (`MUTED_SATURATION`) y atenuado (`MUTED_ALPHA`) sobre la capa de software del núcleo, de modo que un micrófono silenciado se ve distinto del reposo lavanda vívido.
 
 ## Cancelar con un toque durante la escucha
 
