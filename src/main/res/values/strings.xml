@@ -41,6 +41,9 @@
     <string name="settings_voice_volume">Voice volume</string>
     <string name="settings_voice_output">Voice output</string>
     <string name="settings_tts_toggle">Speak responses aloud</string>
+    <string name="settings_tts_voice">Voice</string>
+    <string name="settings_tts_voice_auto">Automatic (best available)</string>
+    <string name="settings_tts_preview">Preview voice</string>
     <string name="settings_membership">Membership</string>
     <string name="settings_assistant_access">Assistant access</string>
     <string name="settings_assistant_access_desc">Grant the permissions Atom needs to assist you across other apps, then turn on the floating bubble.</string>
