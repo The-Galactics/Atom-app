@@ -1,7 +1,11 @@
 package com.atom.app;
 
+import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
 import android.view.View;
@@ -53,6 +57,14 @@ public class SettingsActivity extends AppCompatActivity {
     // Speech-rate slider range.
     private static final float MIN_RATE = 0.5f;
     private static final float MAX_RATE = 1.5f;
+
+    // Permission dashboard chips, refreshed in onResume.
+    private TextView chipOverlayStatus, chipAccessibilityStatus, chipMicrophoneStatus;
+
+    // Microphone runtime request from the dashboard's "Fix" button.
+    private final ActivityResultLauncher<String> micPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                    granted -> refreshPermissionDashboard());
 
 
     // Overlay ("super position") permission result: re-check on return from Settings.
@@ -156,6 +168,168 @@ public class SettingsActivity extends AppCompatActivity {
         btnToggleBubble.setOnClickListener(v -> toggleFloatingBubble());
 
         refreshBubbleControl();
+        setupPermissionDashboard();
+        setupWakeWordSection();
+        setupLanguageSection();
+    }
+
+    // --- Permission dashboard ------------------------------------------------
+
+    /** Wires the three "Fix" buttons; statuses are filled in by {@link #refreshPermissionDashboard}. */
+    private void setupPermissionDashboard() {
+        chipOverlayStatus = findViewById(R.id.chip_overlay_status);
+        chipAccessibilityStatus = findViewById(R.id.chip_accessibility_status);
+        chipMicrophoneStatus = findViewById(R.id.chip_microphone_status);
+
+        MaterialButton btnFixOverlay = findViewById(R.id.btn_fix_overlay);
+        MaterialButton btnFixAccessibility = findViewById(R.id.btn_fix_accessibility);
+        MaterialButton btnFixMicrophone = findViewById(R.id.btn_fix_microphone);
+
+        // Reuse PermissionCoordinator so the permission constants/intents aren't duplicated.
+        btnFixOverlay.setOnClickListener(v ->
+                overlayPermissionLauncher.launch(PermissionCoordinator.overlaySettingsIntent(this)));
+        btnFixAccessibility.setOnClickListener(v ->
+                startActivity(PermissionCoordinator.accessibilitySettingsIntent()));
+        btnFixMicrophone.setOnClickListener(v -> fixMicrophonePermission());
+    }
+
+    /**
+     * Microphone fix: request the runtime permission directly when we can still
+     * prompt; otherwise route to the app's details page (the system won't prompt
+     * again after a permanent denial).
+     */
+    private void fixMicrophonePermission() {
+        if (PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
+            return;
+        }
+        if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+                || !hasRequestedMicBefore()) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+        } else {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", getPackageName(), null)));
+        }
+    }
+
+    // Best-effort: rationale==false before the first ask too, so always allow the
+    // first in-app prompt. We can't distinguish "never asked" from "permanently
+    // denied" via the platform alone, so the launcher's no-op-on-permanent-denial
+    // is acceptable here (the chip simply stays "Not granted").
+    private boolean hasRequestedMicBefore() {
+        return false;
+    }
+
+    /** Refreshes the three status chips to reflect the current grant state. */
+    private void refreshPermissionDashboard() {
+        applyChip(chipOverlayStatus, PermissionCoordinator.canDrawOverlays(this));
+        applyChip(chipAccessibilityStatus,
+                PermissionCoordinator.isAccessibilityServiceEnabled(this));
+        applyChip(chipMicrophoneStatus,
+                PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO));
+    }
+
+    /** Colors and labels a status chip: accent when granted, label tint when not. */
+    private void applyChip(TextView chip, boolean granted) {
+        if (chip == null) {
+            return;
+        }
+        chip.setText(granted ? R.string.settings_perm_granted : R.string.settings_perm_not_granted);
+        chip.setTextColor(getColor(granted ? R.color.accent : R.color.on_surface_label));
+    }
+
+    // --- Wake word section ---------------------------------------------------
+
+    private void setupWakeWordSection() {
+        MaterialSwitch switchWakeEnable = findViewById(R.id.switch_wake_enable);
+        MaterialSwitch switchWakeScreenOn = findViewById(R.id.switch_wake_screen_on);
+        TextView labelScreenOn = findViewById(R.id.label_wake_screen_on);
+
+        switchWakeEnable.setChecked(preferences.isWakeWordEnabled());
+        switchWakeScreenOn.setChecked(preferences.isWakeWordScreenOnOnly());
+        // The screen-on toggle only matters while the wake word is on.
+        applyWakeScreenOnEnabled(switchWakeScreenOn, labelScreenOn,
+                preferences.isWakeWordEnabled());
+
+        switchWakeEnable.setOnCheckedChangeListener((button, checked) -> {
+            preferences.setWakeWordEnabled(checked);
+            applyWakeScreenOnEnabled(switchWakeScreenOn, labelScreenOn, checked);
+            // Start/stop the always-on listener to match the toggle, mirroring how
+            // the Save flow (re)starts it elsewhere in this Activity.
+            if (checked) {
+                startWakeService();
+            } else {
+                stopWakeService();
+            }
+        });
+
+        switchWakeScreenOn.setOnCheckedChangeListener(
+                (button, checked) -> preferences.setWakeWordScreenOnOnly(checked));
+    }
+
+    /** Greys the screen-on toggle out when the wake word itself is disabled. */
+    private void applyWakeScreenOnEnabled(MaterialSwitch toggle, TextView label, boolean enabled) {
+        toggle.setEnabled(enabled);
+        label.setEnabled(enabled);
+        toggle.setAlpha(enabled ? 1f : 0.5f);
+        label.setAlpha(enabled ? 1f : 0.5f);
+    }
+
+    // --- Language section ----------------------------------------------------
+
+    private void setupLanguageSection() {
+        Spinner spinnerLanguage = findViewById(R.id.spinner_language);
+
+        // Order MUST match languageCodeForPosition / positionForLanguage below.
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, new String[]{
+                getString(R.string.settings_language_system),
+                getString(R.string.settings_language_english),
+                getString(R.string.settings_language_spanish)});
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerLanguage.setAdapter(adapter);
+        spinnerLanguage.setSelection(positionForLanguage(preferences.getLanguage()));
+
+        spinnerLanguage.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String code = languageCodeForPosition(position);
+                if (code.equals(preferences.getLanguage())) {
+                    return; // no change (e.g. initial selection callback)
+                }
+                preferences.setLanguage(code);
+                // Apply immediately; AppCompat recreates the Activity in the new locale.
+                AtomApp.applyLocale(code);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+
+    private static String languageCodeForPosition(int position) {
+        return switch (position) {
+            case 1 -> AtomPreferences.LANGUAGE_ENGLISH;
+            case 2 -> AtomPreferences.LANGUAGE_SPANISH;
+            default -> AtomPreferences.LANGUAGE_SYSTEM;
+        };
+    }
+
+    private static int positionForLanguage(String code) {
+        if (AtomPreferences.LANGUAGE_ENGLISH.equals(code)) {
+            return 1;
+        }
+        if (AtomPreferences.LANGUAGE_SPANISH.equals(code)) {
+            return 2;
+        }
+        return 0;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Permission grants can change while we're away (the user fixed one in
+        // system Settings), so re-read them every time the screen comes forward.
+        refreshPermissionDashboard();
     }
 
     private void ensureAssistantPermissions() {
