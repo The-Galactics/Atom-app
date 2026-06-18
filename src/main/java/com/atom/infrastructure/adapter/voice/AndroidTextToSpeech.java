@@ -30,11 +30,18 @@ public class AndroidTextToSpeech {
             Log.w(TAG, "TTS init failed: " + status);
             return;
         }
-        // Fall back gracefully if the device default locale is unsupported.
-        int result = engine.setLanguage(Locale.getDefault());
+        // Force Spanish so replies aren't read with the device's (often English)
+        // accent. Fall back to generic Spanish, then the device default.
+        Locale spanish = new Locale("es", "ES");
+        int result = engine.setLanguage(spanish);
         if (result == TextToSpeech.LANG_MISSING_DATA
                 || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            engine.setLanguage(Locale.US);
+            result = engine.setLanguage(new Locale("es"));
+            if (result == TextToSpeech.LANG_MISSING_DATA
+                    || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.w(TAG, "Spanish TTS data unavailable; using device default locale");
+                engine.setLanguage(Locale.getDefault());
+            }
         }
         ready = true;
         if (pending != null) {

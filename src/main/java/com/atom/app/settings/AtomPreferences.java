@@ -28,9 +28,13 @@ public class AtomPreferences {
         prefs.edit().putBoolean(KEY_TTS_ENABLED, enabled).apply();
     }
 
-    /** Neural backend (Kokoro) voice defaults to ON; falls back to on-device TTS on failure. */
+    /**
+     * Neural backend (Kokoro) voice. Defaults to OFF: on-device TTS is instant
+     * and offline, whereas the backend voice adds synthesis latency. Turn this
+     * on to prefer the premium neural voice (with on-device TTS as fallback).
+     */
     public boolean isRemoteTtsEnabled() {
-        return prefs.getBoolean(KEY_REMOTE_TTS_ENABLED, true);
+        return prefs.getBoolean(KEY_REMOTE_TTS_ENABLED, false);
     }
 
     public void setRemoteTtsEnabled(boolean enabled) {
