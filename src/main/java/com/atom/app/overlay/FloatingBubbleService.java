@@ -20,8 +20,6 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -48,6 +46,7 @@ import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
 import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
+import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
@@ -70,7 +69,6 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final long SNAP_DURATION_MS = 220;       // edge snap glide
     private static final float PUSH_OFF_FRACTION = 0.4f;    // drag this far past an edge to hide
     private static final float HANDLE_IDLE_ALPHA = 0.5f;    // dimmed handle when untouched
-    private static final float SEND_DISABLED_ALPHA = 0.4f;  // send disc opacity with no text
     private static final long STATUS_RESET_MS = 4000;       // settle status back to the resting hint
 
     private WindowManager windowManager;
@@ -580,14 +578,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         });
 
         // Keep send disabled/dimmed until there's non-whitespace text.
-        setSendEnabled(send, false);
-        editText.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                setSendEnabled(send, s.toString().trim().length() > 0);
-            }
-            @Override public void afterTextChanged(Editable s) {}
-        });
+        InputBarUtils.setSendEnabled(send, false);
+        editText.addTextChangedListener(InputBarUtils.enableSendOnText(send));
 
         // Reflect the shared mute state so the bubble matches the main screen.
         applyOverlayMicMuted(mic, preferences.isMicMuted());
@@ -631,12 +623,6 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         status.setText(R.string.overlay_sending);
         editText.setText("");
         handlePrompt(text, status);
-    }
-
-    /** Enables or dims the overlay send disc based on whether there's text to send. */
-    private void setSendEnabled(ImageButton send, boolean enabled) {
-        send.setEnabled(enabled);
-        send.setAlpha(enabled ? 1f : SEND_DISABLED_ALPHA);
     }
 
     /** Settles a transient status (error/cancel) back to the resting hint after a delay. */
