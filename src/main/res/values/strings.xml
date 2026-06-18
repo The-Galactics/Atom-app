@@ -53,7 +53,8 @@
     <string name="settings_wake_title">Wake word</string>
     <string name="settings_wake_enable">Listen for the wake word</string>
     <string name="settings_wake_name">Wake word name</string>
-    <string name="settings_wake_import">Import custom wake word (.ppn)</string>
+    <string name="settings_wake_save">Save wake word</string>
+    <string name="settings_wake_saved">Wake word saved</string>
     <string name="settings_wake_screen_on">Only listen while screen is on</string>
     <string name="settings_wake_battery">Keep Atom running (battery)</string>
     <string name="settings_wake_imported">Custom wake word imported</string>

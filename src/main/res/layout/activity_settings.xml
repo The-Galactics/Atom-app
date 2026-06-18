@@ -258,12 +258,12 @@
                 android:paddingHorizontal="@dimen/space_m" />
 
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_import_ppn"
+                android:id="@+id/btn_wake_save"
                 style="@style/Widget.Atom.Button.Tonal"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
-                android:text="@string/settings_wake_import" />
+                android:text="@string/settings_wake_save" />
 
             <LinearLayout
                 android:layout_width="match_parent"
