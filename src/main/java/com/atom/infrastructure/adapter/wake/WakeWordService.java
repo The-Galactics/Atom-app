@@ -37,8 +37,10 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
 
     public static final String ACTION_START = "com.atom.app.wake.START";
     public static final String ACTION_STOP = "com.atom.app.wake.STOP";
-    /** Broadcast the bubble sends when it has released the mic, so we resume. */
+    /** Broadcast the bubble/app sends when it has released the mic, so we resume. */
     public static final String ACTION_LISTEN_DONE = "com.atom.app.wake.LISTEN_DONE";
+    /** Broadcast to the app when it's foreground: drive its in-app mic, not the bubble. */
+    public static final String ACTION_WAKE_IN_APP = "com.atom.app.wake.IN_APP";
 
     private static final String CHANNEL_ID = "atom_wake_word";
     private static final int NOTIF_ID = 4711;
@@ -58,6 +60,9 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     // True while the mic is handed off to the bubble (so a stray DONE is ignored).
     private boolean handingOff;
     private boolean screenReceiverRegistered;
+    // Set as soon as configuration begins, so repeated START intents arriving
+    // before the async model unpack finishes don't spin up a second engine.
+    private boolean configured;
 
     private final Runnable resumeFallback = this::resumeListening;
 
@@ -91,8 +96,14 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             stopSelf();
             return START_NOT_STICKY;
         }
-        startForegroundNotification();
-        if (engine == null && voskModel == null) {
+        if (!startForegroundNotification()) {
+            // Not allowed to be a mic FGS right now (e.g. app not foreground).
+            // Stop cleanly instead of crashing; it'll start when eligible.
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (!configured) {
+            configured = true;
             configureAndStart();
         }
         return START_STICKY;
@@ -142,18 +153,23 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
                 return;
             }
             handingOff = true;
-            // Release the mic so the bubble's SpeechRecognizer can use it.
+            // Release the mic so the listener (app or bubble) can use it.
             if (engine != null) {
                 engine.stop();
             }
-            try {
-                Intent listen = new Intent(this, FloatingBubbleService.class)
-                        .setAction(FloatingBubbleService.ACTION_LISTEN);
-                startForegroundService(listen);
-            } catch (Exception e) {
-                Log.e(TAG, "Could not summon bubble to listen", e);
-                resumeListening();
-                return;
+            if (isAppInForeground()) {
+                // App is open: drive its own mic instead of the overlay bubble.
+                sendBroadcast(new Intent(ACTION_WAKE_IN_APP).setPackage(getPackageName()));
+            } else {
+                try {
+                    Intent listen = new Intent(this, FloatingBubbleService.class)
+                            .setAction(FloatingBubbleService.ACTION_LISTEN);
+                    startForegroundService(listen);
+                } catch (Exception e) {
+                    Log.e(TAG, "Could not summon bubble to listen", e);
+                    resumeListening();
+                    return;
+                }
             }
             mainHandler.removeCallbacks(resumeFallback);
             mainHandler.postDelayed(resumeFallback, RESUME_FALLBACK_MS);
@@ -163,6 +179,16 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     @Override
     public void onError(String message) {
         Log.e(TAG, "Wake-word error: " + message);
+    }
+
+    private boolean isAppInForeground() {
+        try {
+            android.app.Application app = getApplication();
+            return app instanceof com.atom.app.AtomApp
+                    && ((com.atom.app.AtomApp) app).isAppInForeground();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** Resumes listening after the bubble has freed the mic. Idempotent. */
@@ -197,7 +223,8 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         screenReceiverRegistered = true;
     }
 
-    private void startForegroundNotification() {
+    /** Promotes to a mic foreground service. Returns false (no crash) if denied. */
+    private boolean startForegroundNotification() {
         ensureChannel();
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(getString(R.string.wake_notification_title))
@@ -206,10 +233,19 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
-        } else {
-            startForeground(NOTIF_ID, notification);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            } else {
+                startForeground(NOTIF_ID, notification);
+            }
+            return true;
+        } catch (Exception e) {
+            // Android 14+: starting a microphone FGS while not in an eligible
+            // (foreground) state throws. Don't crash the app — bail out.
+            Log.e(TAG, "startForeground(microphone) not allowed right now", e);
+            return false;
         }
     }
 

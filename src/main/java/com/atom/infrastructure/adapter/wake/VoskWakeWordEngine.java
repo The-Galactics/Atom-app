@@ -44,7 +44,18 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
         if (running) {
             return;
         }
-        Recognizer recognizer = new Recognizer(model, SAMPLE_RATE);
+        Recognizer recognizer;
+        try {
+            // Grammar mode: constrain recognition to the wake word (+ filler), which
+            // is far lighter on CPU and biases strongly toward hearing the word.
+            String grammar = "[\"" + keyword + "\", \"[unk]\"]";
+            recognizer = new Recognizer(model, SAMPLE_RATE, grammar);
+            Log.i(TAG, "Vosk grammar mode for '" + keyword + "'");
+        } catch (Exception grammarUnsupported) {
+            // Keyword may be out-of-vocabulary for the grammar; fall back to full ASR.
+            Log.w(TAG, "Grammar mode failed, using full ASR", grammarUnsupported);
+            recognizer = new Recognizer(model, SAMPLE_RATE);
+        }
         speechService = new SpeechService(recognizer, SAMPLE_RATE);
         speechService.startListening(this);
         running = true;
