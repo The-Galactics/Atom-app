@@ -6,39 +6,45 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
+import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.atom.app.data.ChatMessage;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Objects;
 
 /**
  * Renders the conversation transcript: user turns as right-aligned accent
- * bubbles, assistant turns as left-aligned surface bubbles. The row type is
- * chosen from {@link ChatMessage#role} so each turn inflates the correct layout.
+ * bubbles, assistant turns as left-aligned surface bubbles. Backed by
+ * {@link ListAdapter} so Room emissions diff into granular item updates,
+ * preserving insert animations instead of rebinding the whole list.
  */
-public class ChatHistoryAdapter extends RecyclerView.Adapter<ChatHistoryAdapter.MessageViewHolder> {
+public class ChatHistoryAdapter extends ListAdapter<ChatMessage, ChatHistoryAdapter.MessageViewHolder> {
 
     private static final int TYPE_USER = 0;
     private static final int TYPE_ASSISTANT = 1;
 
-    private final List<ChatMessage> messages = new ArrayList<>();
-
-    /** Replaces the backing list with a fresh transcript snapshot from Room. */
-    public void submit(List<ChatMessage> newMessages) {
-        messages.clear();
-        if (newMessages != null) {
-            messages.addAll(newMessages);
+    private static final DiffUtil.ItemCallback<ChatMessage> DIFF = new DiffUtil.ItemCallback<ChatMessage>() {
+        @Override
+        public boolean areItemsTheSame(@NonNull ChatMessage oldItem, @NonNull ChatMessage newItem) {
+            return oldItem.id == newItem.id;
         }
-        // The transcript is small and refreshes infrequently (one row per turn),
-        // so a full rebind is simpler than diffing and visually indistinguishable.
-        notifyDataSetChanged();
+
+        @Override
+        public boolean areContentsTheSame(@NonNull ChatMessage oldItem, @NonNull ChatMessage newItem) {
+            return Objects.equals(oldItem.role, newItem.role)
+                    && Objects.equals(oldItem.text, newItem.text);
+        }
+    };
+
+    public ChatHistoryAdapter() {
+        super(DIFF);
     }
 
     @Override
     public int getItemViewType(int position) {
-        return ChatMessage.ROLE_USER.equals(messages.get(position).role)
+        return ChatMessage.ROLE_USER.equals(getItem(position).role)
                 ? TYPE_USER : TYPE_ASSISTANT;
     }
 
@@ -54,12 +60,7 @@ public class ChatHistoryAdapter extends RecyclerView.Adapter<ChatHistoryAdapter.
 
     @Override
     public void onBindViewHolder(@NonNull MessageViewHolder holder, int position) {
-        holder.text.setText(messages.get(position).text);
-    }
-
-    @Override
-    public int getItemCount() {
-        return messages.size();
+        holder.text.setText(getItem(position).text);
     }
 
     static final class MessageViewHolder extends RecyclerView.ViewHolder {

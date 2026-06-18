@@ -48,7 +48,7 @@ public class HistoryActivity extends AppCompatActivity {
         // Live transcript: Room re-emits whenever a new turn is saved (from the
         // main screen or the floating bubble), so the list stays current.
         conversationRepository.observeAll().observe(this, messages -> {
-            adapter.submit(messages);
+            adapter.submitList(messages);
             boolean empty = messages == null || messages.isEmpty();
             emptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
         });
