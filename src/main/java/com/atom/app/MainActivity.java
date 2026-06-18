@@ -31,7 +31,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.atom.app.data.ConversationRepository;
 import com.atom.app.di.AppContainer;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
@@ -106,9 +105,6 @@ public class MainActivity extends AppCompatActivity {
     private AtomPreferences preferences;
     private AndroidSpeechRecognizer speechRecognizer;
 
-    // Persists the conversation transcript so the History screen can replay it.
-    private ConversationRepository conversationRepository;
-
     // True while a recognition is in flight; lets a tap cancel it and gates error recovery.
     private boolean isListening;
 
@@ -178,7 +174,6 @@ public class MainActivity extends AppCompatActivity {
                 .get(ChatViewModel.class);
 
         preferences = new AtomPreferences(this);
-        conversationRepository = new ConversationRepository(this);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
 
         // Initialize UI Components
@@ -418,12 +413,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Single entry point for dispatching an order (typed or spoken): records the
-     * user turn in the transcript, then hands it to the ViewModel. Centralizing
-     * here keeps persistence consistent across the keyboard and voice paths.
+     * Single entry point for dispatching an order (typed or spoken). The ViewModel
+     * owns transcript persistence now (it records the user turn at the event source,
+     * so it can't be duplicated by a replayed UI observer); this stays as the shared
+     * chokepoint for the keyboard, chip, and voice paths.
      */
     private void dispatchOrder(String text) {
-        conversationRepository.saveUserMessage(text);
         viewModel.sendOrder(text);
     }
 
@@ -721,9 +716,10 @@ public class MainActivity extends AppCompatActivity {
     private void setupObservers() {
         // When the back-end responds
         viewModel.getChatResponse().observe(this, response -> {
-            // Record Atom's reply in the transcript (covers both conversational
-            // replies and executed-action outcomes, which both land here).
-            conversationRepository.saveAssistantMessage(response);
+            // Persistence happens in the ViewModel at the event source; this observer
+            // only renders the reply. (A retained LiveData replays its last value to
+            // each new observer, so saving here would duplicate the last turn on every
+            // Activity re-creation — e.g. rotation or the locale-switch recreate.)
             fadeSwap(statusText, response);
             fadeSwap(subStatusText, getString(R.string.sub_status_responded));
             // Reply landed: ease the core back to its calm idle with a settle pulse.
