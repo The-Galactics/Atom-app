@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import java.util.UUID;
 
 import com.atom.app.BuildConfig;
+import com.atom.app.data.ConversationRepository;
 import com.atom.application.port.in.ExecuteCommandPortIn;
 import com.atom.application.port.in.StreamChatPortIn;
 import com.atom.application.port.in.SynthesizeSpeechPortIn;
@@ -46,6 +47,11 @@ public class AppContainer {
     private final UUID sessionUserId;
     private final UUID sessionChatId;
 
+    // Process-wide conversation transcript store (Room). Owned here so the chat
+    // ViewModel persists turns at the event source, and every surface records the
+    // dialogue through the same instance.
+    private final ConversationRepository conversationRepository;
+
     public AppContainer(Context context) {
 
         // Load (or lazily create + persist) the device-scoped conversation identity.
@@ -76,6 +82,10 @@ public class AppContainer {
 
         // Input validation use-case (no out-port dependencies).
         this.inputValidationUsecase = new InputValidationUsecase();
+
+        // Conversation transcript store. Uses the application context internally,
+        // so holding it on this process-scoped container leaks nothing.
+        this.conversationRepository = new ConversationRepository(context);
     }
 
     public StreamChatPortIn getExternalMessageUseCase() {
@@ -100,6 +110,10 @@ public class AppContainer {
 
     public InputValidationPort getInputValidationUsecase() {
         return inputValidationUsecase;
+    }
+
+    public ConversationRepository getConversationRepository() {
+        return conversationRepository;
     }
 
     /** Returns the stored UUID for {@code key}, creating and persisting one if absent. */

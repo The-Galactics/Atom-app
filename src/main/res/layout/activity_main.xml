@@ -90,6 +90,64 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/status_text" />
 
+    <!-- Quick-action chips: a horizontally scrollable row of starter commands,
+         pinned just above the control row and below the core animation so it never
+         overlaps the 280dp core. -->
+    <HorizontalScrollView
+        android:id="@+id/quick_actions_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/space_m"
+        android:fillViewport="true"
+        android:paddingHorizontal="@dimen/space_m"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toTopOf="@+id/control_row"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/quick_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:singleLine="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_timer"
+                style="@style/Widget.Material3.Chip.Assist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_timer" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_call"
+                style="@style/Widget.Material3.Chip.Assist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_call" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_message"
+                style="@style/Widget.Material3.Chip.Assist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_message" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_wifi"
+                style="@style/Widget.Material3.Chip.Assist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_wifi" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_flashlight"
+                style="@style/Widget.Material3.Chip.Assist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_flashlight" />
+        </com.google.android.material.chip.ChipGroup>
+    </HorizontalScrollView>
+
     <!-- No android:id on <include> — an include id would override the root's id. -->
     <include
         layout="@layout/view_input_bar"
@@ -99,7 +157,7 @@
         android:layout_marginEnd="@dimen/space_m"
         android:layout_marginBottom="@dimen/space_m"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/control_row"
+        app:layout_constraintBottom_toTopOf="@+id/quick_actions_scroll"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
 

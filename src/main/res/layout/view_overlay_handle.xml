@@ -6,7 +6,6 @@
      FloatingBubbleService flips the bar to the docked side via applyHandleSide; it is
      draggable like the bubble and dimmed while untouched. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/handle_root"
     android:layout_width="@dimen/handle_touch_width"
     android:layout_height="@dimen/handle_height"
     android:background="@android:color/transparent"
