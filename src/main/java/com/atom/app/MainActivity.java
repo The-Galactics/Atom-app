@@ -650,6 +650,14 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        // First-run routing finish()es this Activity from onCreate (before setContentView
+        // and findViewById) to hand off to onboarding. onDestroy still runs in that case,
+        // so bail out before touching views/collaborators that were never initialized —
+        // statusText is null until the full setup below the early return has executed.
+        if (statusText == null) {
+            super.onDestroy();
+            return;
+        }
         // Drop any pending error recovery so it can't fire after teardown.
         statusText.removeCallbacks(errorRecoverRunnable);
         preferences.unregisterChangeListener(muteListener);
