@@ -1,20 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Focused / active: accent border, slightly raised surface. -->
+    <!-- Focused / active: accent border over a faint accent wash so the field reads
+         as *lit*, not merely outlined. The wash is a translucent accent_glow_soft layer
+         laid over the raised surface_2 fill. -->
     <item android:state_activated="true">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/surface_2" />
-            <corners android:radius="@dimen/radius_pill" />
-            <stroke android:width="1.5dp" android:color="@color/accent" />
-        </shape>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/surface_2" />
+                    <corners android:radius="@dimen/radius_pill" />
+                    <stroke android:width="1.5dp" android:color="@color/accent" />
+                </shape>
+            </item>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/accent_glow_soft" />
+                    <corners android:radius="@dimen/radius_pill" />
+                </shape>
+            </item>
+        </layer-list>
     </item>
     <item android:state_focused="true">
-        <shape android:shape="rectangle">
-            <solid android:color="@color/surface_2" />
-            <corners android:radius="@dimen/radius_pill" />
-            <stroke android:width="1.5dp" android:color="@color/accent" />
-        </shape>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/surface_2" />
+                    <corners android:radius="@dimen/radius_pill" />
+                    <stroke android:width="1.5dp" android:color="@color/accent" />
+                </shape>
+            </item>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/accent_glow_soft" />
+                    <corners android:radius="@dimen/radius_pill" />
+                </shape>
+            </item>
+        </layer-list>
     </item>
 
     <!-- Resting: hairline border on surface_1. -->

@@ -1,10 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Small filled accent disc behind the send icon (input bar / overlay). -->
+<!--
+  Small filled accent disc behind the send icon (input bar / overlay).
+  Uses the same 135° accent_bright -> accent -> accent_deep gradient as the mic FAB
+  (bg_mic_fab.xml) so the send button visually rhymes with the core mic control.
+-->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/ripple_light">
     <item>
         <shape android:shape="oval">
-            <solid android:color="@color/accent" />
+            <gradient
+                android:type="linear"
+                android:angle="135"
+                android:startColor="@color/accent_bright"
+                android:centerColor="@color/accent"
+                android:endColor="@color/accent_deep" />
         </shape>
     </item>
 </ripple>
