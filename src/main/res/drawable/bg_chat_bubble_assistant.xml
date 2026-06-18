@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Assistant chat bubble: raised surface with a hairline border, bottom-start
+     corner tightened so it reads as anchored to the left. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/surface_2" />
+    <stroke android:width="1dp" android:color="@color/surface_border" />
+    <corners
+        android:topLeftRadius="@dimen/radius_card"
+        android:topRightRadius="@dimen/radius_card"
+        android:bottomLeftRadius="@dimen/space_xs"
+        android:bottomRightRadius="@dimen/radius_card" />
+</shape>
