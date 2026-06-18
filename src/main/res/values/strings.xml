@@ -78,6 +78,10 @@
     <!-- Voice (STT) -->
     <string name="sub_status_listening">Listening… speak now</string>
     <string name="mic_permission_denied">Microphone permission is required to listen</string>
+    <string name="mic_permission_rationale">Atom needs the microphone to hear you. Tap the mic to allow access.</string>
+    <string name="mic_permission_title">Microphone needed</string>
+    <string name="mic_permission_settings">Microphone access is turned off. Enable it in Settings to use voice.</string>
+    <string name="mic_permission_open_settings">Open settings</string>
     <string name="stt_unavailable">Speech recognition is not available on this device</string>
     <string name="stt_error">Sorry, I didn\'t catch that</string>
 </resources>

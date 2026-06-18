@@ -6,7 +6,9 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Rect;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.HapticFeedbackConstants;
@@ -61,6 +63,12 @@ public class MainActivity extends AppCompatActivity {
     // Delay before an error message fades back to the idle resting state.
     private static final long ERROR_AUTO_RECOVER_MS = 4000;
 
+    // Saved-instance keys for surviving configuration changes (e.g. rotation).
+    private static final String KEY_STATUS = "status_text";
+    private static final String KEY_SUB_STATUS = "sub_status_text";
+    private static final String KEY_ENERGY = "core_energy";
+    private static final String KEY_GLOW = "core_glow";
+
     private AtomCoreView atomCore;
     private View coreGlow;
     private ImageButton btnMic, btnSettings, btnHistory, btnKeyboard, btnVolume;
@@ -98,6 +106,10 @@ public class MainActivity extends AppCompatActivity {
     // True while a recognition is in flight; lets a tap cancel it and gates error recovery.
     private boolean isListening;
 
+    // Last applied core state, kept so it can be restored across configuration changes.
+    private float currentEnergy = CORE_ENERGY_IDLE;
+    private float currentGlow = CORE_GLOW_IDLE;
+
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
 
@@ -106,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
                 if (granted) {
                     startListening();
                 } else {
-                    toast(getString(R.string.mic_permission_denied));
+                    onMicPermissionDenied();
                 }
             });
 
@@ -162,6 +174,9 @@ public class MainActivity extends AppCompatActivity {
         // start, process death, or configuration change (the pref outlives the Activity).
         applyMicMutedState(preferences.isMicMuted());
 
+        // Bring back the status line and core state after a configuration change.
+        restoreUiState(savedInstanceState);
+
         btnSettings.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
 
@@ -172,6 +187,27 @@ public class MainActivity extends AppCompatActivity {
         btnKeyboard.setOnClickListener(v -> toggleInputBar());
 
         btnVolume.setOnClickListener(v -> showVolumeSlider());
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // Keep the visible status line and core state through a configuration change.
+        outState.putString(KEY_STATUS, statusText.getText().toString());
+        outState.putString(KEY_SUB_STATUS, subStatusText.getText().toString());
+        outState.putFloat(KEY_ENERGY, currentEnergy);
+        outState.putFloat(KEY_GLOW, currentGlow);
+    }
+
+    /** Restores the status line and core state saved before a configuration change. */
+    private void restoreUiState(Bundle state) {
+        if (state == null) {
+            return;
+        }
+        statusText.setText(state.getString(KEY_STATUS, getString(R.string.status_idle)));
+        subStatusText.setText(state.getString(KEY_SUB_STATUS, getString(R.string.sub_status_tap_mic)));
+        applyCoreState(state.getFloat(KEY_ENERGY, CORE_ENERGY_IDLE),
+                state.getFloat(KEY_GLOW, CORE_GLOW_IDLE));
     }
 
     private void setupInputBar() {
@@ -340,6 +376,30 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Mic permission was denied: explain why if we can still ask, otherwise route to
+     * app settings (the system won't prompt again after a permanent "Don't allow").
+     */
+    private void onMicPermissionDenied() {
+        if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+            toast(getString(R.string.mic_permission_rationale));
+        } else {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.mic_permission_title)
+                    .setMessage(R.string.mic_permission_settings)
+                    .setPositiveButton(R.string.mic_permission_open_settings,
+                            (d, w) -> openAppSettings())
+                    .setNegativeButton(R.string.action_confirm_no, null)
+                    .show();
+        }
+    }
+
+    /** Opens this app's system settings page so the user can grant the microphone. */
+    private void openAppSettings() {
+        startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", getPackageName(), null)));
+    }
+
     /** Stops any active recognition and eases the core back to idle. */
     private void tearDownRecognizer() {
         if (speechRecognizer != null) {
@@ -485,6 +545,8 @@ public class MainActivity extends AppCompatActivity {
      * feel continuous rather than stepped.
      */
     private void applyCoreState(float energy, float glowAlpha) {
+        currentEnergy = energy;
+        currentGlow = glowAlpha;
         if (atomCore != null) {
             atomCore.setEnergy(energy);
         }
