@@ -3,6 +3,8 @@ package com.atom.app.ui;
 import android.content.Context;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
@@ -37,6 +39,10 @@ public class AtomCoreView extends View {
     private static final int ACCENT_BRIGHT = 0xFFD6B8FF;
     private static final int ACCENT_DEEP = 0xFF8C5CF0;
 
+    // Muted look: near-grayscale and dimmed so a muted mic reads differently from idle.
+    private static final float MUTED_SATURATION = 0.15f;
+    private static final int MUTED_ALPHA = 140;
+
     // Three orbits: tilt in degrees, angular speed (sign = direction), starting phase offset.
     private static final float[] ORBIT_TILT = {0f, 62f, 121f};
     private static final float[] ORBIT_SPEED = {1.0f, -0.78f, 1.32f};
@@ -59,6 +65,9 @@ public class AtomCoreView extends View {
     private BlurMaskFilter ringBlur;
     private BlurMaskFilter electronBlur;
     private BlurMaskFilter nucleusBlur;
+
+    // Desaturating + dimming paint applied to the whole layer while muted (lazy-built).
+    private Paint mutedLayerPaint;
 
     private double phase = 0;        // ever-advancing animation phase
     private float energy = 0f;       // current eased energy
@@ -97,6 +106,23 @@ public class AtomCoreView extends View {
         if (isAttachedToWindow()) {
             postInvalidateOnAnimation();
         }
+    }
+
+    /**
+     * Mutes the core's look: when muted it renders near-grayscale and dimmed so the
+     * "mic off" state is legible at a glance, distinct from the vivid lavender idle.
+     * Implemented as a color filter on the software layer the view already uses.
+     */
+    public void setMuted(boolean muted) {
+        if (muted && mutedLayerPaint == null) {
+            ColorMatrix matrix = new ColorMatrix();
+            matrix.setSaturation(MUTED_SATURATION);
+            mutedLayerPaint = new Paint();
+            mutedLayerPaint.setColorFilter(new ColorMatrixColorFilter(matrix));
+            mutedLayerPaint.setAlpha(MUTED_ALPHA);
+        }
+        setLayerType(LAYER_TYPE_SOFTWARE, muted ? mutedLayerPaint : null);
+        invalidate();
     }
 
     @Override
