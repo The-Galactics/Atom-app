@@ -90,9 +90,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel:2.10.0")
     implementation("androidx.lifecycle:lifecycle-livedata:2.10.0")
 
-    // Animaciones
-    implementation("com.airbnb.android:lottie:6.7.1")
-
     // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:launcher")
