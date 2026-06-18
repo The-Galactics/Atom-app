@@ -49,3 +49,21 @@ Este documento describe las interacciones de calidad de vida en la pantalla prin
 - Ante una denegación, `onMicPermissionDenied` comprueba `shouldShowRequestPermissionRationale`:
   - se puede volver a pedir → muestra `mic_permission_rationale` (reintento en el siguiente toque);
   - denegado permanentemente → un `AlertDialog` lleva a los ajustes del sistema de la app mediante `openAppSettings` (`ACTION_APPLICATION_DETAILS_SETTINGS`), para que el micrófono no quede sin salida.
+
+## Detener el habla al iniciar un nuevo turno
+
+- `AndroidTextToSpeech.stop()` silencia el habla en curso o en cola sin desmontar el motor.
+- Se invoca al iniciar un nuevo turno — `startListening` y `sendFromInputBar` en la pantalla principal, y `startVoiceCapture`/`dispatchPrompt` en el overlay — para que una respuesta larga no se solape con la siguiente petición.
+
+## Atrás cierra la barra de entrada
+
+- `MainActivity` registra un `OnBackPressedCallback` habilitado solo mientras la barra de entrada está abierta (`showInputBar` lo habilita, `hideInputBar` lo deshabilita). Pulsar Atrás cierra la barra en lugar de salir de la pantalla, igual que el descarte al tocar fuera.
+
+## Paridad del panel del overlay
+
+- El panel flotante refleja el pulido de la pantalla principal: `overlay_send` se deshabilita/atenúa (`SEND_DISABLED_ALPHA`) hasta que hay texto, enviar/micrófono/silencio emiten hápticos, y los estados transitorios de error/cancelación vuelven a `overlay_panel_hint` tras `STATUS_RESET_MS` mediante `scheduleStatusReset` (se cancela al iniciar un nuevo turno).
+
+## Sincronización de silencio entre superficies en vivo
+
+- `AtomPreferences` expone `registerChangeListener`/`unregisterChangeListener` sobre su `SharedPreferences`.
+- Tanto `MainActivity` como `FloatingBubbleService` escuchan `KEY_MIC_MUTED`; como comparten un único proceso y un único archivo de preferencias, alternar el silencio en cualquiera de las dos superficies actualiza al instante el icono del micrófono de la otra (el overlay vuelve a leer `overlay_mic` del `panelView` vivo).

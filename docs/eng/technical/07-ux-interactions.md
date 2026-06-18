@@ -49,3 +49,21 @@ This document describes the quality-of-life interactions on the main screen (`Ma
 - On denial, `onMicPermissionDenied` checks `shouldShowRequestPermissionRationale`:
   - re-askable → shows `mic_permission_rationale` (retry on the next tap);
   - permanently denied → an `AlertDialog` routes to the app's system settings via `openAppSettings` (`ACTION_APPLICATION_DETAILS_SETTINGS`), so the mic isn't a dead end.
+
+## Stopping speech on a new turn
+
+- `AndroidTextToSpeech.stop()` silences in-progress/queued speech without tearing down the engine.
+- Called when a new turn starts — `startListening` and `sendFromInputBar` on the main screen, and `startVoiceCapture`/`dispatchPrompt` in the overlay — so a long reply doesn't talk over the next request.
+
+## Back collapses the input bar
+
+- `MainActivity` registers an `OnBackPressedCallback` enabled only while the input bar is open (`showInputBar` enables it, `hideInputBar` disables it). Pressing Back then collapses the bar instead of leaving the screen, matching the tap-outside dismissal.
+
+## Overlay panel parity
+
+- The floating panel mirrors the main-screen polish: `overlay_send` is gated/dimmed (`SEND_DISABLED_ALPHA`) until there's text, send/mic/mute fire haptics, and transient error/cancel statuses auto-recover to `overlay_panel_hint` after `STATUS_RESET_MS` via `scheduleStatusReset` (cancelled when a new turn starts).
+
+## Live cross-surface mute sync
+
+- `AtomPreferences` exposes `registerChangeListener`/`unregisterChangeListener` over its `SharedPreferences`.
+- Both `MainActivity` and `FloatingBubbleService` listen for `KEY_MIC_MUTED`; because they share one process and one prefs file, toggling mute on either surface instantly updates the other's mic icon (the overlay re-reads `overlay_mic` from the live `panelView`).
