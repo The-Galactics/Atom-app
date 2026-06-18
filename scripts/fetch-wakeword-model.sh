@@ -12,4 +12,5 @@ INNER="$(ls -d "$TMP"/*/ | head -1)"
 rm -rf "$DEST"; mkdir -p "$DEST"
 cp -r "$INNER"* "$DEST"/
 rm -rf "$TMP"
+echo "vosk-model-small-es-0.42" > "$DEST/uuid"
 echo "Model ready at $DEST"
