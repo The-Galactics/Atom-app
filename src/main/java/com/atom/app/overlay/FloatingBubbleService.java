@@ -3,8 +3,6 @@ package com.atom.app.overlay;
 import android.Manifest;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
-import android.animation.ObjectAnimator;
-import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
@@ -29,7 +27,6 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.view.WindowMetrics;
-import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
@@ -45,6 +42,7 @@ import com.atom.app.R;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
+import com.atom.app.ui.MicAnimations;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 
@@ -57,10 +55,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final int NOTIFICATION_ID = 0xA70;
     private static final String CHANNEL_ID = "atom_floating_assistant";
 
-    // Motion tuning for the bubble + mic. Kept in code (behaviour, not layout).
-    private static final float MIC_PULSE_SCALE = 1.18f;     // peak of the breathing pulse
-    private static final long MIC_PULSE_DURATION_MS = 620;  // one half-cycle (grows, then reverses)
-    private static final long MIC_PRESS_DURATION_MS = 90;   // tap settle dip
+    // Motion tuning for the bubble. Kept in code (behaviour, not layout).
+    // Mic press/pulse tuning now lives in the shared MicAnimations helper.
     private static final long SNAP_DURATION_MS = 220;       // edge snap glide
     private static final float PUSH_OFF_FRACTION = 0.4f;    // drag this far past an edge to hide
     private static final float HANDLE_IDLE_ALPHA = 0.5f;    // dimmed handle when untouched
@@ -77,7 +73,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private AndroidSpeechRecognizer speechRecognizer;
     private int touchSlop;
 
-    private ObjectAnimator micPulse;  // infinite "listening" pulse on the panel mic
+    // Shared mic feedback (press-settle + breathing pulse) used by the panel mic.
+    private final MicAnimations micAnimations = new MicAnimations();
     private ValueAnimator bubbleSettle; // edge snap glide
 
     private View handleView;          // edge tab shown while the bubble is hidden
@@ -633,8 +630,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             status.setText(R.string.overlay_mic_denied);
             return;
         }
-        playPressSettle(mic);
-        startMicPulse(mic);
+        MicAnimations.playPressSettle(mic);
+        micAnimations.startMicPulse(mic);
         if (speechRecognizer == null) {
             speechRecognizer = new AndroidSpeechRecognizer(this, new BubbleSttListener(status, mic));
         }
@@ -660,7 +657,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         @Override
         public void onEndOfSpeech() {
-            stopMicPulse(mic);
+            micAnimations.stopMicPulse(mic);
             if (status.isAttachedToWindow()) {
                 status.setText(R.string.overlay_thinking);
             }
@@ -668,7 +665,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         @Override
         public void onResult(String text) {
-            stopMicPulse(mic);
+            micAnimations.stopMicPulse(mic);
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
                     status.setText(R.string.overlay_voice_error);
@@ -680,7 +677,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         @Override
         public void onError(String message) {
-            stopMicPulse(mic);
+            micAnimations.stopMicPulse(mic);
             if (!status.isAttachedToWindow()) {
                 return;
             }
@@ -701,7 +698,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         chatRepository.askAtom(prompt, new ChatRepository.ChatCallback() {
             @Override
             public void onSuccess(ResponseModel response) {
-                stopMicPulse(mic);
+                micAnimations.stopMicPulse(mic);
                 if (status.isAttachedToWindow()) {
                     status.setText(response.getResponseText());
                 }
@@ -709,7 +706,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
             @Override
             public void onError(String error) {
-                stopMicPulse(mic);
+                micAnimations.stopMicPulse(mic);
                 if (status.isAttachedToWindow()) {
                     status.setText(error);
                 }
@@ -718,62 +715,11 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     private void collapseToBubble() {
-        stopMicPulse(null);
+        micAnimations.stopMicPulse(null);
         destroyRecognizer();
         removeView(panelView);
         panelView = null;
         showBubble();
-    }
-
-    // --- Mic animation (Phase 2) -------------------------------------------
-
-    // A quick scale dip-and-recover that acknowledges the tap.
-    private void playPressSettle(View mic) {
-        if (mic == null) {
-            return;
-        }
-        mic.animate()
-                .scaleX(0.86f).scaleY(0.86f)
-                .setDuration(MIC_PRESS_DURATION_MS)
-                .withEndAction(() -> mic.animate()
-                        .scaleX(1f).scaleY(1f)
-                        .setDuration(MIC_PRESS_DURATION_MS + 30)
-                        .start())
-                .start();
-    }
-
-    // Infinite "breathing" pulse (scale + alpha) marking the listening state.
-    private void startMicPulse(View mic) {
-        if (mic == null) {
-            return;
-        }
-        stopMicPulse(mic);
-        PropertyValuesHolder scaleX =
-                PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, MIC_PULSE_SCALE);
-        PropertyValuesHolder scaleY =
-                PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, MIC_PULSE_SCALE);
-        PropertyValuesHolder alpha =
-                PropertyValuesHolder.ofFloat(View.ALPHA, 1f, 0.55f);
-        micPulse = ObjectAnimator.ofPropertyValuesHolder(mic, scaleX, scaleY, alpha);
-        micPulse.setDuration(MIC_PULSE_DURATION_MS);
-        micPulse.setRepeatCount(ValueAnimator.INFINITE);
-        micPulse.setRepeatMode(ValueAnimator.REVERSE);
-        micPulse.setInterpolator(new AccelerateDecelerateInterpolator());
-        micPulse.start();
-    }
-
-    // Stops the pulse and restores the mic to its resting state. The view may
-    // already be detached (panel torn down mid-request); resetting it is safe.
-    private void stopMicPulse(View mic) {
-        if (micPulse != null) {
-            micPulse.cancel();
-            micPulse = null;
-        }
-        if (mic != null) {
-            mic.setScaleX(1f);
-            mic.setScaleY(1f);
-            mic.setAlpha(1f);
-        }
     }
 
     // --- Edge snap & force-to-hide (Phase 3) -------------------------------
@@ -879,7 +825,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void cancelAnimations() {
         cancelBubbleSettle();
         cancelHandleSettle();
-        stopMicPulse(null);
+        micAnimations.stopMicPulse(null);
     }
 
     private WindowManager.LayoutParams baseLayoutParams() {
