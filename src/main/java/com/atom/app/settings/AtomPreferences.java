@@ -14,8 +14,9 @@ public class AtomPreferences {
     private static final String KEY_TTS_RATE = "tts_rate";
     private static final String KEY_WAKE_ENABLED = "wake_word_enabled";
     private static final String KEY_WAKE_NAME = "wake_word_name";
-    private static final String KEY_WAKE_PPN = "wake_word_ppn_path";
     private static final String KEY_WAKE_SCREEN_ON_ONLY = "wake_word_screen_on_only";
+    private static final String KEY_USER_NAME = "user_name";
+    private static final String KEY_ASSISTANT_NAME = "assistant_name";
 
     private final SharedPreferences prefs;
 
@@ -41,10 +42,6 @@ public class AtomPreferences {
      */
     public boolean isRemoteTtsEnabled() {
         return prefs.getBoolean(KEY_REMOTE_TTS_ENABLED, false);
-    }
-
-    public void setRemoteTtsEnabled(boolean enabled) {
-        prefs.edit().putBoolean(KEY_REMOTE_TTS_ENABLED, enabled).apply();
     }
 
     /** Selected on-device TTS voice name (Voice.getName()); empty = automatic. */
@@ -84,25 +81,9 @@ public class AtomPreferences {
                 ? "Atom" : name.trim()).apply();
     }
 
-    /**
-     * Absolute path to the imported Porcupine {@code .ppn} keyword for a custom
-     * name; empty means use the bundled default ("Atom").
-     */
-    public String getWakeWordPpnPath() {
-        return prefs.getString(KEY_WAKE_PPN, "");
-    }
-
-    public void setWakeWordPpnPath(String path) {
-        prefs.edit().putString(KEY_WAKE_PPN, path == null ? "" : path).apply();
-    }
-
     /** Battery saver: only listen for the wake word while the screen is on. */
     public boolean isWakeWordScreenOnOnly() {
         return prefs.getBoolean(KEY_WAKE_SCREEN_ON_ONLY, false);
-    }
-
-    public void setWakeWordScreenOnOnly(boolean screenOnOnly) {
-        prefs.edit().putBoolean(KEY_WAKE_SCREEN_ON_ONLY, screenOnOnly).apply();
     }
 
     /** Voice input defaults to unmuted (mic available). */
@@ -112,6 +93,25 @@ public class AtomPreferences {
 
     public void setMicMuted(boolean muted) {
         prefs.edit().putBoolean(KEY_MIC_MUTED, muted).apply();
+    }
+
+    /** The user's display name; empty until set in Settings. */
+    public String getUserName() {
+        return prefs.getString(KEY_USER_NAME, "");
+    }
+
+    public void setUserName(String name) {
+        prefs.edit().putString(KEY_USER_NAME, name == null ? "" : name.trim()).apply();
+    }
+
+    /** The assistant's display name. Defaults to "Atom"; also drives the wake word. */
+    public String getAssistantName() {
+        return prefs.getString(KEY_ASSISTANT_NAME, "Atom");
+    }
+
+    public void setAssistantName(String name) {
+        prefs.edit().putString(KEY_ASSISTANT_NAME, name == null || name.trim().isEmpty()
+                ? "Atom" : name.trim()).apply();
     }
 
     /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */
