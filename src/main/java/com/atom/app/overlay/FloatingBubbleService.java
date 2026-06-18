@@ -42,6 +42,7 @@ import com.atom.app.R;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
+import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.MicAnimations;
 import com.atom.domain.action.ResolvedAction;
@@ -74,6 +75,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private CommandRepository commandRepository;
     private AndroidSpeechRecognizer speechRecognizer;
     private AndroidTextToSpeech tts;
+    private VoiceRepository voiceRepository;
     private AtomPreferences preferences;
     private int touchSlop;
 
@@ -107,6 +109,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor());
         tts = new AndroidTextToSpeech(this);
+        voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         preferences = new AtomPreferences(this);
         app.setForegroundListener(this);
     }
@@ -698,14 +701,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     /**
      * Shows Atom's reply in the panel and, when voice output is enabled in
-     * Settings, speaks it aloud — same behaviour as the main chat screen.
+     * Settings, speaks it aloud. Prefers the backend neural voice (Kokoro);
+     * if that fails, falls back to the on-device TTS engine.
      */
     private void respond(String text, TextView status) {
         if (status.isAttachedToWindow()) {
             status.setText(text);
         }
-        if (text != null && !text.trim().isEmpty()
-                && preferences.isTtsEnabled() && tts != null) {
+        if (text == null || text.trim().isEmpty() || !preferences.isTtsEnabled()) {
+            return;
+        }
+        if (preferences.isRemoteTtsEnabled() && voiceRepository != null) {
+            final String reply = text;
+            voiceRepository.speak(reply, () -> {
+                if (tts != null) {
+                    tts.speak(reply);
+                }
+            });
+        } else if (tts != null) {
             tts.speak(text);
         }
     }
@@ -884,6 +897,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (tts != null) {
             tts.shutdown();
             tts = null;
+        }
+        if (voiceRepository != null) {
+            voiceRepository.shutdown();
+            voiceRepository = null;
         }
         cancelAnimations();
         removeView(bubbleView);
