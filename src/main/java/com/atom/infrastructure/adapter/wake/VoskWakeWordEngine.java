@@ -82,7 +82,8 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
 
     @Override
     public void onPartialResult(String hypothesis) {
-        check(hypothesis, "partial");
+        // Ignore partials: they're speculative and the main source of false
+        // triggers during normal conversation. Only act on settled results.
     }
 
     @Override
@@ -127,25 +128,28 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
         }
     }
 
-    /** Loose match: whole-word, substring, or shared prefix (ASR may mishear names). */
+    /**
+     * Strict match: fire only when the wake word is the single meaningful word
+     * heard (alone, or surrounded by Vosk's "[unk]" filler). This avoids waking
+     * when the name happens to appear inside a normal conversation.
+     */
     private boolean matches(String heard) {
         if (keyword.isEmpty()) {
             return false;
         }
-        if (heard.contains(keyword)) {
-            return true;
-        }
-        int prefix = Math.min(4, keyword.length());
-        if (prefix < 3) {
-            return false;
-        }
-        String keyPrefix = keyword.substring(0, prefix);
-        for (String word : heard.split("\\s+")) {
-            if (word.length() >= prefix && word.startsWith(keyPrefix)) {
-                return true;
+        boolean hasKeyword = false;
+        int otherWords = 0;
+        for (String token : heard.split("\\s+")) {
+            if (token.isEmpty() || token.equals("[unk]")) {
+                continue;
+            }
+            if (token.equals(keyword)) {
+                hasKeyword = true;
+            } else {
+                otherWords++;
             }
         }
-        return false;
+        return hasKeyword && otherWords == 0;
     }
 
     private static String normalize(String s) {
