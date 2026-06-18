@@ -52,12 +52,15 @@ import com.atom.app.ui.MicAnimations;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
+import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
     public static final String ACTION_START = "com.atom.app.overlay.START";
     public static final String ACTION_STOP = "com.atom.app.overlay.STOP";
     public static final String ACTION_SHOW = "com.atom.app.overlay.SHOW";
+    /** Opens the panel and starts voice capture — fired by the wake-word service. */
+    public static final String ACTION_LISTEN = "com.atom.app.overlay.LISTEN";
 
     private static final int NOTIFICATION_ID = 0xA70;
     private static final String CHANNEL_ID = "atom_floating_assistant";
@@ -154,6 +157,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             // Brought back from the notification after a hide.
             startForegroundWithNotification();
             restoreBubble();
+            return START_STICKY;
+        }
+        if (ACTION_LISTEN.equals(action)) {
+            // Summoned by the wake word: open the panel and start capturing.
+            startForegroundWithNotification();
+            startListeningFromWakeWord();
             return START_STICKY;
         }
         startForegroundWithNotification();
@@ -736,6 +745,33 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         speechRecognizer.startListening();
     }
 
+    /**
+     * Entry point for the wake word: make sure the panel is open, then start
+     * voice capture as if the user had tapped the mic.
+     */
+    private void startListeningFromWakeWord() {
+        if (!app.isAppInForeground() && panelView == null && bubbleView == null && handleView == null) {
+            showBubble();
+        }
+        if (panelView == null) {
+            expandPanel();
+        }
+        if (panelView == null) {
+            return;
+        }
+        TextView status = panelView.findViewById(R.id.overlay_status);
+        View mic = panelView.findViewById(R.id.overlay_mic);
+        startVoiceCapture(status, mic);
+    }
+
+    /**
+     * Tells the wake-word service the mic is free again so Porcupine can resume.
+     * A no-op when the wake word isn't running (the broadcast is just ignored).
+     */
+    private void notifyWakeWordListenDone() {
+        sendBroadcast(new Intent(WakeWordService.ACTION_LISTEN_DONE).setPackage(getPackageName()));
+    }
+
     /** Routes speech-recognition callbacks to the panel and dispatches the transcript. */
     private final class BubbleSttListener implements AndroidSpeechRecognizer.Listener {
         private final TextView status;
@@ -764,6 +800,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         @Override
         public void onResult(String text) {
             micAnimations.stopMicPulse(mic);
+            notifyWakeWordListenDone();
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
                     status.setText(R.string.overlay_voice_error);
@@ -777,6 +814,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         @Override
         public void onError(String message) {
             micAnimations.stopMicPulse(mic);
+            notifyWakeWordListenDone();
             if (!status.isAttachedToWindow()) {
                 return;
             }

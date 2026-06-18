@@ -1,18 +1,27 @@
 package com.atom.app;
 
+import android.Manifest;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -28,6 +37,7 @@ import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.infrastructure.adapter.screen.ScreenCaptureService;
+import com.atom.infrastructure.adapter.wake.WakeWordService;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.materialswitch.MaterialSwitch;
 
@@ -51,6 +61,14 @@ public class SettingsActivity extends AppCompatActivity {
     // Speech-rate slider range.
     private static final float MIN_RATE = 0.5f;
     private static final float MAX_RATE = 1.5f;
+
+    // Picks a custom Porcupine keyword (.ppn) the user generated for their name.
+    private final ActivityResultLauncher<String[]> importPpnLauncher =
+            registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri != null) {
+                    importPpn(uri);
+                }
+            });
 
     // Overlay ("super position") permission result: re-check on return from Settings.
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
@@ -120,6 +138,8 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
+
+        setupWakeWordControls();
 
         // Spoken responses toggle: reflect stored value and persist immediately.
         switchTts.setChecked(preferences.isTtsEnabled());
@@ -304,6 +324,109 @@ public class SettingsActivity extends AppCompatActivity {
         voicePickerTts.setSpeechRate(selectedRate);
         voicePickerTts.speak("Hola, soy Atom. Así sueno con esta voz.",
                 TextToSpeech.QUEUE_FLUSH, null, "atom_voice_preview");
+    }
+
+    /** Wires the wake-word section: enable switch, name, import, screen-only, battery. */
+    private void setupWakeWordControls() {
+        MaterialSwitch switchWake = findViewById(R.id.switch_wake);
+        EditText etWakeName = findViewById(R.id.et_wake_name);
+        MaterialButton btnImportPpn = findViewById(R.id.btn_import_ppn);
+        MaterialSwitch switchWakeScreen = findViewById(R.id.switch_wake_screen);
+        MaterialButton btnWakeBattery = findViewById(R.id.btn_wake_battery);
+
+        switchWake.setChecked(preferences.isWakeWordEnabled());
+        switchWake.setOnCheckedChangeListener((button, checked) -> {
+            if (checked && BuildConfig.PICOVOICE_ACCESS_KEY.trim().isEmpty()) {
+                toast(getString(R.string.settings_wake_needs_key));
+                button.setChecked(false);
+                return;
+            }
+            if (checked && !PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
+                toast(getString(R.string.mic_permission_denied));
+                button.setChecked(false);
+                return;
+            }
+            preferences.setWakeWordEnabled(checked);
+            if (checked) {
+                startWakeService();
+            } else {
+                stopWakeService();
+            }
+        });
+
+        etWakeName.setText(preferences.getWakeWordName());
+        etWakeName.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override
+            public void afterTextChanged(Editable s) {
+                preferences.setWakeWordName(s.toString());
+            }
+        });
+
+        btnImportPpn.setOnClickListener(v -> importPpnLauncher.launch(new String[]{"*/*"}));
+
+        switchWakeScreen.setChecked(preferences.isWakeWordScreenOnOnly());
+        switchWakeScreen.setOnCheckedChangeListener((button, checked) -> {
+            preferences.setWakeWordScreenOnOnly(checked);
+            restartWakeServiceIfEnabled();
+        });
+
+        btnWakeBattery.setOnClickListener(v -> openWakeBatterySettings());
+    }
+
+    /** Copies the chosen .ppn into app storage and points the wake word at it. */
+    private void importPpn(Uri uri) {
+        File out = new File(getFilesDir(), "custom_wakeword.ppn");
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             FileOutputStream fos = new FileOutputStream(out)) {
+            if (in == null) {
+                throw new java.io.IOException("could not open uri");
+            }
+            byte[] buffer = new byte[4096];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                fos.write(buffer, 0, read);
+            }
+            preferences.setWakeWordPpnPath(out.getAbsolutePath());
+            toast(getString(R.string.settings_wake_imported));
+            restartWakeServiceIfEnabled();
+        } catch (Exception e) {
+            toast(getString(R.string.settings_wake_import_failed));
+        }
+    }
+
+    private void startWakeService() {
+        startForegroundService(new Intent(this, WakeWordService.class)
+                .setAction(WakeWordService.ACTION_START));
+    }
+
+    private void stopWakeService() {
+        startService(new Intent(this, WakeWordService.class)
+                .setAction(WakeWordService.ACTION_STOP));
+    }
+
+    private void restartWakeServiceIfEnabled() {
+        if (preferences.isWakeWordEnabled()) {
+            stopWakeService();
+            startWakeService();
+        }
+    }
+
+    /** Opens the OS battery-optimization screen so the user can exempt Atom (MIUI kills FGS). */
+    private void openWakeBatterySettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        } catch (Exception e) {
+            try {
+                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:" + getPackageName())));
+            } catch (Exception ignored) {
+                toast("Open battery settings manually");
+            }
+        }
     }
 
     private static int rateToProgress(float rate) {
