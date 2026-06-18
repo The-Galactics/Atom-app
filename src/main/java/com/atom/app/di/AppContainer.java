@@ -8,6 +8,7 @@ import java.util.UUID;
 import com.atom.app.BuildConfig;
 import com.atom.application.port.in.ExecuteCommandPortIn;
 import com.atom.application.port.in.StreamChatPortIn;
+import com.atom.application.port.in.SynthesizeSpeechPortIn;
 import com.atom.application.port.in.security.DeviceSecurityPort;
 import com.atom.application.port.in.security.InputValidationPort;
 import com.atom.application.port.out.ActionExecutorPortOut;
@@ -15,6 +16,7 @@ import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.application.port.out.security.DeviceInspectorPort;
 import com.atom.application.usecase.ExternalCommandUseCase;
 import com.atom.application.usecase.ExternalMessageUseCase;
+import com.atom.application.usecase.SynthesizeSpeechUseCase;
 import com.atom.application.usecase.security.DeviceSecurityUseCase;
 import com.atom.application.usecase.security.InputValidationUsecase;
 import com.atom.infrastructure.adapter.action.AndroidActionExecutor;
@@ -31,6 +33,7 @@ public class AppContainer {
     // Application use-cases (in-ports).
     private final StreamChatPortIn externalMessageUseCase;
     private final ExecuteCommandPortIn externalCommandUseCase;
+    private final SynthesizeSpeechPortIn synthesizeSpeechUseCase;
     private final DeviceSecurityPort deviceSecurityUseCase;
     private final InputValidationPort inputValidationUsecase;
 
@@ -65,6 +68,7 @@ public class AppContainer {
         // External interaction use-cases (chat streaming + command execution).
         this.externalMessageUseCase = new ExternalMessageUseCase(externalInteractionPortOut);
         this.externalCommandUseCase = new ExternalCommandUseCase(externalInteractionPortOut);
+        this.synthesizeSpeechUseCase = new SynthesizeSpeechUseCase(externalInteractionPortOut);
 
         // Device security use-case <- device inspector adapter.
         this.deviceInspectorPort = new DeviceInspectorAdapter();
@@ -80,6 +84,10 @@ public class AppContainer {
 
     public ExecuteCommandPortIn getExternalCommandUseCase() {
         return externalCommandUseCase;
+    }
+
+    public SynthesizeSpeechPortIn getSynthesizeSpeechUseCase() {
+        return synthesizeSpeechUseCase;
     }
 
     public ActionExecutorPortOut getActionExecutor() {
