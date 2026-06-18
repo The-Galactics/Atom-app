@@ -45,6 +45,12 @@ public class SettingsActivity extends AppCompatActivity {
     private Spinner spinnerVoice;
     // Parallel to the spinner labels; index -> Voice.getName() ("" = automatic).
     private final List<String> voiceNames = new ArrayList<>();
+    // Current speech rate (0.5x..1.5x), kept in sync with the speed slider.
+    private float selectedRate = 0.9f;
+
+    // Speech-rate slider range.
+    private static final float MIN_RATE = 0.5f;
+    private static final float MAX_RATE = 1.5f;
 
     // Overlay ("super position") permission result: re-check on return from Settings.
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
@@ -95,6 +101,25 @@ public class SettingsActivity extends AppCompatActivity {
                 findViewById(R.id.btn_preview_voice);
         btnPreviewVoice.setOnClickListener(v -> previewSelectedVoice());
         voicePickerTts = new TextToSpeech(this, this::onVoicePickerInit);
+
+        // Speech speed: slider maps 0..100 to a 0.5x..1.5x rate, persisted live.
+        SeekBar seekBarSpeed = findViewById(R.id.seekbar_speed);
+        TextView tvSpeedValue = findViewById(R.id.tv_speed_value);
+        selectedRate = preferences.getTtsRate();
+        seekBarSpeed.setProgress(rateToProgress(selectedRate));
+        tvSpeedValue.setText(formatRate(selectedRate));
+        seekBarSpeed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                selectedRate = progressToRate(progress);
+                tvSpeedValue.setText(formatRate(selectedRate));
+                preferences.setTtsRate(selectedRate);
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
 
         // Spoken responses toggle: reflect stored value and persist immediately.
         switchTts.setChecked(preferences.isTtsEnabled());
@@ -276,9 +301,22 @@ public class SettingsActivity extends AppCompatActivity {
             }
         }
         voicePickerTts.setPitch(0.95f);
-        voicePickerTts.setSpeechRate(0.9f);
+        voicePickerTts.setSpeechRate(selectedRate);
         voicePickerTts.speak("Hola, soy Atom. Así sueno con esta voz.",
                 TextToSpeech.QUEUE_FLUSH, null, "atom_voice_preview");
+    }
+
+    private static int rateToProgress(float rate) {
+        int p = Math.round((rate - MIN_RATE) / (MAX_RATE - MIN_RATE) * 100f);
+        return Math.max(0, Math.min(100, p));
+    }
+
+    private static float progressToRate(int progress) {
+        return MIN_RATE + (progress / 100f) * (MAX_RATE - MIN_RATE);
+    }
+
+    private static String formatRate(float rate) {
+        return String.format(Locale.US, "%.1fx", rate);
     }
 
     private Set<Voice> safeVoices() {
