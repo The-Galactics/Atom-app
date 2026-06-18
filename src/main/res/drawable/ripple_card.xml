@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Bounded accent ripple over a rounded card surface (tappable rows). -->
-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/ripple_accent">
-    <item android:drawable="@drawable/bg_surface_card" />
-</ripple>

@@ -9,7 +9,6 @@
     <string name="status_listening">Listening</string>
     <string name="status_thinking">Thinking</string>
     <string name="status_error">Something went wrong</string>
-    <string name="sub_status_awaiting">Awaiting prompt</string>
     <string name="sub_status_tap_mic">Tap the mic or type to begin</string>
     <string name="sub_status_thinking">Reaching the Atom core</string>
     <string name="sub_status_responded">Atom responded</string>
