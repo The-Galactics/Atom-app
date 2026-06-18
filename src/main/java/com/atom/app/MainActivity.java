@@ -31,6 +31,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.atom.app.data.ConversationRepository;
 import com.atom.app.di.AppContainer;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
@@ -105,6 +106,9 @@ public class MainActivity extends AppCompatActivity {
     private AtomPreferences preferences;
     private AndroidSpeechRecognizer speechRecognizer;
 
+    // Persists the conversation transcript so the History screen can replay it.
+    private ConversationRepository conversationRepository;
+
     // True while a recognition is in flight; lets a tap cancel it and gates error recovery.
     private boolean isListening;
 
@@ -155,6 +159,17 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // First-run routing: if onboarding hasn't been completed, hand off to it
+        // before inflating the main UI so the user never sees a flash of the home
+        // screen. We finish() immediately so back from onboarding leaves the app.
+        AtomPreferences earlyPrefs = new AtomPreferences(this);
+        if (!earlyPrefs.isOnboardingComplete()) {
+            startActivity(new Intent(this, OnboardingActivity.class));
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_main);
 
         // Initialize ViewModel via the composition root (AppContainer).
@@ -163,6 +178,7 @@ public class MainActivity extends AppCompatActivity {
                 .get(ChatViewModel.class);
 
         preferences = new AtomPreferences(this);
+        conversationRepository = new ConversationRepository(this);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
 
         // Initialize UI Components
@@ -217,13 +233,40 @@ public class MainActivity extends AppCompatActivity {
         btnSettings.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
 
-        // FUTURE WORK: no conversation store or history screen yet; this is a placeholder.
         btnHistory.setOnClickListener(v ->
-                toast("History is not available yet"));
+                startActivity(new Intent(MainActivity.this, HistoryActivity.class)));
 
         btnKeyboard.setOnClickListener(v -> toggleInputBar());
 
         btnVolume.setOnClickListener(v -> showVolumeSlider());
+
+        setupQuickActions();
+    }
+
+    /**
+     * Wires the quick-action chips. Ambiguous actions (timer/call/message need a
+     * value the user must supply) pre-fill the input bar with a starter phrase so
+     * the user can complete and confirm. Clearly unambiguous toggles (Wi-Fi,
+     * flashlight) are dispatched straight away as orders.
+     */
+    private void setupQuickActions() {
+        findViewById(R.id.chip_timer).setOnClickListener(v ->
+                prefillInput(getString(R.string.chip_phrase_timer)));
+        findViewById(R.id.chip_call).setOnClickListener(v ->
+                prefillInput(getString(R.string.chip_phrase_call)));
+        findViewById(R.id.chip_message).setOnClickListener(v ->
+                prefillInput(getString(R.string.chip_phrase_message)));
+        findViewById(R.id.chip_wifi).setOnClickListener(v ->
+                dispatchOrder(getString(R.string.chip_phrase_wifi)));
+        findViewById(R.id.chip_flashlight).setOnClickListener(v ->
+                dispatchOrder(getString(R.string.chip_phrase_flashlight)));
+    }
+
+    /** Opens the input bar pre-filled with a starter phrase, caret at the end. */
+    private void prefillInput(String starter) {
+        showInputBar();
+        inputEditText.setText(starter);
+        inputEditText.setSelection(inputEditText.getText().length());
     }
 
     @Override
@@ -369,9 +412,19 @@ public class MainActivity extends AppCompatActivity {
         }
         // Typed input is treated as an ORDER: the backend decides whether it is
         // an executable action or a plain conversational reply.
-        viewModel.sendOrder(text);
+        dispatchOrder(text);
         inputEditText.setText("");
         hideInputBar();
+    }
+
+    /**
+     * Single entry point for dispatching an order (typed or spoken): records the
+     * user turn in the transcript, then hands it to the ViewModel. Centralizing
+     * here keeps persistence consistent across the keyboard and voice paths.
+     */
+    private void dispatchOrder(String text) {
+        conversationRepository.saveUserMessage(text);
+        viewModel.sendOrder(text);
     }
 
     private void showVolumeSlider() {
@@ -482,6 +535,8 @@ public class MainActivity extends AppCompatActivity {
         }
         // Drop any pending error recovery now that we're active again.
         statusText.removeCallbacks(errorRecoverRunnable);
+        // Clear a leftover retry hint so the sub-status is plain again while listening.
+        clearRetryAffordance();
         fadeSwap(statusText, getString(R.string.status_listening));
         fadeSwap(subStatusText, getString(R.string.sub_status_listening));
         // Drive the atom core brighter/faster and start the listening mic pulse.
@@ -510,10 +565,21 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
+        public void onPartialResult(String text) {
+            // Live transcript: set directly (no fadeSwap) so the fast, frequent
+            // partials don't queue janky crossfades. Cleared on the next state change.
+            if (subStatusText != null && text != null && !text.trim().isEmpty()) {
+                subStatusText.animate().cancel();
+                subStatusText.setAlpha(1f);
+                subStatusText.setText(text);
+            }
+        }
+
+        @Override
         public void onResult(String text) {
             notifyWakeDone();
-            // Speech is treated as an ORDER, same as typed input.
-            viewModel.sendOrder(text);
+            // Speech is treated as an ORDER, same as typed input (persist + dispatch).
+            dispatchOrder(text);
         }
 
         @Override
@@ -524,11 +590,34 @@ public class MainActivity extends AppCompatActivity {
                     ? R.string.stt_unavailable
                     : R.string.stt_error;
             fadeSwap(statusText, getString(R.string.status_idle));
-            fadeSwap(subStatusText, getString(R.string.sub_status_tap_mic));
             // Recognition failed: stop the pulse and return the core to its calm idle.
             micAnimations.stopMicPulse(btnMic);
             applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
             toast(getString(msg));
+            // Offer a subtle, on-brand retry: the sub-status becomes a tappable
+            // "Tap to try again" that re-runs the listen path. Cleared on the next
+            // successful listen (startListening resets the sub-status + tap handler).
+            showRetryAffordance();
+        }
+    }
+
+    /** Turns the sub-status into a tappable retry hint after a failed recognition. */
+    private void showRetryAffordance() {
+        if (subStatusText == null) {
+            return;
+        }
+        fadeSwap(subStatusText, getString(R.string.sub_status_retry));
+        subStatusText.setOnClickListener(v -> {
+            clearRetryAffordance();
+            onMicTapped();
+        });
+    }
+
+    /** Removes the retry tap handler so the sub-status goes back to plain text. */
+    private void clearRetryAffordance() {
+        if (subStatusText != null) {
+            subStatusText.setOnClickListener(null);
+            subStatusText.setClickable(false);
         }
     }
 
@@ -632,6 +721,9 @@ public class MainActivity extends AppCompatActivity {
     private void setupObservers() {
         // When the back-end responds
         viewModel.getChatResponse().observe(this, response -> {
+            // Record Atom's reply in the transcript (covers both conversational
+            // replies and executed-action outcomes, which both land here).
+            conversationRepository.saveAssistantMessage(response);
             fadeSwap(statusText, response);
             fadeSwap(subStatusText, getString(R.string.sub_status_responded));
             // Reply landed: ease the core back to its calm idle with a settle pulse.

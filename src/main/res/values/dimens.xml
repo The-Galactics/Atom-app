@@ -28,6 +28,9 @@
     <dimen name="handle_touch_width">36dp</dimen>    <!-- invisible grab zone around the line so the tap lands -->
     <dimen name="handle_height">96dp</dimen>         <!-- height of the grab zone -->
 
+    <!-- History chat bubbles: cap width so long turns wrap instead of edge-to-edge. -->
+    <dimen name="chat_bubble_max_width">280dp</dimen>
+
     <!-- Type scale (sp) -->
     <dimen name="text_wordmark">26sp</dimen>      <!-- ATOM wordmark -->
     <dimen name="text_display">30sp</dimen>       <!-- large serif status -->

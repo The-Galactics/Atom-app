@@ -41,6 +41,7 @@ import androidx.core.app.NotificationCompat;
 
 import com.atom.app.AtomApp;
 import com.atom.app.R;
+import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
@@ -84,6 +85,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private AndroidTextToSpeech tts;
     private VoiceRepository voiceRepository;
     private AtomPreferences preferences;
+    // Persists the dialogue from the overlay into the same transcript the main screen uses.
+    private ConversationRepository conversationRepository;
     private int touchSlop;
 
     // Shared mic feedback (press-settle + breathing pulse) used by the panel mic.
@@ -137,6 +140,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor());
         preferences = new AtomPreferences(this);
+        conversationRepository = new ConversationRepository(this);
         preferences.registerChangeListener(muteListener);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
@@ -638,6 +642,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      * (StreamChat), which keeps in-session context.
      */
     private void handlePrompt(String prompt, TextView status) {
+        // Record the user turn so the History screen replays bubble conversations too.
+        conversationRepository.saveUserMessage(prompt);
         commandRepository.recognize(prompt, new CommandRepository.CommandCallback() {
             @Override
             public void onResolved(ResolvedAction action) {
@@ -776,6 +782,14 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
 
         @Override
+        public void onPartialResult(String text) {
+            // Live transcript in the overlay status line as the user speaks.
+            if (status.isAttachedToWindow() && text != null && !text.trim().isEmpty()) {
+                status.setText(text);
+            }
+        }
+
+        @Override
         public void onEndOfSpeech() {
             micAnimations.stopMicPulse(mic);
             if (status.isAttachedToWindow()) {
@@ -824,6 +838,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      * if that fails, falls back to the on-device TTS engine.
      */
     private void respond(String text, TextView status) {
+        // Record Atom's reply in the shared transcript before showing/speaking it.
+        conversationRepository.saveAssistantMessage(text);
         if (status.isAttachedToWindow()) {
             status.setText(text);
         }
