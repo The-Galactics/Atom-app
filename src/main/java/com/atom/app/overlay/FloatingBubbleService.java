@@ -115,6 +115,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private final MicAnimations micAnimations = new MicAnimations();
     private ValueAnimator bubbleSettle; // edge snap glide
 
+    private View dismissView;          // drag-to-dismiss drop zone, shown during a bubble drag
+    private WindowManager.LayoutParams dismissParams;
+    private boolean dismissHot;        // bubble center is currently over the dismiss target
+
     private View handleView;          // edge tab shown while the bubble is hidden
     private WindowManager.LayoutParams handleParams;
     private ValueAnimator handleSettle; // handle edge snap / fade-to-idle glide
@@ -272,6 +276,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     private void hideOverlayViews() {
         cancelAnimations();
+        hideDismissTarget();
         removeView(panelView);
         panelView = null;
         removeView(bubbleView);
@@ -585,15 +590,28 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     int dx = (int) (event.getRawX() - touchX);
                     int dy = (int) (event.getRawY() - touchY);
                     if (Math.abs(dx) > touchSlop || Math.abs(dy) > touchSlop) {
+                        if (!dragging) {
+                            // First real drag: reveal the dismiss drop zone.
+                            showDismissTarget();
+                        }
                         dragging = true;
                     }
                     bubbleParams.x = initialX + dx;
                     bubbleParams.y = initialY + dy;
                     windowManager.updateViewLayout(bubbleView, bubbleParams);
+                    if (dragging) {
+                        updateDismissHighlight();
+                    }
                     return true;
                 case MotionEvent.ACTION_UP:
                     if (dragging) {
-                        settleToEdge();
+                        if (isOverDismiss()) {
+                            hideDismissTarget();
+                            stopOverlay();
+                        } else {
+                            hideDismissTarget();
+                            settleToEdge();
+                        }
                     } else {
                         v.performClick();
                         expandPanel();
@@ -602,6 +620,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 case MotionEvent.ACTION_CANCEL:
                     // Gesture stolen (common with edge gesture-nav on tall phones):
                     // settle to the edge instead of leaving the bubble stranded.
+                    hideDismissTarget();
                     if (dragging) {
                         settleToEdge();
                     }
@@ -610,6 +629,64 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     return false;
             }
         }
+    }
+
+    // --- Drag-to-dismiss drop zone -----------------------------------------
+
+    // Adds the centered-bottom dismiss target shown while the bubble is dragged.
+    private void showDismissTarget() {
+        if (dismissView != null) {
+            return;
+        }
+        int[] screen = getScreenSize();
+        int size = getResources().getDimensionPixelSize(R.dimen.dismiss_target_size);
+        int margin = getResources().getDimensionPixelSize(R.dimen.dismiss_target_margin);
+
+        dismissView = inflater.inflate(R.layout.view_overlay_dismiss, null);
+        dismissHot = false;
+        dismissParams = baseLayoutParams();
+        dismissParams.gravity = Gravity.TOP | Gravity.START;
+        dismissParams.x = (screen[0] - size) / 2;
+        dismissParams.y = screen[1] - size - margin;
+        windowManager.addView(dismissView, dismissParams);
+    }
+
+    // Lights up the target (and gives a haptic) while the bubble center overlaps it.
+    private void updateDismissHighlight() {
+        if (dismissView == null) {
+            return;
+        }
+        boolean over = isOverDismiss();
+        if (over != dismissHot) {
+            dismissHot = over;
+            dismissView.setActivated(over);
+            if (over && bubbleView != null) {
+                bubbleView.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            }
+        }
+    }
+
+    // True when the bubble center is within the capture radius of the target center.
+    private boolean isOverDismiss() {
+        if (dismissView == null || bubbleView == null || bubbleParams == null) {
+            return false;
+        }
+        int size = getResources().getDimensionPixelSize(R.dimen.dismiss_target_size);
+        int bubbleWidth = bubbleSpan(bubbleView.getWidth());
+        int bubbleHeight = bubbleSpan(bubbleView.getHeight());
+        float bubbleCx = bubbleParams.x + bubbleWidth / 2f;
+        float bubbleCy = bubbleParams.y + bubbleHeight / 2f;
+        float targetCx = dismissParams.x + size / 2f;
+        float targetCy = dismissParams.y + size / 2f;
+        float radius = getResources().getDimensionPixelSize(R.dimen.dismiss_capture_radius);
+        return Math.hypot(bubbleCx - targetCx, bubbleCy - targetCy) <= radius;
+    }
+
+    private void hideDismissTarget() {
+        removeView(dismissView);
+        dismissView = null;
+        dismissParams = null;
+        dismissHot = false;
     }
 
     private void expandPanel() {
@@ -1137,6 +1214,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         overlayEnabled = false;
         collapsedToHandle = false;
         cancelAnimations();
+        hideDismissTarget();
         removeView(bubbleView);
         removeView(panelView);
         removeView(handleView);
@@ -1154,9 +1232,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         if (preferences != null) {
             preferences.unregisterChangeListener(muteListener);
+        }
         if (transcriptSource != null) {
             transcriptSource.removeObserver(transcriptObserver);
-        }
         }
         destroyRecognizer();
         if (tts != null) {
@@ -1168,6 +1246,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             voiceRepository = null;
         }
         cancelAnimations();
+        hideDismissTarget();
         removeView(bubbleView);
         removeView(panelView);
         removeView(handleView);

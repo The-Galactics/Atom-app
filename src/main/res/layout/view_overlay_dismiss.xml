@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drag-to-dismiss drop zone: circular target shown at bottom-center during a bubble drag. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dismiss_root"
+    android:layout_width="@dimen/dismiss_target_size"
+    android:layout_height="@dimen/dismiss_target_size"
+    android:background="@drawable/bg_dismiss_target"
+    android:contentDescription="@string/cd_dismiss_bubble">
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/cd_dismiss_bubble"
+        android:padding="@dimen/space_m"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_close"
+        android:tint="@color/white" />
+
+</FrameLayout>

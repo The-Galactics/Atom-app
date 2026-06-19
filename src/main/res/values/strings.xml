@@ -28,6 +28,7 @@
     <string name="cd_atom_bubble">Atom floating assistant</string>
     <string name="cd_hide">Hide while using other apps</string>
     <string name="cd_show_bubble">Show Atom bubble</string>
+    <string name="cd_dismiss_bubble">Drag here to dismiss</string>
     <string name="cd_chat_user">You said: %1$s</string>
     <string name="cd_chat_assistant">Atom said: %1$s</string>
 
