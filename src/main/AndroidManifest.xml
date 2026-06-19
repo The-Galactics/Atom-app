@@ -88,7 +88,7 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <!-- Always-on wake-word listener (Porcupine), microphone foreground service. -->
+        <!-- Always-on wake-word listener (Vosk), microphone foreground service. -->
         <service
             android:name="com.atom.infrastructure.adapter.wake.WakeWordService"
             android:exported="false"

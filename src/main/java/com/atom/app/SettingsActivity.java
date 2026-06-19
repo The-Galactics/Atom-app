@@ -103,8 +103,7 @@ public class SettingsActivity extends AppCompatActivity {
         preferences = new AtomPreferences(this);
 
         spinnerVoice = findViewById(R.id.spinner_voice);
-        com.google.android.material.button.MaterialButton btnPreviewVoice =
-                findViewById(R.id.btn_preview_voice);
+        MaterialButton btnPreviewVoice = findViewById(R.id.btn_preview_voice);
         btnPreviewVoice.setOnClickListener(v -> previewSelectedVoice());
         voicePickerTts = new TextToSpeech(this, this::onVoicePickerInit);
 
