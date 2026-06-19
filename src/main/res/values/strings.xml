@@ -58,9 +58,6 @@
     <string name="settings_wake_name_too_short">Use a longer, distinctive name (3+ letters) to avoid false triggers</string>
     <string name="settings_wake_screen_on">Only listen while screen is on</string>
     <string name="settings_wake_battery">Keep Atom running (battery)</string>
-    <string name="settings_wake_imported">Custom wake word imported</string>
-    <string name="settings_wake_import_failed">Could not import the .ppn file</string>
-    <string name="settings_wake_needs_key">Wake word needs a Picovoice key — not configured yet</string>
 
     <string name="settings_membership">Membership</string>
     <string name="settings_assistant_access">Assistant access</string>

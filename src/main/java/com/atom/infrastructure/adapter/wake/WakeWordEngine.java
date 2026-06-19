@@ -3,7 +3,7 @@ package com.atom.infrastructure.adapter.wake;
 /**
  * Always-on hotword detector. Implementations listen continuously for a single
  * wake word ("Atom" by default) and notify {@link Listener} on a match. Kept
- * behind this interface so the engine (Porcupine today) can be swapped without
+ * behind this interface so the engine (Vosk today) can be swapped without
  * touching the service that coordinates the microphone.
  */
 public interface WakeWordEngine {

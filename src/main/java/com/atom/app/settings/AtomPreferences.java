@@ -14,7 +14,6 @@ public class AtomPreferences {
     private static final String KEY_TTS_RATE = "tts_rate";
     private static final String KEY_WAKE_ENABLED = "wake_word_enabled";
     private static final String KEY_WAKE_NAME = "wake_word_name";
-    private static final String KEY_WAKE_PPN = "wake_word_ppn_path";
     private static final String KEY_WAKE_SCREEN_ON_ONLY = "wake_word_screen_on_only";
 
     private final SharedPreferences prefs;
@@ -82,18 +81,6 @@ public class AtomPreferences {
     public void setWakeWordName(String name) {
         prefs.edit().putString(KEY_WAKE_NAME, name == null || name.trim().isEmpty()
                 ? "Atom" : name.trim()).apply();
-    }
-
-    /**
-     * Absolute path to the imported Porcupine {@code .ppn} keyword for a custom
-     * name; empty means use the bundled default ("Atom").
-     */
-    public String getWakeWordPpnPath() {
-        return prefs.getString(KEY_WAKE_PPN, "");
-    }
-
-    public void setWakeWordPpnPath(String path) {
-        prefs.edit().putString(KEY_WAKE_PPN, path == null ? "" : path).apply();
     }
 
     /** Battery saver: only listen for the wake word while the screen is on. */
