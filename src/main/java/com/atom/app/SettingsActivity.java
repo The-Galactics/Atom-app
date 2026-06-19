@@ -2,6 +2,7 @@ package com.atom.app;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -57,6 +58,14 @@ public class SettingsActivity extends AppCompatActivity {
     private static final float MIN_RATE = 0.5f;
     private static final float MAX_RATE = 1.5f;
 
+    // Permission dashboard chips, refreshed in onResume.
+    private TextView chipOverlayStatus, chipAccessibilityStatus, chipMicrophoneStatus;
+
+    // Microphone runtime request from the dashboard's "Fix" button.
+    private final ActivityResultLauncher<String> micPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                    granted -> refreshPermissionDashboard());
+
 
     // Overlay ("super position") permission result: re-check on return from Settings.
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
@@ -93,17 +102,22 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
 
         ImageButton btnBack = findViewById(R.id.btn_back);
-        SeekBar seekBarVolume = findViewById(R.id.seekbar_volume);
-        TextView tvVolumeValue = findViewById(R.id.tv_volume_value);
         MaterialButton btnSave = findViewById(R.id.btn_save);
         btnToggleBubble = findViewById(R.id.btn_toggle_bubble);
         tvBubbleStatus = findViewById(R.id.tv_bubble_status);
         MaterialSwitch switchTts = findViewById(R.id.switch_tts);
+        EditText etUserName = findViewById(R.id.et_user_name);
+        EditText etAiName = findViewById(R.id.et_ai_name);
 
         preferences = new AtomPreferences(this);
 
+        // Prefill name fields from storage.
+        etUserName.setText(preferences.getUserName());
+        etAiName.setText(preferences.getAssistantName());
+
         spinnerVoice = findViewById(R.id.spinner_voice);
-        MaterialButton btnPreviewVoice = findViewById(R.id.btn_preview_voice);
+        com.google.android.material.button.MaterialButton btnPreviewVoice =
+                findViewById(R.id.btn_preview_voice);
         btnPreviewVoice.setOnClickListener(v -> previewSelectedVoice());
         voicePickerTts = new TextToSpeech(this, this::onVoicePickerInit);
 
@@ -126,8 +140,6 @@ public class SettingsActivity extends AppCompatActivity {
             public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        setupWakeWordControls();
-
         // Spoken responses toggle: reflect stored value and persist immediately.
         switchTts.setChecked(preferences.isTtsEnabled());
         switchTts.setOnCheckedChangeListener(
@@ -135,22 +147,20 @@ public class SettingsActivity extends AppCompatActivity {
 
         btnBack.setOnClickListener(v -> finish());
 
-        // Handle Volume Changes
-        seekBarVolume.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                tvVolumeValue.setText(progress + "%");
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
-        });
-
         btnSave.setOnClickListener(v -> {
-            // FUTURE WORK: persist profile name / assistant name / volume to storage.
+            // Persist profile + assistant names. (TTS on/off, voice and speed are
+            // already persisted live by their own listeners.)
+            preferences.setUserName(etUserName.getText().toString());
+            preferences.setAssistantName(etAiName.getText().toString());
+
+            // The assistant name IS the wake word: store it and (re)start the
+            // always-on listener so Vosk picks up the new name. setAssistantName
+            // falls back to "Atom" when blank, mirrored here for the wake word.
+            preferences.setWakeWordName(preferences.getAssistantName());
+            preferences.setWakeWordEnabled(true);
+            stopWakeService();
+            startWakeService();
+
             toast(getString(R.string.settings_saved));
             ensureAssistantPermissions();
         });
@@ -158,6 +168,168 @@ public class SettingsActivity extends AppCompatActivity {
         btnToggleBubble.setOnClickListener(v -> toggleFloatingBubble());
 
         refreshBubbleControl();
+        setupPermissionDashboard();
+        setupWakeWordSection();
+        setupLanguageSection();
+    }
+
+    // --- Permission dashboard ------------------------------------------------
+
+    /** Wires the three "Fix" buttons; statuses are filled in by {@link #refreshPermissionDashboard}. */
+    private void setupPermissionDashboard() {
+        chipOverlayStatus = findViewById(R.id.chip_overlay_status);
+        chipAccessibilityStatus = findViewById(R.id.chip_accessibility_status);
+        chipMicrophoneStatus = findViewById(R.id.chip_microphone_status);
+
+        MaterialButton btnFixOverlay = findViewById(R.id.btn_fix_overlay);
+        MaterialButton btnFixAccessibility = findViewById(R.id.btn_fix_accessibility);
+        MaterialButton btnFixMicrophone = findViewById(R.id.btn_fix_microphone);
+
+        // Reuse PermissionCoordinator so the permission constants/intents aren't duplicated.
+        btnFixOverlay.setOnClickListener(v ->
+                overlayPermissionLauncher.launch(PermissionCoordinator.overlaySettingsIntent(this)));
+        btnFixAccessibility.setOnClickListener(v ->
+                startActivity(PermissionCoordinator.accessibilitySettingsIntent()));
+        btnFixMicrophone.setOnClickListener(v -> fixMicrophonePermission());
+    }
+
+    /**
+     * Microphone fix: request the runtime permission directly when we can still
+     * prompt; otherwise route to the app's details page (the system won't prompt
+     * again after a permanent denial).
+     */
+    private void fixMicrophonePermission() {
+        if (PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
+            return;
+        }
+        if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+                || !hasRequestedMicBefore()) {
+            micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
+        } else {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", getPackageName(), null)));
+        }
+    }
+
+    // Best-effort: rationale==false before the first ask too, so always allow the
+    // first in-app prompt. We can't distinguish "never asked" from "permanently
+    // denied" via the platform alone, so the launcher's no-op-on-permanent-denial
+    // is acceptable here (the chip simply stays "Not granted").
+    private boolean hasRequestedMicBefore() {
+        return false;
+    }
+
+    /** Refreshes the three status chips to reflect the current grant state. */
+    private void refreshPermissionDashboard() {
+        applyChip(chipOverlayStatus, PermissionCoordinator.canDrawOverlays(this));
+        applyChip(chipAccessibilityStatus,
+                PermissionCoordinator.isAccessibilityServiceEnabled(this));
+        applyChip(chipMicrophoneStatus,
+                PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO));
+    }
+
+    /** Colors and labels a status chip: accent when granted, label tint when not. */
+    private void applyChip(TextView chip, boolean granted) {
+        if (chip == null) {
+            return;
+        }
+        chip.setText(granted ? R.string.settings_perm_granted : R.string.settings_perm_not_granted);
+        chip.setTextColor(getColor(granted ? R.color.accent : R.color.on_surface_label));
+    }
+
+    // --- Wake word section ---------------------------------------------------
+
+    private void setupWakeWordSection() {
+        MaterialSwitch switchWakeEnable = findViewById(R.id.switch_wake_enable);
+        MaterialSwitch switchWakeScreenOn = findViewById(R.id.switch_wake_screen_on);
+        TextView labelScreenOn = findViewById(R.id.label_wake_screen_on);
+
+        switchWakeEnable.setChecked(preferences.isWakeWordEnabled());
+        switchWakeScreenOn.setChecked(preferences.isWakeWordScreenOnOnly());
+        // The screen-on toggle only matters while the wake word is on.
+        applyWakeScreenOnEnabled(switchWakeScreenOn, labelScreenOn,
+                preferences.isWakeWordEnabled());
+
+        switchWakeEnable.setOnCheckedChangeListener((button, checked) -> {
+            preferences.setWakeWordEnabled(checked);
+            applyWakeScreenOnEnabled(switchWakeScreenOn, labelScreenOn, checked);
+            // Start/stop the always-on listener to match the toggle, mirroring how
+            // the Save flow (re)starts it elsewhere in this Activity.
+            if (checked) {
+                startWakeService();
+            } else {
+                stopWakeService();
+            }
+        });
+
+        switchWakeScreenOn.setOnCheckedChangeListener(
+                (button, checked) -> preferences.setWakeWordScreenOnOnly(checked));
+    }
+
+    /** Greys the screen-on toggle out when the wake word itself is disabled. */
+    private void applyWakeScreenOnEnabled(MaterialSwitch toggle, TextView label, boolean enabled) {
+        toggle.setEnabled(enabled);
+        label.setEnabled(enabled);
+        toggle.setAlpha(enabled ? 1f : 0.5f);
+        label.setAlpha(enabled ? 1f : 0.5f);
+    }
+
+    // --- Language section ----------------------------------------------------
+
+    private void setupLanguageSection() {
+        Spinner spinnerLanguage = findViewById(R.id.spinner_language);
+
+        // Order MUST match languageCodeForPosition / positionForLanguage below.
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, new String[]{
+                getString(R.string.settings_language_system),
+                getString(R.string.settings_language_english),
+                getString(R.string.settings_language_spanish)});
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerLanguage.setAdapter(adapter);
+        spinnerLanguage.setSelection(positionForLanguage(preferences.getLanguage()));
+
+        spinnerLanguage.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String code = languageCodeForPosition(position);
+                if (code.equals(preferences.getLanguage())) {
+                    return; // no change (e.g. initial selection callback)
+                }
+                preferences.setLanguage(code);
+                // Apply immediately; AppCompat recreates the Activity in the new locale.
+                AtomApp.applyLocale(code);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+    }
+
+    private static String languageCodeForPosition(int position) {
+        return switch (position) {
+            case 1 -> AtomPreferences.LANGUAGE_ENGLISH;
+            case 2 -> AtomPreferences.LANGUAGE_SPANISH;
+            default -> AtomPreferences.LANGUAGE_SYSTEM;
+        };
+    }
+
+    private static int positionForLanguage(String code) {
+        if (AtomPreferences.LANGUAGE_ENGLISH.equals(code)) {
+            return 1;
+        }
+        if (AtomPreferences.LANGUAGE_SPANISH.equals(code)) {
+            return 2;
+        }
+        return 0;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Permission grants can change while we're away (the user fixed one in
+        // system Settings), so re-read them every time the screen comes forward.
+        refreshPermissionDashboard();
     }
 
     private void ensureAssistantPermissions() {
@@ -313,53 +485,6 @@ public class SettingsActivity extends AppCompatActivity {
                 TextToSpeech.QUEUE_FLUSH, null, "atom_voice_preview");
     }
 
-    /** Wires the wake-word section: enable switch, name, import, screen-only, battery. */
-    private void setupWakeWordControls() {
-        MaterialSwitch switchWake = findViewById(R.id.switch_wake);
-        EditText etWakeName = findViewById(R.id.et_wake_name);
-        MaterialButton btnWakeSave = findViewById(R.id.btn_wake_save);
-        MaterialSwitch switchWakeScreen = findViewById(R.id.switch_wake_screen);
-        MaterialButton btnWakeBattery = findViewById(R.id.btn_wake_battery);
-
-        switchWake.setChecked(preferences.isWakeWordEnabled());
-        switchWake.setOnCheckedChangeListener((button, checked) -> {
-            if (checked && !PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
-                toast(getString(R.string.mic_permission_denied));
-                button.setChecked(false);
-                return;
-            }
-            preferences.setWakeWordEnabled(checked);
-            if (checked) {
-                startWakeService();
-            } else {
-                stopWakeService();
-            }
-        });
-
-        etWakeName.setText(preferences.getWakeWordName());
-        // Type any name + Save: persist it and reload the listener with the new word.
-        btnWakeSave.setOnClickListener(v -> {
-            String name = etWakeName.getText().toString().trim();
-            // Very short names match too much speech -> constant false triggers.
-            if (name.length() < 3) {
-                toast(getString(R.string.settings_wake_name_too_short));
-                return;
-            }
-            preferences.setWakeWordName(name);
-            etWakeName.setText(preferences.getWakeWordName());
-            toast(getString(R.string.settings_wake_saved));
-            restartWakeServiceIfEnabled();
-        });
-
-        switchWakeScreen.setChecked(preferences.isWakeWordScreenOnOnly());
-        switchWakeScreen.setOnCheckedChangeListener((button, checked) -> {
-            preferences.setWakeWordScreenOnOnly(checked);
-            restartWakeServiceIfEnabled();
-        });
-
-        btnWakeBattery.setOnClickListener(v -> openWakeBatterySettings());
-    }
-
     private void startWakeService() {
         startForegroundService(new Intent(this, WakeWordService.class)
                 .setAction(WakeWordService.ACTION_START));
@@ -368,29 +493,6 @@ public class SettingsActivity extends AppCompatActivity {
     private void stopWakeService() {
         startService(new Intent(this, WakeWordService.class)
                 .setAction(WakeWordService.ACTION_STOP));
-    }
-
-    private void restartWakeServiceIfEnabled() {
-        if (preferences.isWakeWordEnabled()) {
-            // Reconfigure in-place (rebuild engine for the new name) rather than
-            // stop+start, which races the mic between the old and new instances.
-            startForegroundService(new Intent(this, WakeWordService.class)
-                    .setAction(WakeWordService.ACTION_RECONFIGURE));
-        }
-    }
-
-    /** Opens the OS battery-optimization screen so the user can exempt Atom (MIUI kills FGS). */
-    private void openWakeBatterySettings() {
-        try {
-            startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
-        } catch (Exception e) {
-            try {
-                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + getPackageName())));
-            } catch (Exception ignored) {
-                toast("Open battery settings manually");
-            }
-        }
     }
 
     private static int rateToProgress(float rate) {

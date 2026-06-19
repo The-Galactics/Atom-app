@@ -15,6 +15,15 @@ public class AtomPreferences {
     private static final String KEY_WAKE_ENABLED = "wake_word_enabled";
     private static final String KEY_WAKE_NAME = "wake_word_name";
     private static final String KEY_WAKE_SCREEN_ON_ONLY = "wake_word_screen_on_only";
+    private static final String KEY_USER_NAME = "user_name";
+    private static final String KEY_ASSISTANT_NAME = "assistant_name";
+    private static final String KEY_ONBOARDING_COMPLETE = "onboarding_complete";
+    private static final String KEY_LANGUAGE = "app_language";
+
+    /** Language follows the system locale until the user picks a specific one. */
+    public static final String LANGUAGE_SYSTEM = "system";
+    public static final String LANGUAGE_ENGLISH = "en";
+    public static final String LANGUAGE_SPANISH = "es";
 
     private final SharedPreferences prefs;
 
@@ -40,10 +49,6 @@ public class AtomPreferences {
      */
     public boolean isRemoteTtsEnabled() {
         return prefs.getBoolean(KEY_REMOTE_TTS_ENABLED, false);
-    }
-
-    public void setRemoteTtsEnabled(boolean enabled) {
-        prefs.edit().putBoolean(KEY_REMOTE_TTS_ENABLED, enabled).apply();
     }
 
     /** Selected on-device TTS voice name (Voice.getName()); empty = automatic. */
@@ -99,6 +104,47 @@ public class AtomPreferences {
 
     public void setMicMuted(boolean muted) {
         prefs.edit().putBoolean(KEY_MIC_MUTED, muted).apply();
+    }
+
+    /** The user's display name; empty until set in Settings. */
+    public String getUserName() {
+        return prefs.getString(KEY_USER_NAME, "");
+    }
+
+    public void setUserName(String name) {
+        prefs.edit().putString(KEY_USER_NAME, name == null ? "" : name.trim()).apply();
+    }
+
+    /** The assistant's display name. Defaults to "Atom"; also drives the wake word. */
+    public String getAssistantName() {
+        return prefs.getString(KEY_ASSISTANT_NAME, "Atom");
+    }
+
+    public void setAssistantName(String name) {
+        prefs.edit().putString(KEY_ASSISTANT_NAME, name == null || name.trim().isEmpty()
+                ? "Atom" : name.trim()).apply();
+    }
+
+    /** True once the user has finished the first-run onboarding flow. */
+    public boolean isOnboardingComplete() {
+        return prefs.getBoolean(KEY_ONBOARDING_COMPLETE, false);
+    }
+
+    public void setOnboardingComplete(boolean complete) {
+        prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETE, complete).apply();
+    }
+
+    /**
+     * UI language preference: {@link #LANGUAGE_SYSTEM} (follow the device),
+     * {@link #LANGUAGE_ENGLISH}, or {@link #LANGUAGE_SPANISH}. Drives
+     * AppCompat's per-app locale at startup and when changed in Settings.
+     */
+    public String getLanguage() {
+        return prefs.getString(KEY_LANGUAGE, LANGUAGE_SYSTEM);
+    }
+
+    public void setLanguage(String language) {
+        prefs.edit().putString(KEY_LANGUAGE, language == null ? LANGUAGE_SYSTEM : language).apply();
     }
 
     /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/deep_onyx"
+    android:fitsSystemWindows="true">
+
+    <!-- Header: back, title, clear-history affordance. -->
+    <ImageButton
+        android:id="@+id/btn_back"
+        style="@style/Widget.Atom.IconButton.Ghost"
+        android:layout_marginStart="@dimen/space_s"
+        android:layout_marginTop="@dimen/space_s"
+        android:contentDescription="@string/cd_back"
+        android:src="@drawable/ic_back"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/history_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/history_title"
+        android:textAppearance="@style/TextAppearance.Atom.Title"
+        app:layout_constraintBottom_toBottomOf="@+id/btn_back"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/btn_back" />
+
+    <ImageButton
+        android:id="@+id/btn_clear_history"
+        style="@style/Widget.Atom.IconButton.Ghost"
+        android:layout_marginTop="@dimen/space_s"
+        android:layout_marginEnd="@dimen/space_s"
+        android:contentDescription="@string/cd_clear_history"
+        android:src="@drawable/ic_close"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/history_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/space_m"
+        android:clipToPadding="false"
+        android:paddingVertical="@dimen/space_s"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_back" />
+
+    <!-- Shown only when the transcript is empty. -->
+    <TextView
+        android:id="@+id/history_empty"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/history_empty"
+        android:textAppearance="@style/TextAppearance.Atom.Caption"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
