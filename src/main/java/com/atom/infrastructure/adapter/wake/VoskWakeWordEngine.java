@@ -2,6 +2,7 @@ package com.atom.infrastructure.adapter.wake;
 
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.vosk.Model;
@@ -24,6 +25,10 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
 
     private static final String TAG = "AtomWake";
     private static final int SAMPLE_RATE = 16000;
+    // Reject low-confidence / too-short detections — these are the noise blips
+    // that cause random false triggers, while a real spoken name scores high.
+    private static final double MIN_CONF = 0.85;
+    private static final double MIN_DURATION_S = 0.20;
 
     private final Model model;        // owned by the caller (service)
     private final String keyword;     // normalized (lowercase, no accents)
@@ -56,6 +61,8 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
             Log.w(TAG, "Grammar mode failed, using full ASR", grammarUnsupported);
             recognizer = new Recognizer(model, SAMPLE_RATE);
         }
+        // Per-word output so we can gate on confidence + duration.
+        recognizer.setWords(true);
         speechService = new SpeechService(recognizer, SAMPLE_RATE);
         speechService.startListening(this);
         running = true;
@@ -106,50 +113,50 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
     public void onTimeout() {
     }
 
+    /**
+     * Fires only when the wake word is the single meaningful word heard AND it
+     * was recognized with enough confidence and duration. Strictness avoids
+     * waking mid-conversation; the confidence/duration gate kills the random
+     * noise blips — while a clearly-spoken name still passes.
+     */
     private void check(String json) {
-        if (!running || json == null) {
+        if (!running || json == null || keyword.isEmpty()) {
             return;
         }
         try {
-            String heard = new JSONObject(json).optString("text", "");
-            if (heard.isEmpty()) {
-                return;
+            JSONArray words = new JSONObject(json).optJSONArray("result");
+            if (words == null || words.length() == 0) {
+                return; // partial / empty: no settled word-level detail
             }
-            if (matches(normalize(heard))) {
-                // Debounce repeated partials of the same utterance.
-                long now = System.currentTimeMillis();
-                if (now - lastHitMs < 2000) {
-                    return;
+            int meaningful = 0;
+            double keywordConf = -1;
+            double keywordDuration = 0;
+            for (int i = 0; i < words.length(); i++) {
+                JSONObject w = words.getJSONObject(i);
+                String word = normalize(w.optString("word", ""));
+                if (word.isEmpty() || word.equals("[unk]")) {
+                    continue;
                 }
-                lastHitMs = now;
-                listener.onWakeWordDetected();
+                meaningful++;
+                if (word.equals(keyword)) {
+                    keywordConf = w.optDouble("conf", 0);
+                    keywordDuration = w.optDouble("end", 0) - w.optDouble("start", 0);
+                }
             }
+            if (keywordConf < 0 || meaningful != 1) {
+                return; // keyword wasn't the lone meaningful word
+            }
+            if (keywordConf < MIN_CONF || keywordDuration < MIN_DURATION_S) {
+                return; // too weak / too short → noise, ignore
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastHitMs < 2000) {
+                return; // debounce
+            }
+            lastHitMs = now;
+            listener.onWakeWordDetected();
         } catch (JSONException ignored) {
         }
-    }
-
-    /**
-     * Strict match: fire only when the wake word is the single meaningful word
-     * heard (alone, or surrounded by Vosk's "[unk]" filler). This avoids waking
-     * when the name happens to appear inside a normal conversation.
-     */
-    private boolean matches(String heard) {
-        if (keyword.isEmpty()) {
-            return false;
-        }
-        boolean hasKeyword = false;
-        int otherWords = 0;
-        for (String token : heard.split("\\s+")) {
-            if (token.isEmpty() || token.equals("[unk]")) {
-                continue;
-            }
-            if (token.equals(keyword)) {
-                hasKeyword = true;
-            } else {
-                otherWords++;
-            }
-        }
-        return hasKeyword && otherWords == 0;
     }
 
     private static String normalize(String s) {
