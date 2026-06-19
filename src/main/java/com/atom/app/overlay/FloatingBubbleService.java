@@ -375,6 +375,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         handleView.setAlpha(HANDLE_IDLE_ALPHA);
 
         handleParams = baseLayoutParams();
+        // Pin window to grab-zone size; WRAP_CONTENT collapses and breaks right-edge dock math.
+        handleParams.width = handleWidth;
+        handleParams.height = handleHeight;
         handleParams.gravity = Gravity.TOP | Gravity.START;
         handleParams.x = lastBubbleOnLeft ? 0 : screen[0] - handleWidth;
         int y = lastBubbleY >= 0 ? lastBubbleY : 240;
