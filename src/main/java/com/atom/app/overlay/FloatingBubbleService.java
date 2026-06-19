@@ -543,6 +543,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         bubbleView.setOnTouchListener(new BubbleTouchListener());
         windowManager.addView(bubbleView, bubbleParams);
+        animateBubbleAppear(bubbleView);
+    }
+
+    // Scale-in 0.7→1.0; end-action forces resting scale in case animation is skipped.
+    private void animateBubbleAppear(View bubble) {
+        bubble.setScaleX(0.7f);
+        bubble.setScaleY(0.7f);
+        bubble.animate()
+                .scaleX(1f).scaleY(1f)
+                .setDuration(SNAP_DURATION_MS)
+                .setInterpolator(new DecelerateInterpolator())
+                .withEndAction(() -> {
+                    if (bubble == bubbleView) {
+                        bubble.setScaleX(1f);
+                        bubble.setScaleY(1f);
+                    }
+                })
+                .start();
     }
 
     private final class BubbleTouchListener implements View.OnTouchListener {
@@ -669,6 +687,29 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         windowManager.addView(panelView, params);
         editText.requestFocus();
+        animatePanelIn(panelView);
+    }
+
+    // Slide-up fade-in; end-action forces final state in case animation is skipped.
+    private void animatePanelIn(View sheet) {
+        sheet.setAlpha(0f);
+        sheet.post(() -> {
+            // A rapid close may have detached the sheet before this frame ran.
+            if (sheet != panelView || !sheet.isAttachedToWindow()) {
+                return;
+            }
+            sheet.setTranslationY(sheet.getHeight());
+            sheet.animate()
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(SNAP_DURATION_MS)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> {
+                        sheet.setTranslationY(0f);
+                        sheet.setAlpha(1f);
+                    })
+                    .start();
+        });
     }
 
     private void dispatchPrompt(EditText editText, TextView status) {
@@ -946,8 +987,20 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void collapseToBubble() {
         micAnimations.stopMicPulse(null);
         destroyRecognizer();
-        removeView(panelView);
-        panelView = null;
+        final View closing = panelView;
+        panelView = null; // null early so a second close can't double-animate
+
+        if (closing != null && closing.isAttachedToWindow()) {
+            closing.animate()
+                    .translationY(closing.getHeight())
+                    .alpha(0f)
+                    .setDuration(SNAP_DURATION_MS)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> removeView(closing))
+                    .start();
+        } else {
+            removeView(closing);
+        }
         showBubble();
     }
 
@@ -1055,6 +1108,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void cancelAnimations() {
         cancelBubbleSettle();
         cancelHandleSettle();
+        if (bubbleView != null) {
+            bubbleView.animate().cancel();
+        }
         micAnimations.stopMicPulse(null);
     }
 
