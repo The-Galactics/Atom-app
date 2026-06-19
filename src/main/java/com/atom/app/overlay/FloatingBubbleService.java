@@ -1205,8 +1205,14 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     private void removeView(View view) {
-        if (view != null && view.isAttachedToWindow()) {
+        if (view == null) {
+            return;
+        }
+        // removeView works before first layout; isAttachedToWindow() is false then, causing leaks.
+        try {
             windowManager.removeView(view);
+        } catch (IllegalArgumentException ignored) {
+            // never added or already removed
         }
     }
 
