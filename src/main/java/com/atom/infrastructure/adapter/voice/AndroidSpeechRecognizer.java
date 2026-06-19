@@ -23,6 +23,13 @@ public class AndroidSpeechRecognizer implements RecognitionListener {
         void onEndOfSpeech();
         void onResult(String text);
         void onError(String message);
+
+        /**
+         * Live (non-final) transcript as the user is still speaking. Default no-op
+         * so existing implementers keep compiling; surfaces fast, frequent updates
+         * for a low-latency "live listening" status line.
+         */
+        default void onPartialResult(String text) { }
     }
 
     private final Context appContext;
@@ -52,6 +59,8 @@ public class AndroidSpeechRecognizer implements RecognitionListener {
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        // Ask for live partial hypotheses so the UI can show speech as it lands.
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         return intent;
     }
 
@@ -94,6 +103,18 @@ public class AndroidSpeechRecognizer implements RecognitionListener {
     @Override public void onBeginningOfSpeech() { }
     @Override public void onRmsChanged(float rmsdB) { }
     @Override public void onBufferReceived(byte[] buffer) { }
-    @Override public void onPartialResults(Bundle partialResults) { }
+
+    @Override
+    public void onPartialResults(Bundle partialResults) {
+        ArrayList<String> matches =
+                partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if (matches != null && !matches.isEmpty()) {
+            String top = matches.get(0);
+            if (top != null && !top.trim().isEmpty()) {
+                listener.onPartialResult(top);
+            }
+        }
+    }
+
     @Override public void onEvent(int eventType, Bundle params) { }
 }

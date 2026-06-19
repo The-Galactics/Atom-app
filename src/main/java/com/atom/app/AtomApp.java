@@ -7,6 +7,8 @@ import android.os.Bundle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.os.LocaleListCompat;
 
 import com.atom.app.di.AppContainer;
 import com.atom.app.settings.AtomPreferences;
@@ -33,8 +35,27 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
     @Override
     public void onCreate() {
         super.onCreate();
+        // Apply the saved UI language before any Activity inflates, so the first
+        // screen already renders in the chosen locale. AppCompat persists this in
+        // its own store; we drive it from our AtomPreferences value as the source
+        // of truth (and re-apply here to cover a fresh process / cleared state).
+        applyLocale(new AtomPreferences(this).getLanguage());
         appContainer = new AppContainer(this);
         registerActivityLifecycleCallbacks(this);
+    }
+
+    /**
+     * Applies a UI language via AppCompat's per-app locale API. Pass
+     * {@link AtomPreferences#LANGUAGE_SYSTEM} (or null) to follow the device
+     * locale (empty list), or a BCP-47 tag like "en"/"es" to force one. AppCompat
+     * recreates visible Activities so the change takes effect immediately.
+     */
+    public static void applyLocale(String language) {
+        LocaleListCompat locales = (language == null
+                || AtomPreferences.LANGUAGE_SYSTEM.equals(language))
+                ? LocaleListCompat.getEmptyLocaleList()
+                : LocaleListCompat.forLanguageTags(language);
+        AppCompatDelegate.setApplicationLocales(locales);
     }
 
     public AppContainer getAppContainer() {
