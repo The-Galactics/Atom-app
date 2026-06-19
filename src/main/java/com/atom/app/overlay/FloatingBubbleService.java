@@ -734,7 +734,18 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (speechRecognizer == null) {
             speechRecognizer = new AndroidSpeechRecognizer(this, new BubbleSttListener(status, mic));
         }
-        speechRecognizer.startListening();
+        // The always-on wake word holds the mic; ask it to release first, then give
+        // it a moment to free the AudioRecord before capturing.
+        if (preferences.isWakeWordEnabled()) {
+            sendBroadcast(new Intent(WakeWordService.ACTION_WAKE_PAUSE).setPackage(getPackageName()));
+            status.postDelayed(() -> {
+                if (speechRecognizer != null) {
+                    speechRecognizer.startListening();
+                }
+            }, 350L);
+        } else {
+            speechRecognizer.startListening();
+        }
     }
 
     /**
