@@ -41,13 +41,18 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     public static final String ACTION_LISTEN_DONE = "com.atom.app.wake.LISTEN_DONE";
     /** Broadcast to the app when it's foreground: drive its in-app mic, not the bubble. */
     public static final String ACTION_WAKE_IN_APP = "com.atom.app.wake.IN_APP";
+    /** Rebuilds the engine in-place (e.g. after the wake-word name changed). */
+    public static final String ACTION_RECONFIGURE = "com.atom.app.wake.RECONFIGURE";
+    /** App/bubble is about to use the mic manually: release it until LISTEN_DONE. */
+    public static final String ACTION_WAKE_PAUSE = "com.atom.app.wake.PAUSE";
 
     private static final String CHANNEL_ID = "atom_wake_word";
     private static final int NOTIF_ID = 4711;
     private static final String MODEL_ASSET_DIR = "model-es";
     private static final String MODEL_TARGET_DIR = "vosk-model-es";
-    // Safety net: resume listening even if the bubble never signals completion.
-    private static final long RESUME_FALLBACK_MS = 10_000L;
+    // Safety net: resume listening even if the listener never signals completion
+    // (e.g. wake fired while a non-Main screen was foreground and nobody captured).
+    private static final long RESUME_FALLBACK_MS = 6_000L;
     // Give the bubble's SpeechRecognizer time to fully release the mic before
     // Vosk re-opens it, so the two never contend for the microphone.
     private static final long RESUME_DELAY_MS = 600L;
@@ -69,7 +74,11 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     private final BroadcastReceiver doneReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            resumeListening();
+            if (ACTION_WAKE_PAUSE.equals(intent.getAction())) {
+                pauseForExternalMic();
+            } else {
+                resumeListening();
+            }
         }
     };
 
@@ -102,6 +111,10 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_RECONFIGURE.equals(action) && configured) {
+            reconfigure();
+            return START_STICKY;
+        }
         if (!configured) {
             configured = true;
             configureAndStart();
@@ -115,21 +128,43 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         if (preferences.isWakeWordScreenOnOnly()) {
             registerScreenReceiver();
         }
-        // Unpack the bundled model to internal storage (one-time), then listen.
+        startEngineForName(preferences.getWakeWordName());
+    }
+
+    /** Rebuilds the engine for the current name without restarting the service. */
+    private void reconfigure() {
+        if (preferences == null) {
+            configureAndStart();
+            return;
+        }
+        mainHandler.removeCallbacks(resumeFallback);
+        handingOff = false;
+        if (engine != null) {
+            engine.release();
+            engine = null;
+        }
+        if (voskModel != null) {
+            voskModel.close();
+            voskModel = null;
+        }
+        startEngineForName(preferences.getWakeWordName());
+    }
+
+    /**
+     * Starts Vosk listening for {@code name}. Vosk needs the (large) model
+     * unpacked to internal storage once, so we do it lazily here.
+     */
+    private void startEngineForName(String name) {
         StorageService.unpack(this, MODEL_ASSET_DIR, MODEL_TARGET_DIR,
                 model -> {
                     voskModel = model;
-                    buildAndStartEngine();
+                    engine = new VoskWakeWordEngine(voskModel, name, this);
+                    startEngineSafely();
                 },
                 exception -> {
                     Log.e(TAG, "Vosk model unpack failed", exception);
                     stopSelf();
                 });
-    }
-
-    private void buildAndStartEngine() {
-        engine = new VoskWakeWordEngine(voskModel, preferences.getWakeWordName(), this);
-        startEngineSafely();
     }
 
     private void startEngineSafely() {
@@ -191,7 +226,7 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
     }
 
-    /** Resumes listening after the bubble has freed the mic. Idempotent. */
+    /** Resumes listening after the listener (app/bubble) has freed the mic. Idempotent. */
     private void resumeListening() {
         mainHandler.removeCallbacks(resumeFallback);
         if (!handingOff) {
@@ -204,10 +239,26 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
     }
 
+    /**
+     * Releases the mic because the app/bubble is about to capture manually (the
+     * user tapped the mic). Mirrors the wake-detected handoff; the listener sends
+     * ACTION_LISTEN_DONE when finished so we resume. The fallback resumes anyway.
+     */
+    private void pauseForExternalMic() {
+        if (engine == null || handingOff) {
+            return;
+        }
+        handingOff = true;
+        engine.stop();
+        mainHandler.removeCallbacks(resumeFallback);
+        mainHandler.postDelayed(resumeFallback, RESUME_FALLBACK_MS);
+    }
+
     // --- setup helpers ---
 
     private void registerDoneReceiver() {
         IntentFilter filter = new IntentFilter(ACTION_LISTEN_DONE);
+        filter.addAction(ACTION_WAKE_PAUSE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(doneReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {

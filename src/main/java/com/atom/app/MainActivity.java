@@ -66,6 +66,9 @@ public class MainActivity extends AppCompatActivity {
     // Delay before an error message fades back to the idle resting state.
     private static final long ERROR_AUTO_RECOVER_MS = 4000;
 
+    // Let the wake word release the mic before the manual recognizer grabs it.
+    private static final long MIC_HANDOFF_DELAY_MS = 350;
+
     // Saved-instance keys for surviving configuration changes (e.g. rotation).
     private static final String KEY_STATUS = "status_text";
     private static final String KEY_SUB_STATUS = "sub_status_text";
@@ -132,6 +135,10 @@ public class MainActivity extends AppCompatActivity {
                     && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                             == PackageManager.PERMISSION_GRANTED) {
                 startListening();
+            } else {
+                // Can't capture now (already listening / no permission): release the
+                // wake engine immediately instead of letting it wait for the fallback.
+                notifyWakeDone();
             }
         }
     };
@@ -538,7 +545,18 @@ public class MainActivity extends AppCompatActivity {
         // Drive the atom core brighter/faster and start the listening mic pulse.
         applyCoreState(CORE_ENERGY_LISTENING, CORE_GLOW_ACTIVE);
         micAnimations.startMicPulse(btnMic);
-        speechRecognizer.startListening();
+        // The always-on wake word holds the mic; ask it to release first, then give
+        // it a moment to free the AudioRecord before we start capturing.
+        if (preferences.isWakeWordEnabled()) {
+            sendBroadcast(new Intent(WakeWordService.ACTION_WAKE_PAUSE).setPackage(getPackageName()));
+            statusText.postDelayed(() -> {
+                if (isListening && speechRecognizer != null) {
+                    speechRecognizer.startListening();
+                }
+            }, MIC_HANDOFF_DELAY_MS);
+        } else {
+            speechRecognizer.startListening();
+        }
     }
 
     /** Routes recognizer callbacks to UI state and dispatches the transcript as an order. */
