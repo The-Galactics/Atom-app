@@ -9,14 +9,16 @@ import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
 import android.graphics.SweepGradient;
+import android.os.Build;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.AnimationUtils;
 
 /**
- * The animated "atom core" centerpiece, drawn by hand on a software layer so it can
- * use real radial-gradient glows and {@link BlurMaskFilter} blooms (which are ignored
- * on a hardware canvas below API 28). It renders, from back to front:
+ * The animated "atom core" centerpiece, drawn by hand with real radial-gradient glows
+ * and {@link BlurMaskFilter} blooms. Blur is only honoured on a hardware canvas from
+ * API 28, so below that the view falls back to a software layer; from API 28 it draws
+ * directly on the GPU canvas. It renders, from back to front:
  *
  * <ul>
  *   <li>a soft radial atmosphere glow that breathes;</li>
@@ -42,6 +44,16 @@ public class AtomCoreView extends View {
     // Muted look: near-grayscale and dimmed so a muted mic reads differently from idle.
     private static final float MUTED_SATURATION = 0.15f;
     private static final int MUTED_ALPHA = 140;
+
+    // BlurMaskFilter only renders on a hardware canvas from API 28; below that we need a
+    // software layer. From API 28 we draw with no layer (LAYER_TYPE_NONE) so the GPU canvas
+    // handles the blur — a hardware *layer* would just cache an offscreen buffer this
+    // every-frame view re-renders anyway.
+    private static final boolean BLUR_NEEDS_SOFTWARE = Build.VERSION.SDK_INT < Build.VERSION_CODES.P;
+
+    // Idle re-draw delay: long enough to span two 60Hz frames so the calm idle motion
+    // settles to ~30fps instead of tracking the panel's native (up to 120Hz) refresh.
+    private static final long IDLE_FRAME_DELAY_MS = 24;
 
     // Three orbits: tilt in degrees, angular speed (sign = direction), starting phase offset.
     private static final float[] ORBIT_TILT = {0f, 62f, 121f};
@@ -75,6 +87,9 @@ public class AtomCoreView extends View {
     private long lastFrameMs = 0;
     private float cx, cy, radius;
 
+    // Vsync-aligned re-draw used to throttle the idle loop to ~30fps.
+    private final Runnable invalidateFrame = this::invalidate;
+
     public AtomCoreView(Context context) {
         super(context);
         init();
@@ -91,27 +106,28 @@ public class AtomCoreView extends View {
     }
 
     private void init() {
-        // BlurMaskFilter is only honoured on a software layer below API 28; force it
-        // everywhere so the glows render identically across devices.
-        setLayerType(LAYER_TYPE_SOFTWARE, null);
+        applyDefaultLayer();
         ringPaint.setStyle(Paint.Style.STROKE);
         ringGlowPaint.setStyle(Paint.Style.STROKE);
         auraPaint.setStyle(Paint.Style.STROKE);
         orbitPaint.setStyle(Paint.Style.STROKE);
     }
 
+    /** Applies the layer the glows need by default: software below API 28, none from 28. */
+    private void applyDefaultLayer() {
+        setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_NONE, null);
+    }
+
     /** Sets the engagement level: 0 = calm idle, 1 = fully engaged (listening). */
     public void setEnergy(float value) {
         targetEnergy = Math.max(0f, Math.min(1f, value));
-        if (isAttachedToWindow()) {
-            postInvalidateOnAnimation();
-        }
+        scheduleNextFrame();
     }
 
     /**
      * Mutes the core's look: when muted it renders near-grayscale and dimmed so the
      * "mic off" state is legible at a glance, distinct from the vivid lavender idle.
-     * Implemented as a color filter on the software layer the view already uses.
+     * Implemented as a color filter on a layer: the whole composited core is desaturated.
      */
     public void setMuted(boolean muted) {
         if (muted && mutedLayerPaint == null) {
@@ -121,7 +137,13 @@ public class AtomCoreView extends View {
             mutedLayerPaint.setColorFilter(new ColorMatrixColorFilter(matrix));
             mutedLayerPaint.setAlpha(MUTED_ALPHA);
         }
-        setLayerType(LAYER_TYPE_SOFTWARE, muted ? mutedLayerPaint : null);
+        if (muted) {
+            // A layer with the filter paint applies the desaturation to the result; the
+            // blur still renders into it (software below API 28, hardware from 28).
+            setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_HARDWARE, mutedLayerPaint);
+        } else {
+            applyDefaultLayer();
+        }
         invalidate();
     }
 
@@ -129,7 +151,35 @@ public class AtomCoreView extends View {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         lastFrameMs = 0;
-        postInvalidateOnAnimation();
+        scheduleNextFrame();
+    }
+
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        // Restart the loop when the activity returns to the foreground; while hidden it
+        // stops on its own because scheduleNextFrame() bails when the view isn't shown.
+        if (visibility == VISIBLE) {
+            lastFrameMs = 0;
+            scheduleNextFrame();
+        }
+    }
+
+    /**
+     * Re-posts the next animation frame, unless the view is off-screen (then the loop
+     * stops). At settled idle it throttles to ~30fps since the calm motion doesn't need
+     * every vsync; while engaged it runs at the full display cadence.
+     */
+    private void scheduleNextFrame() {
+        removeCallbacks(invalidateFrame);
+        if (!isAttachedToWindow() || getWindowVisibility() != VISIBLE || !isShown()) {
+            return;
+        }
+        if (targetEnergy == 0f && energy < 0.01f) {
+            postOnAnimationDelayed(invalidateFrame, IDLE_FRAME_DELAY_MS);
+        } else {
+            postInvalidateOnAnimation();
+        }
     }
 
     @Override
@@ -189,7 +239,7 @@ public class AtomCoreView extends View {
         drawNucleus(canvas, pulse);
         drawOrbitsAndElectrons(canvas, true);    // electrons passing in front
 
-        postInvalidateOnAnimation();
+        scheduleNextFrame();
     }
 
     private void drawBackgroundGlow(Canvas canvas, float pulse) {
