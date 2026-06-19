@@ -21,7 +21,8 @@
     <dimen name="mic_fab_size">68dp</dimen>
     <dimen name="mic_touch_size">88dp</dimen>     <!-- touch cell: headroom so the pulsed disc stays tappable -->
     <dimen name="input_bar_height">56dp</dimen>
-    <dimen name="bubble_size">44dp</dimen>          <!-- compact, low-intrusion floating disc -->
+    <dimen name="bubble_size">44dp</dimen>          <!-- visible disc: compact, low-intrusion -->
+    <dimen name="bubble_touch_size">48dp</dimen>    <!-- touchable window: a11y-friendly target around the disc -->
     <dimen name="bubble_edge_margin">8dp</dimen>     <!-- resting gap from the screen edge -->
     <dimen name="handle_width">11dp</dimen>          <!-- hidden-state edge line (Game Turbo style): thin & visible -->
     <dimen name="handle_bar_height">67dp</dimen>     <!-- visible length of the edge line -->
@@ -30,6 +31,14 @@
 
     <!-- History chat bubbles: cap width so long turns wrap instead of edge-to-edge. -->
     <dimen name="chat_bubble_max_width">280dp</dimen>
+
+    <!-- Overlay panel transcript: cap height so the sheet stays compact and scrolls. -->
+    <dimen name="overlay_transcript_max_height">260dp</dimen>
+
+    <!-- Drag-to-dismiss drop zone shown while dragging the bubble. -->
+    <dimen name="dismiss_target_size">56dp</dimen>
+    <dimen name="dismiss_target_margin">32dp</dimen>      <!-- gap above the bottom edge -->
+    <dimen name="dismiss_capture_radius">96dp</dimen>     <!-- bubble-center distance that counts as a hit -->
 
     <!-- Type scale (sp) -->
     <dimen name="text_wordmark">26sp</dimen>      <!-- ATOM wordmark -->

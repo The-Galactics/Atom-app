@@ -19,6 +19,8 @@ public class AtomPreferences {
     private static final String KEY_ASSISTANT_NAME = "assistant_name";
     private static final String KEY_ONBOARDING_COMPLETE = "onboarding_complete";
     private static final String KEY_LANGUAGE = "app_language";
+    private static final String KEY_BUBBLE_ON_LEFT = "bubble_on_left";
+    private static final String KEY_BUBBLE_Y = "bubble_y";
 
     /** Language follows the system locale until the user picks a specific one. */
     public static final String LANGUAGE_SYSTEM = "system";
@@ -145,6 +147,24 @@ public class AtomPreferences {
 
     public void setLanguage(String language) {
         prefs.edit().putString(KEY_LANGUAGE, language == null ? LANGUAGE_SYSTEM : language).apply();
+    }
+
+    /** Edge the floating bubble last rested on; defaults to the left. */
+    public boolean isBubbleOnLeft() {
+        return prefs.getBoolean(KEY_BUBBLE_ON_LEFT, true);
+    }
+
+    public void setBubbleOnLeft(boolean onLeft) {
+        prefs.edit().putBoolean(KEY_BUBBLE_ON_LEFT, onLeft).apply();
+    }
+
+    /** Last bubble Y in pixels; -1 = never placed (use the default anchor). */
+    public int getBubbleY() {
+        return prefs.getInt(KEY_BUBBLE_Y, -1);
+    }
+
+    public void setBubbleY(int y) {
+        prefs.edit().putInt(KEY_BUBBLE_Y, y).apply();
     }
 
     /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */

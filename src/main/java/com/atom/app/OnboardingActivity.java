@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.RecyclerView;
@@ -79,6 +80,20 @@ public class OnboardingActivity extends AppCompatActivity {
                 pager.setCurrentItem(current + 1, true);
             } else {
                 finishOnboarding();
+            }
+        });
+
+        // System back pages backwards; on page 0 it falls through to the default (exit).
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                int current = pager.getCurrentItem();
+                if (current > 0) {
+                    pager.setCurrentItem(current - 1, true);
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
             }
         });
     }
