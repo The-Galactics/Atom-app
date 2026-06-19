@@ -88,12 +88,12 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
 
     @Override
     public void onResult(String hypothesis) {
-        check(hypothesis, "text");
+        check(hypothesis);
     }
 
     @Override
     public void onFinalResult(String hypothesis) {
-        check(hypothesis, "text");
+        check(hypothesis);
     }
 
     @Override
@@ -106,12 +106,12 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
     public void onTimeout() {
     }
 
-    private void check(String json, String field) {
+    private void check(String json) {
         if (!running || json == null) {
             return;
         }
         try {
-            String heard = new JSONObject(json).optString(field, "");
+            String heard = new JSONObject(json).optString("text", "");
             if (heard.isEmpty()) {
                 return;
             }

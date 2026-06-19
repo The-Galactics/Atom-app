@@ -109,8 +109,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 
-    // Wake-word detection ("Hey Atom") — Vosk on-device keyword spotting.
-    // Any typed name works at runtime (no per-word model file needed).
+    // Wake word — Vosk on-device keyword spotting (any typed name, no model file).
     implementation("com.alphacephei:vosk-android:0.3.47")
 
     // gRPC

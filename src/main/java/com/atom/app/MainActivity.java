@@ -132,6 +132,10 @@ public class MainActivity extends AppCompatActivity {
                     && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                             == PackageManager.PERMISSION_GRANTED) {
                 startListening();
+            } else {
+                // Can't capture now (already listening / no permission): release the
+                // wake engine immediately instead of letting it wait for the fallback.
+                notifyWakeDone();
             }
         }
     };

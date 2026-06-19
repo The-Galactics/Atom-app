@@ -41,13 +41,16 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     public static final String ACTION_LISTEN_DONE = "com.atom.app.wake.LISTEN_DONE";
     /** Broadcast to the app when it's foreground: drive its in-app mic, not the bubble. */
     public static final String ACTION_WAKE_IN_APP = "com.atom.app.wake.IN_APP";
+    /** Rebuilds the engine in-place (e.g. after the wake-word name changed). */
+    public static final String ACTION_RECONFIGURE = "com.atom.app.wake.RECONFIGURE";
 
     private static final String CHANNEL_ID = "atom_wake_word";
     private static final int NOTIF_ID = 4711;
     private static final String MODEL_ASSET_DIR = "model-es";
     private static final String MODEL_TARGET_DIR = "vosk-model-es";
-    // Safety net: resume listening even if the bubble never signals completion.
-    private static final long RESUME_FALLBACK_MS = 10_000L;
+    // Safety net: resume listening even if the listener never signals completion
+    // (e.g. wake fired while a non-Main screen was foreground and nobody captured).
+    private static final long RESUME_FALLBACK_MS = 6_000L;
     // Give the bubble's SpeechRecognizer time to fully release the mic before
     // Vosk re-opens it, so the two never contend for the microphone.
     private static final long RESUME_DELAY_MS = 600L;
@@ -102,6 +105,10 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             stopSelf();
             return START_NOT_STICKY;
         }
+        if (ACTION_RECONFIGURE.equals(action) && configured) {
+            reconfigure();
+            return START_STICKY;
+        }
         if (!configured) {
             configured = true;
             configureAndStart();
@@ -115,21 +122,43 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         if (preferences.isWakeWordScreenOnOnly()) {
             registerScreenReceiver();
         }
-        // Unpack the bundled model to internal storage (one-time), then listen.
+        startEngineForName(preferences.getWakeWordName());
+    }
+
+    /** Rebuilds the engine for the current name without restarting the service. */
+    private void reconfigure() {
+        if (preferences == null) {
+            configureAndStart();
+            return;
+        }
+        mainHandler.removeCallbacks(resumeFallback);
+        handingOff = false;
+        if (engine != null) {
+            engine.release();
+            engine = null;
+        }
+        if (voskModel != null) {
+            voskModel.close();
+            voskModel = null;
+        }
+        startEngineForName(preferences.getWakeWordName());
+    }
+
+    /**
+     * Starts Vosk listening for {@code name}. Vosk needs the (large) model
+     * unpacked to internal storage once, so we do it lazily here.
+     */
+    private void startEngineForName(String name) {
         StorageService.unpack(this, MODEL_ASSET_DIR, MODEL_TARGET_DIR,
                 model -> {
                     voskModel = model;
-                    buildAndStartEngine();
+                    engine = new VoskWakeWordEngine(voskModel, name, this);
+                    startEngineSafely();
                 },
                 exception -> {
                     Log.e(TAG, "Vosk model unpack failed", exception);
                     stopSelf();
                 });
-    }
-
-    private void buildAndStartEngine() {
-        engine = new VoskWakeWordEngine(voskModel, preferences.getWakeWordName(), this);
-        startEngineSafely();
     }
 
     private void startEngineSafely() {
