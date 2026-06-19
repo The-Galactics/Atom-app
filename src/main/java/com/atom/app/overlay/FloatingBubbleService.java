@@ -38,9 +38,15 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.Observer;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.atom.app.AtomApp;
+import com.atom.app.ChatHistoryAdapter;
 import com.atom.app.R;
+import com.atom.app.data.ChatMessage;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.repository.ChatRepository;
@@ -53,6 +59,8 @@ import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
+
+import java.util.List;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
@@ -88,6 +96,20 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     // Persists the dialogue from the overlay into the same transcript the main screen uses.
     private ConversationRepository conversationRepository;
     private int touchSlop;
+
+    // Reuses the History adapter; observeForever since the Service has no LifecycleOwner.
+    private final ChatHistoryAdapter transcriptAdapter = new ChatHistoryAdapter();
+    private List<ChatMessage> latestMessages;
+    private LiveData<List<ChatMessage>> transcriptSource;
+    private final Observer<List<ChatMessage>> transcriptObserver = messages -> {
+        latestMessages = messages;
+        if (panelView != null) {
+            RecyclerView list = panelView.findViewById(R.id.overlay_transcript);
+            if (list != null) {
+                transcriptAdapter.submitList(messages, () -> scrollTranscriptToBottom(list));
+            }
+        }
+    };
 
     // Shared mic feedback (press-settle + breathing pulse) used by the panel mic.
     private final MicAnimations micAnimations = new MicAnimations();
@@ -143,6 +165,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         conversationRepository = new ConversationRepository(this);
         preferences.registerChangeListener(muteListener);
         seedBubblePosition(); // restore last resting position on restart
+        // Observe transcript for the whole service lifetime; removed in onDestroy.
+        transcriptSource = conversationRepository.observeAll();
+        transcriptSource.observeForever(transcriptObserver);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         app.setForegroundListener(this);
@@ -583,6 +608,15 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         params.gravity = Gravity.BOTTOM;
         params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
 
+        // Transcript: reuse the History adapter, keeping the newest turn in view.
+        RecyclerView transcript = panelView.findViewById(R.id.overlay_transcript);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        layoutManager.setStackFromEnd(true);
+        transcript.setLayoutManager(layoutManager);
+        transcript.setAdapter(transcriptAdapter);
+        // Populate immediately from the cached list so prior turns show on open.
+        transcriptAdapter.submitList(latestMessages, () -> scrollTranscriptToBottom(transcript));
+
         final EditText editText = panelView.findViewById(R.id.overlay_edit_text);
         final TextView status = panelView.findViewById(R.id.overlay_status);
         final View inputRoot = panelView.findViewById(R.id.overlay_input_root);
@@ -901,6 +935,14 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         });
     }
 
+    // Keeps the latest turn visible after a submit, guarding against an empty list.
+    private void scrollTranscriptToBottom(RecyclerView list) {
+        int count = transcriptAdapter.getItemCount();
+        if (count > 0 && list.isAttachedToWindow()) {
+            list.scrollToPosition(count - 1);
+        }
+    }
+
     private void collapseToBubble() {
         micAnimations.stopMicPulse(null);
         destroyRecognizer();
@@ -1056,6 +1098,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         if (preferences != null) {
             preferences.unregisterChangeListener(muteListener);
+        if (transcriptSource != null) {
+            transcriptSource.removeObserver(transcriptObserver);
+        }
         }
         destroyRecognizer();
         if (tts != null) {

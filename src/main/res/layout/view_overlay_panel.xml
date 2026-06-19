@@ -63,6 +63,15 @@
         android:text="@string/sub_status_tap_mic"
         android:textAppearance="@style/TextAppearance.Atom.Caption" />
 
+    <!-- In-panel conversation transcript (height-capped so the sheet stays compact). -->
+    <com.atom.app.ui.MaxHeightRecyclerView
+        android:id="@+id/overlay_transcript"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_s"
+        android:clipToPadding="false"
+        android:paddingVertical="@dimen/space_xs" />
+
     <!-- Pill input row -->
     <LinearLayout
         android:id="@+id/overlay_input_root"
