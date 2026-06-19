@@ -535,7 +535,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return;
         }
         int[] screen = getScreenSize();
-        int bubbleWidth = getResources().getDimensionPixelSize(R.dimen.bubble_size);
+        int bubbleWidth = getResources().getDimensionPixelSize(R.dimen.bubble_touch_size);
         int edgeMargin = getResources().getDimensionPixelSize(R.dimen.bubble_edge_margin);
 
         bubbleView = inflater.inflate(R.layout.view_overlay_bubble, null);
@@ -1152,7 +1152,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     // Bubble dimension fallback for the rare frame where the view is unmeasured.
     private int bubbleSpan(int measured) {
-        return measured > 0 ? measured : getResources().getDimensionPixelSize(R.dimen.bubble_size);
+        return measured > 0 ? measured : getResources().getDimensionPixelSize(R.dimen.bubble_touch_size);
     }
 
     // Handle window-width fallback for the rare frame where the view is unmeasured.
