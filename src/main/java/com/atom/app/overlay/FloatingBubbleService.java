@@ -31,6 +31,7 @@ import android.view.WindowManager;
 import android.view.WindowMetrics;
 import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
@@ -277,6 +278,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void hideOverlayViews() {
         cancelAnimations();
         hideDismissTarget();
+        if (panelView != null) {
+            dismissKeyboard(panelView);
+        }
         removeView(panelView);
         panelView = null;
         removeView(bubbleView);
@@ -349,6 +353,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             persistBubblePosition();
         }
         cancelAnimations();
+        if (panelView != null) {
+            dismissKeyboard(panelView); // tear down IME before detaching the panel
+        }
         removeView(panelView);
         panelView = null;
         removeView(bubbleView);
@@ -1067,21 +1074,34 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void collapseToBubble() {
         micAnimations.stopMicPulse(null);
         destroyRecognizer();
+
         final View closing = panelView;
         panelView = null; // null early so a second close can't double-animate
-
-        if (closing != null && closing.isAttachedToWindow()) {
-            closing.animate()
-                    .translationY(closing.getHeight())
-                    .alpha(0f)
-                    .setDuration(SNAP_DURATION_MS)
-                    .setInterpolator(new DecelerateInterpolator())
-                    .withEndAction(() -> removeView(closing))
-                    .start();
-        } else {
-            removeView(closing);
+        if (closing == null) {
+            showBubble();
+            return;
         }
+
+        // Tear down the IME before detaching so it can't outlive the window.
+        dismissKeyboard(closing);
+
+        // Detach synchronously so rapid close→open→close can't leave it half-alive.
+        closing.animate().cancel();
+        removeView(closing);
         showBubble();
+    }
+
+    // Hides the soft keyboard and drops focus before the panel is detached.
+    private void dismissKeyboard(View panel) {
+        InputMethodManager imm =
+                (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null && panel.getWindowToken() != null) {
+            imm.hideSoftInputFromWindow(panel.getWindowToken(), 0);
+        }
+        View focused = panel.findFocus();
+        if (focused != null) {
+            focused.clearFocus();
+        }
     }
 
     // --- Edge snap & force-to-hide (Phase 3) -------------------------------
@@ -1224,6 +1244,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         collapsedToHandle = false;
         cancelAnimations();
         hideDismissTarget();
+        if (panelView != null) {
+            dismissKeyboard(panelView);
+        }
         removeView(bubbleView);
         removeView(panelView);
         removeView(handleView);
