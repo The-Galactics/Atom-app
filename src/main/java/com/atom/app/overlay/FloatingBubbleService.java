@@ -142,6 +142,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         preferences = new AtomPreferences(this);
         conversationRepository = new ConversationRepository(this);
         preferences.registerChangeListener(muteListener);
+        seedBubblePosition(); // restore last resting position on restart
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         app.setForegroundListener(this);
@@ -194,6 +195,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             bubbleParams.y = Math.max(0, Math.min(bubbleParams.y, screen[1] - bubbleWidth));
             lastBubbleY = bubbleParams.y;
             windowManager.updateViewLayout(bubbleView, bubbleParams);
+            persistBubblePosition();
         } else if (handleView != null && handleParams != null) {
             int handleWidth = handleSpan(handleView.getWidth());
             int handleHeight = getResources().getDimensionPixelSize(R.dimen.handle_height);
@@ -201,6 +203,26 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             handleParams.y = Math.max(0, Math.min(handleParams.y, screen[1] - handleHeight));
             lastBubbleY = handleParams.y;
             windowManager.updateViewLayout(handleView, handleParams);
+            persistBubblePosition();
+        }
+    }
+
+    // Restores saved edge/Y, clamping to current screen to handle rotation/resize.
+    private void seedBubblePosition() {
+        lastBubbleOnLeft = preferences.isBubbleOnLeft();
+        int savedY = preferences.getBubbleY();
+        if (savedY >= 0) {
+            int[] screen = getScreenSize();
+            int bubbleWidth = getResources().getDimensionPixelSize(R.dimen.bubble_touch_size);
+            lastBubbleY = Math.max(0, Math.min(savedY, screen[1] - bubbleWidth));
+        }
+    }
+
+    // Persists the current resting edge/Y so it survives a service restart.
+    private void persistBubblePosition() {
+        if (preferences != null) {
+            preferences.setBubbleOnLeft(lastBubbleOnLeft);
+            preferences.setBubbleY(lastBubbleY);
         }
     }
 
@@ -294,6 +316,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             int bubbleWidth = bubbleSpan(bubbleView.getWidth());
             lastBubbleOnLeft = (bubbleParams.x + bubbleWidth / 2) < screen[0] / 2;
             lastBubbleY = bubbleParams.y;
+            persistBubblePosition();
         }
         cancelAnimations();
         removeView(panelView);
@@ -412,6 +435,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         int targetX = toLeft ? 0 : screen[0] - handleWidth;
         int targetY = Math.max(0, Math.min(handleParams.y, screen[1] - handleHeight));
         lastBubbleY = targetY;
+        persistBubblePosition();
         animateHandleTo(targetX, targetY, HANDLE_IDLE_ALPHA);
     }
 
@@ -915,6 +939,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         int targetY = Math.max(0, Math.min(bubbleParams.y, screenHeight - bubbleHeight));
         lastBubbleOnLeft = toLeft;
         lastBubbleY = targetY;
+        persistBubblePosition();
         animateBubbleTo(targetX, targetY);
     }
 
