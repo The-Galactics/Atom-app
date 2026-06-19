@@ -389,7 +389,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         handleParams.x = lastBubbleOnLeft ? 0 : screen[0] - handleWidth;
         int y = lastBubbleY >= 0 ? lastBubbleY : 240;
         handleParams.y = Math.max(0, Math.min(y, screen[1] - handleHeight));
-        windowManager.addView(handleView, handleParams);
+        addView(handleView, handleParams);
     }
 
     // Pins the visible line to the docked border inside the transparent grab zone, so
@@ -557,7 +557,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         lastBubbleY = bubbleParams.y;
 
         bubbleView.setOnTouchListener(new BubbleTouchListener());
-        windowManager.addView(bubbleView, bubbleParams);
+        addView(bubbleView, bubbleParams);
         animateBubbleAppear(bubbleView);
     }
 
@@ -658,7 +658,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         dismissParams.gravity = Gravity.TOP | Gravity.START;
         dismissParams.x = (screen[0] - size) / 2;
         dismissParams.y = screen[1] - size - margin;
-        windowManager.addView(dismissView, dismissParams);
+        addView(dismissView, dismissParams);
     }
 
     // Lights up the target (and gives a haptic) while the bubble center overlaps it.
@@ -772,7 +772,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         // Tuck the overlay away to the edge handle while using other apps.
         hide.setOnClickListener(v -> hideToHandle());
 
-        windowManager.addView(panelView, params);
+        addView(panelView, params);
         editText.requestFocus();
         animatePanelIn(panelView);
     }
@@ -792,6 +792,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     .setDuration(SNAP_DURATION_MS)
                     .setInterpolator(new DecelerateInterpolator())
                     .withEndAction(() -> {
+                        // Skip if a collapse swapped the panel out underneath us.
+                        if (sheet != panelView) {
+                            return;
+                        }
                         sheet.setTranslationY(0f);
                         sheet.setAlpha(1f);
                     })
@@ -1236,6 +1240,18 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             windowManager.removeView(view);
         } catch (IllegalArgumentException ignored) {
             // never added or already removed
+        }
+    }
+
+    // Guards addView so re-adding an already-attached view can't crash under races.
+    private void addView(View view, WindowManager.LayoutParams params) {
+        if (view == null || view.isAttachedToWindow()) {
+            return;
+        }
+        try {
+            windowManager.addView(view, params);
+        } catch (IllegalStateException ignored) {
+            // already added under a tight open/close race
         }
     }
 
