@@ -373,8 +373,10 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void restartWakeServiceIfEnabled() {
         if (preferences.isWakeWordEnabled()) {
-            stopWakeService();
-            startWakeService();
+            // Reconfigure in-place (rebuild engine for the new name) rather than
+            // stop+start, which races the mic between the old and new instances.
+            startForegroundService(new Intent(this, WakeWordService.class)
+                    .setAction(WakeWordService.ACTION_RECONFIGURE));
         }
     }
 

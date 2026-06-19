@@ -765,7 +765,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     /**
-     * Tells the wake-word service the mic is free again so Porcupine can resume.
+     * Tells the wake-word service the mic is free again so it can resume.
      * A no-op when the wake word isn't running (the broadcast is just ignored).
      */
     private void notifyWakeWordListenDone() {
