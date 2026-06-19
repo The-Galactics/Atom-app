@@ -43,6 +43,8 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     public static final String ACTION_WAKE_IN_APP = "com.atom.app.wake.IN_APP";
     /** Rebuilds the engine in-place (e.g. after the wake-word name changed). */
     public static final String ACTION_RECONFIGURE = "com.atom.app.wake.RECONFIGURE";
+    /** App/bubble is about to use the mic manually: release it until LISTEN_DONE. */
+    public static final String ACTION_WAKE_PAUSE = "com.atom.app.wake.PAUSE";
 
     private static final String CHANNEL_ID = "atom_wake_word";
     private static final int NOTIF_ID = 4711;
@@ -72,7 +74,11 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     private final BroadcastReceiver doneReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            resumeListening();
+            if (ACTION_WAKE_PAUSE.equals(intent.getAction())) {
+                pauseForExternalMic();
+            } else {
+                resumeListening();
+            }
         }
     };
 
@@ -220,7 +226,7 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
     }
 
-    /** Resumes listening after the bubble has freed the mic. Idempotent. */
+    /** Resumes listening after the listener (app/bubble) has freed the mic. Idempotent. */
     private void resumeListening() {
         mainHandler.removeCallbacks(resumeFallback);
         if (!handingOff) {
@@ -233,10 +239,26 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
     }
 
+    /**
+     * Releases the mic because the app/bubble is about to capture manually (the
+     * user tapped the mic). Mirrors the wake-detected handoff; the listener sends
+     * ACTION_LISTEN_DONE when finished so we resume. The fallback resumes anyway.
+     */
+    private void pauseForExternalMic() {
+        if (engine == null || handingOff) {
+            return;
+        }
+        handingOff = true;
+        engine.stop();
+        mainHandler.removeCallbacks(resumeFallback);
+        mainHandler.postDelayed(resumeFallback, RESUME_FALLBACK_MS);
+    }
+
     // --- setup helpers ---
 
     private void registerDoneReceiver() {
         IntentFilter filter = new IntentFilter(ACTION_LISTEN_DONE);
+        filter.addAction(ACTION_WAKE_PAUSE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(doneReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
