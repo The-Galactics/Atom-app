@@ -174,6 +174,21 @@
     <string name="action_torch_on">Flashlight on.</string>
     <string name="action_torch_off">Flashlight off.</string>
     <string name="action_opening_settings">Opening %1$s settings.</string>
+    <!-- Accessibility-powered actions -->
+    <string name="action_accessibility_disabled">Enable Atom\'s accessibility service in Settings to do that.</string>
+    <string name="accessibility_prompt_title">Accessibility needed</string>
+    <string name="accessibility_prompt_message">To navigate, scroll, read or tap the screen, Atom needs its accessibility service enabled. Open Settings to turn it on?</string>
+    <string name="accessibility_prompt_open">Open settings</string>
+    <string name="action_navigate_unknown">I didn\'t understand where to navigate.</string>
+    <string name="action_navigated">Done: %1$s.</string>
+    <string name="action_navigate_failed">I couldn\'t do that navigation.</string>
+    <string name="action_scroll_unknown">I didn\'t understand which way to scroll.</string>
+    <string name="action_scrolled">Scrolled %1$s.</string>
+    <string name="action_scroll_failed">There\'s nothing here I can scroll.</string>
+    <string name="action_read_screen_empty">I couldn\'t read any text on the screen.</string>
+    <string name="action_tap_unknown">I didn\'t understand what to tap.</string>
+    <string name="action_tapped">Tapped \'%1$s\'.</string>
+    <string name="action_tap_not_found">I couldn\'t find \'%1$s\' on the screen.</string>
     <string name="setting_label_wifi">Wi-Fi</string>
     <string name="setting_label_bluetooth">Bluetooth</string>
     <string name="setting_label_dnd">Do not disturb</string>

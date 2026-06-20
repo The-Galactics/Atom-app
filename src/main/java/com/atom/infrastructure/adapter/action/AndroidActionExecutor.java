@@ -15,6 +15,7 @@ import com.atom.app.R;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ResolvedAction;
+import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +55,10 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
                 case SET_ALARM -> setAlarm(action.param("time"), action.param("label"));
                 case SET_TIMER -> setTimer(action.param("duration_seconds"), action.param("label"));
                 case TOGGLE_SETTING -> toggleSetting(action.param("setting"), action.param("state"));
+                case NAVIGATE -> navigate(action.param("direction"));
+                case SCROLL -> scroll(action.param("direction"));
+                case READ_SCREEN -> readScreen();
+                case TAP_ELEMENT -> tapElement(action.param("text"));
                 default -> ActionOutcome.ok("");
             };
         } catch (Exception e) {
@@ -231,6 +236,60 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
                 ? panelAction
                 : Settings.ACTION_WIFI_SETTINGS;
+    }
+
+    // --- accessibility-powered handlers -------------------------------------
+
+    private ActionOutcome navigate(String direction) {
+        if (isBlank(direction)) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_navigate_unknown));
+        }
+        AtomAccessibilityService service = AtomAccessibilityService.getInstance();
+        if (service == null) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_accessibility_disabled));
+        }
+        return service.navigate(direction)
+                ? ActionOutcome.ok(appContext.getString(R.string.action_navigated, direction))
+                : ActionOutcome.failed(appContext.getString(R.string.action_navigate_failed));
+    }
+
+    private ActionOutcome scroll(String direction) {
+        if (isBlank(direction)) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_scroll_unknown));
+        }
+        AtomAccessibilityService service = AtomAccessibilityService.getInstance();
+        if (service == null) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_accessibility_disabled));
+        }
+        return service.scroll(direction)
+                ? ActionOutcome.ok(appContext.getString(R.string.action_scrolled, direction))
+                : ActionOutcome.failed(appContext.getString(R.string.action_scroll_failed));
+    }
+
+    private ActionOutcome readScreen() {
+        AtomAccessibilityService service = AtomAccessibilityService.getInstance();
+        if (service == null) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_accessibility_disabled));
+        }
+        String text = service.readScreen();
+        // The screen text is carried in the outcome message so the existing
+        // render path speaks/shows it to the user.
+        return isBlank(text)
+                ? ActionOutcome.ok(appContext.getString(R.string.action_read_screen_empty))
+                : ActionOutcome.ok(text);
+    }
+
+    private ActionOutcome tapElement(String text) {
+        if (isBlank(text)) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_tap_unknown));
+        }
+        AtomAccessibilityService service = AtomAccessibilityService.getInstance();
+        if (service == null) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_accessibility_disabled));
+        }
+        return service.tapByText(text)
+                ? ActionOutcome.ok(appContext.getString(R.string.action_tapped, text))
+                : ActionOutcome.failed(appContext.getString(R.string.action_tap_not_found, text));
     }
 
     private static boolean isBlank(String s) {
