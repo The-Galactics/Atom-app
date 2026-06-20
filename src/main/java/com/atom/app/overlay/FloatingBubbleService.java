@@ -50,6 +50,7 @@ import com.atom.app.R;
 import com.atom.app.data.ChatMessage;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
+import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
 import com.atom.app.repository.VoiceRepository;
@@ -841,6 +842,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     askAtom(prompt, status, null);
                     return;
                 }
+                // Accessibility-powered actions need the service enabled first.
+                if (PermissionCoordinator.requiresAccessibility(action)
+                        && !PermissionCoordinator.isAccessibilityServiceEnabled(FloatingBubbleService.this)) {
+                    promptEnableAccessibility(status);
+                    return;
+                }
                 if (action.requiresConfirmation()) {
                     confirmAndRun(action, status);
                 } else {
@@ -861,6 +868,19 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     /** Executes a resolved action and shows its outcome in the panel status. */
     private void runAction(ResolvedAction action, TextView status) {
         commandRepository.run(action, outcome -> respond(outcome.message(), status));
+    }
+
+    /**
+     * Tells the user the accessibility service is needed and opens its Settings
+     * screen. From a Service the Intent needs its own task.
+     */
+    private void promptEnableAccessibility(TextView status) {
+        if (status.isAttachedToWindow()) {
+            status.setText(R.string.action_accessibility_disabled);
+            scheduleStatusReset(status);
+        }
+        startActivity(PermissionCoordinator.accessibilitySettingsIntent()
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     /**
