@@ -3,13 +3,16 @@ package com.atom.infrastructure.adapter.grpc;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
+import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Spliterators;
 import java.util.UUID;
@@ -48,6 +51,7 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
         CommandRequest request = CommandRequest.newBuilder()
                 .setUserId(userId.toString())
                 .setCommand(command)
+                .addAllScreenElements(captureScreenElements())
                 .build();
 
         CommandResponse response = this.blockingStub.executeCommand(request);
@@ -61,6 +65,31 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
                 response.getConfidence(),
                 response.getRequiresConfirmation());
 
+    }
+
+    /**
+     * Snapshots the current screen via the accessibility service and maps each
+     * node to a {@link ScreenElement}. Empty when the service is disabled — the
+     * only place the proto ScreenElement type is constructed (layering).
+     */
+    private static List<ScreenElement> captureScreenElements() {
+        AtomAccessibilityService service = AtomAccessibilityService.getInstance();
+        if (service == null) {
+            return List.of();
+        }
+        List<ScreenElement> elements = new ArrayList<>();
+        for (AtomAccessibilityService.ScreenNode node : service.captureScreen()) {
+            elements.add(ScreenElement.newBuilder()
+                    .setText(node.text)
+                    .setRole(node.role)
+                    .setClickable(node.clickable)
+                    .setFocusable(node.focusable)
+                    .setEditable(node.editable)
+                    .setScrollable(node.scrollable)
+                    .setIndex(node.index)
+                    .build());
+        }
+        return elements;
     }
 
     /**
