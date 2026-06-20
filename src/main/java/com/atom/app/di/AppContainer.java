@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import com.atom.app.BuildConfig;
 import com.atom.app.data.ConversationRepository;
+import com.atom.app.permission.PermissionCoordinator;
 import com.atom.application.port.in.ExecuteCommandPortIn;
 import com.atom.application.port.in.StreamChatPortIn;
 import com.atom.application.port.in.SynthesizeSpeechPortIn;
@@ -52,7 +53,12 @@ public class AppContainer {
     // dialogue through the same instance.
     private final ConversationRepository conversationRepository;
 
+    // Application context, retained for process-scoped permission/state checks
+    // (e.g. whether the accessibility service the user must enable is running).
+    private final Context appContext;
+
     public AppContainer(Context context) {
+        this.appContext = context.getApplicationContext();
 
         // Load (or lazily create + persist) the device-scoped conversation identity.
         SharedPreferences sessionPrefs =
@@ -110,6 +116,11 @@ public class AppContainer {
 
     public InputValidationPort getInputValidationUsecase() {
         return inputValidationUsecase;
+    }
+
+    /** True if Atom's accessibility service is currently enabled by the user. */
+    public boolean isAccessibilityEnabled() {
+        return PermissionCoordinator.isAccessibilityServiceEnabled(appContext);
     }
 
     public ConversationRepository getConversationRepository() {
