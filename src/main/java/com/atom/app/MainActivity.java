@@ -780,6 +780,23 @@ public class MainActivity extends AppCompatActivity {
 
         // Sensitive actions (call, message) require explicit confirmation.
         viewModel.getPendingConfirmation().observe(this, this::confirmAction);
+
+        // Accessibility-powered actions need the service enabled first.
+        viewModel.getAccessibilityRequired().observe(this, this::promptEnableAccessibility);
+    }
+
+    /** Prompts the user to enable Atom's accessibility service, then opens Settings. */
+    private void promptEnableAccessibility(ResolvedAction action) {
+        if (action == null) {
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.accessibility_prompt_title)
+                .setMessage(R.string.accessibility_prompt_message)
+                .setPositiveButton(R.string.accessibility_prompt_open,
+                        (d, w) -> startActivity(PermissionCoordinator.accessibilitySettingsIntent()))
+                .setNegativeButton(R.string.action_confirm_no, null)
+                .show();
     }
 
     /** Asks the user to confirm a sensitive action before executing it. */
