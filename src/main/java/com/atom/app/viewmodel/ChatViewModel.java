@@ -5,13 +5,19 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
+import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
 import com.atom.domain.action.ResolvedAction;
 
+import java.util.function.BooleanSupplier;
+
 public class ChatViewModel extends ViewModel {
     private final ChatRepository repository;
     private final CommandRepository commandRepository;
+    // Reports whether Atom's accessibility service is enabled. Kept as a
+    // supplier so the ViewModel stays free of an Android Context and unit-testable.
+    private final BooleanSupplier accessibilityEnabled;
     // Transcript store. Turns are persisted here, at the point each backend event
     // actually occurs, rather than in a UI observer — a retained LiveData replays
     // its last value to every new observer, so persisting on the UI side would
@@ -24,18 +30,23 @@ public class ChatViewModel extends ViewModel {
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
     // Emitted for sensitive actions awaiting user confirmation.
     private MutableLiveData<ResolvedAction> pendingConfirmation = new MutableLiveData<>();
+    // Emitted when an action needs the accessibility service but it is disabled.
+    private MutableLiveData<ResolvedAction> accessibilityRequired = new MutableLiveData<>();
 
     public ChatViewModel(ChatRepository repository, CommandRepository commandRepository,
-                         ConversationRepository conversationRepository) {
+                         ConversationRepository conversationRepository,
+                         BooleanSupplier accessibilityEnabled) {
         this.repository = repository;
         this.commandRepository = commandRepository;
         this.conversationRepository = conversationRepository;
+        this.accessibilityEnabled = accessibilityEnabled;
     }
 
     public LiveData<String> getChatResponse() { return chatResponse; }
     public LiveData<Boolean> getIsLoading() { return isLoading; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
     public LiveData<ResolvedAction> getPendingConfirmation() { return pendingConfirmation; }
+    public LiveData<ResolvedAction> getAccessibilityRequired() { return accessibilityRequired; }
 
     /** Free-form conversational message (token-streamed via StreamChat). */
     public void sendMessage(String prompt) {
@@ -78,6 +89,13 @@ public class ChatViewModel extends ViewModel {
                     return;
                 }
                 isLoading.setValue(false);
+                // Accessibility-powered actions can't run until the user enables
+                // the service: prompt for that before confirming or executing.
+                if (PermissionCoordinator.requiresAccessibility(action)
+                        && !accessibilityEnabled.getAsBoolean()) {
+                    accessibilityRequired.setValue(action);
+                    return;
+                }
                 if (action.requiresConfirmation()) {
                     pendingConfirmation.setValue(action);
                 } else {
