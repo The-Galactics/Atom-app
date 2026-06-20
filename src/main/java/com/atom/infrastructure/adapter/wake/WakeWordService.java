@@ -101,13 +101,20 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : ACTION_START;
+        // A startForegroundService() promise must be fulfilled before any stopSelf(),
+        // or the OS throws ForegroundServiceDidNotStartInTimeException. Satisfy it on
+        // every teardown path with a typeless startForeground, then stop cleanly.
         if (ACTION_STOP.equals(action)) {
+            startForegroundFallback();
+            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
         if (!startForegroundNotification()) {
-            // Not allowed to be a mic FGS right now (e.g. app not foreground).
-            // Stop cleanly instead of crashing; it'll start when eligible.
+            // Mic FGS not allowed right now (e.g. app not foreground): fulfil the
+            // promise typelessly, then stop; it'll start again when eligible.
+            startForegroundFallback();
+            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -297,6 +304,26 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             // (foreground) state throws. Don't crash the app — bail out.
             Log.e(TAG, "startForeground(microphone) not allowed right now", e);
             return false;
+        }
+    }
+
+    /**
+     * Fulfils a pending FGS promise with a typeless notification when the mic
+     * type isn't allowed, so we can stopSelf() without a DidNotStartInTime crash.
+     */
+    private void startForegroundFallback() {
+        ensureChannel();
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(getString(R.string.wake_notification_title))
+                .setContentText(getString(R.string.wake_notification_text))
+                .setSmallIcon(R.drawable.ic_mic)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
+        try {
+            startForeground(NOTIF_ID, notification);
+        } catch (Exception e) {
+            Log.e(TAG, "Fallback startForeground failed", e);
         }
     }
 

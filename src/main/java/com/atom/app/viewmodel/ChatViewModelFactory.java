@@ -30,7 +30,8 @@ public class ChatViewModelFactory implements ViewModelProvider.Factory {
                     appContainer.getExternalCommandUseCase(),
                     appContainer.getActionExecutor());
             return (T) new ChatViewModel(repository, commandRepository,
-                    appContainer.getConversationRepository());
+                    appContainer.getConversationRepository(),
+                    appContainer::isAccessibilityEnabled);
         }
         throw new IllegalArgumentException("Unknown ViewModel class: " + modelClass.getName());
     }

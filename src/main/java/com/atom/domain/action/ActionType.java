@@ -24,6 +24,14 @@ public enum ActionType {
     SET_TIMER,
     /** {@code {setting, state}} — toggle wifi/bluetooth/flashlight/do_not_disturb. */
     TOGGLE_SETTING,
+    /** {@code {direction}} — global navigation back/home/recents/quick_settings (accessibility). */
+    NAVIGATE,
+    /** {@code {direction}} — scroll the active window up/down/left/right (accessibility). */
+    SCROLL,
+    /** {@code {}} — read the visible screen text (accessibility); returned in {@code out_message}. */
+    READ_SCREEN,
+    /** {@code {text}} — tap an on-screen element by visible text (accessibility; confirm first). */
+    TAP_ELEMENT,
     /** No action — just present {@code out_message}. Also the unknown/fallback value. */
     NONE;
 

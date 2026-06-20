@@ -6,9 +6,8 @@
     <!-- Overlay / "super position": draw the assistant UI on top of other apps. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- Screen view (MediaProjection) foreground service. FUTURE WORK. -->
+    <!-- Foreground services (wake-word listener, floating bubble). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <!-- Floating bubble overlay runs as a "special use" foreground service. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -87,12 +86,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-
-        <!-- Screen capture foreground service (MediaProjection). FUTURE WORK. -->
-        <service
-            android:name="com.atom.infrastructure.adapter.screen.ScreenCaptureService"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
 
         <!-- Always-on wake-word listener (Vosk), microphone foreground service. -->
         <service
