@@ -55,6 +55,9 @@ android {
     testOptions {
         // Tests use JUnit 5 (Jupiter); AGP runs them on the JUnit Platform.
         unitTests.all { it.useJUnitPlatform() }
+        // android.jar stubs return defaults instead of throwing, so happy-path
+        // android.util.Log calls in code under test are no-ops in unit tests.
+        unitTests.isReturnDefaultValues = true
     }
 }
 
