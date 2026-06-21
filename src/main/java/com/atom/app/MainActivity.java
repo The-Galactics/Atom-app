@@ -778,11 +778,28 @@ public class MainActivity extends AppCompatActivity {
             statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
         });
 
-        // Sensitive actions (call, message) require explicit confirmation.
-        viewModel.getPendingConfirmation().observe(this, this::confirmAction);
+        // Sensitive actions require confirmation; one-shot Event avoids re-prompting on recreation.
+        viewModel.getPendingConfirmation().observe(this,
+                e -> confirmAction(e.getContentIfNotHandled()));
+
+        // Destructive action mid-loop: prompt before it runs (loop thread waits for the answer).
+        viewModel.getDestructiveConfirmation().observe(this,
+                e -> confirmDestructive(e.getContentIfNotHandled()));
 
         // Accessibility-powered actions need the service enabled first.
-        viewModel.getAccessibilityRequired().observe(this, this::promptEnableAccessibility);
+        viewModel.getAccessibilityRequired().observe(this,
+                e -> promptEnableAccessibility(e.getContentIfNotHandled()));
+
+        // While the loop runs, freeze input and show the operating indicator.
+        viewModel.getAutomationActive().observe(this, active -> {
+            boolean operating = Boolean.TRUE.equals(active);
+            inputEditText.setEnabled(!operating);
+            if (operating) {
+                fadeSwap(statusText, getString(R.string.automation_operating));
+                fadeSwap(subStatusText, getString(R.string.automation_operating));
+                applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
+            }
+        });
     }
 
     /** Prompts the user to enable Atom's accessibility service, then opens Settings. */
@@ -812,6 +829,25 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage(prompt)
                 .setPositiveButton(R.string.action_confirm_yes, (d, w) -> executeWithPermission(action))
                 .setNegativeButton(R.string.action_confirm_no, null)
+                .show();
+    }
+
+    /** Confirms a destructive action mid-loop; the paused loop resumes or aborts on the answer. */
+    private void confirmDestructive(ResolvedAction action) {
+        if (action == null) {
+            return;
+        }
+        String prompt = action.outMessage().isEmpty()
+                ? getString(R.string.action_confirm_default)
+                : action.outMessage();
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.action_confirm_title)
+                .setMessage(prompt)
+                .setCancelable(false)
+                .setPositiveButton(R.string.action_confirm_yes,
+                        (d, w) -> viewModel.resolveDestructiveConfirmation(true))
+                .setNegativeButton(R.string.action_confirm_no,
+                        (d, w) -> viewModel.resolveDestructiveConfirmation(false))
                 .show();
     }
 
