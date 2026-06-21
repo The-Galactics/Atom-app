@@ -32,6 +32,8 @@ class InteractionGrpcAdapterTest {
     private static class FakeAtomAgentService extends AtomAgentServiceGrpc.AtomAgentServiceImplBase {
         CommandResponse commandResponseResult;
         List<MessageResponse> streamChatResults;
+        // Captured so tests can assert what the adapter put on the request.
+        CommandRequest lastCommandRequest;
 
         /**
          * Simulates the synchronous executeCommand unary RPC method.
@@ -39,6 +41,7 @@ class InteractionGrpcAdapterTest {
          */
         @Override
         public void executeCommand(CommandRequest request, StreamObserver<CommandResponse> responseObserver) {
+            lastCommandRequest = request;
             if (commandResponseResult != null) {
                 responseObserver.onNext(commandResponseResult);
                 responseObserver.onCompleted();
@@ -153,6 +156,69 @@ class InteractionGrpcAdapterTest {
         assertTrue(result.isExecutable());
         assertTrue(result.requiresConfirmation());
         assertEquals(1.0f, result.confidence());
+    }
+
+    @Test
+    void shouldMapTaskCompleteAndStepFromWire() {
+        // GIVEN a mid-loop action response that is not yet complete.
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setActionType("OPEN_APP")
+                .setTaskComplete(false)
+                .setStep(3)
+                .build();
+
+        // WHEN
+        ResolvedAction result = adapter.commandResponse(userId, "abre youtube");
+
+        // THEN the loop fields are projected into the domain action.
+        assertEquals(ActionType.OPEN_APP, result.type());
+        assertFalse(result.taskComplete());
+        assertEquals(3, result.step());
+    }
+
+    @Test
+    void shouldMapTaskCompleteTrueOnFinalResponse() {
+        // GIVEN a terminal response signalling the ReAct task is done.
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setOutMessage("Listo")
+                .setTaskComplete(true)
+                .setStep(5)
+                .build();
+
+        // WHEN
+        ResolvedAction result = adapter.commandResponse(userId, "abre youtube");
+
+        // THEN
+        assertTrue(result.taskComplete());
+        assertEquals(5, result.step());
+        assertEquals("Listo", result.outMessage());
+    }
+
+    @Test
+    void shouldPopulateRequestFieldsAndSendScreenElements() {
+        // GIVEN any response; we only assert what the adapter put on the request.
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setActionType("OPEN_APP")
+                .build();
+
+        // WHEN
+        adapter.commandResponse(userId, "abre youtube");
+
+        // THEN the request carries the user id and command, and the screen_elements
+        // field is always populated (empty here: no accessibility service in the JVM).
+        assertNotNull(fakeService.lastCommandRequest);
+        assertEquals(userId.toString(), fakeService.lastCommandRequest.getUserId());
+        assertEquals("abre youtube", fakeService.lastCommandRequest.getCommand());
+        assertEquals(0, fakeService.lastCommandRequest.getScreenElementsCount());
     }
 
     @Test
