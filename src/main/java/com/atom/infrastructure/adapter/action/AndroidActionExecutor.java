@@ -59,6 +59,7 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
                 case SCROLL -> scroll(action.param("direction"));
                 case READ_SCREEN -> readScreen();
                 case TAP_ELEMENT -> tapElement(action.param("text"));
+                case TYPE_TEXT -> typeText(action.param("text"), action.param("submit"));
                 default -> ActionOutcome.ok("");
             };
         } catch (Exception e) {
@@ -290,6 +291,30 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         return service.tapByText(text)
                 ? ActionOutcome.ok(appContext.getString(R.string.action_tapped, text))
                 : ActionOutcome.failed(appContext.getString(R.string.action_tap_not_found, text));
+    }
+
+    private ActionOutcome typeText(String text, String submitParam) {
+        if (isBlank(text)) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_type_unknown));
+        }
+        AtomAccessibilityService service = AtomAccessibilityService.getInstance();
+        if (service == null) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_accessibility_disabled));
+        }
+        return service.typeText(text, parseSubmit(submitParam))
+                ? ActionOutcome.ok(appContext.getString(R.string.action_typed, text))
+                : ActionOutcome.failed(appContext.getString(R.string.action_type_failed));
+    }
+
+    /**
+     * Resolves the {@code submit} param into a boolean: submit defaults to true
+     * when the param is absent/blank (the common "type and search" intent), and
+     * any non-boolean string parses to false via {@link Boolean#parseBoolean}.
+     * Package-private and static so it is unit-testable without the Android
+     * accessibility-service singleton (which short-circuits the JVM path).
+     */
+    static boolean parseSubmit(String submitParam) {
+        return isBlank(submitParam) || Boolean.parseBoolean(submitParam.trim());
     }
 
     private static boolean isBlank(String s) {
