@@ -63,7 +63,9 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
                 parseParameters(response.getParametersJson()),
                 response.getOutMessage(),
                 response.getConfidence(),
-                response.getRequiresConfirmation());
+                response.getRequiresConfirmation(),
+                response.getTaskComplete(),
+                response.getStep());
 
     }
 

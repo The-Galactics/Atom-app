@@ -19,6 +19,14 @@ class ActionTypeTest {
         assertThat(ActionType.fromWire("SCROLL")).isEqualTo(ActionType.SCROLL);
         assertThat(ActionType.fromWire("READ_SCREEN")).isEqualTo(ActionType.READ_SCREEN);
         assertThat(ActionType.fromWire("TAP_ELEMENT")).isEqualTo(ActionType.TAP_ELEMENT);
+        assertThat(ActionType.fromWire("TYPE_TEXT")).isEqualTo(ActionType.TYPE_TEXT);
+    }
+
+    @Test
+    @DisplayName("TYPE_TEXT resolves regardless of case/whitespace")
+    void resolvesTypeText() {
+        assertThat(ActionType.fromWire("type_text")).isEqualTo(ActionType.TYPE_TEXT);
+        assertThat(ActionType.fromWire("  TYPE_TEXT ")).isEqualTo(ActionType.TYPE_TEXT);
     }
 
     @Test
