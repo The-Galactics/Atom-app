@@ -80,6 +80,8 @@
     <string name="action_confirm_no">Cancelar</string>
     <string name="action_cancelled">Acción cancelada</string>
     <string name="action_permission_denied">Permiso denegado — acción cancelada</string>
+    <!-- Progreso del bucle autónomo -->
+    <string name="automation_operating">Atom está operando…</string>
 
     <!-- Superposición flotante -->
     <string name="overlay_notification_title">Atom está flotando</string>
@@ -174,6 +176,17 @@
     <string name="action_torch_on">Linterna encendida.</string>
     <string name="action_torch_off">Linterna apagada.</string>
     <string name="action_opening_settings">Abriendo ajustes de %1$s.</string>
+    <string name="action_type_unknown">No entendí qué escribir.</string>
+    <string name="action_typed">Escribí \'%1$s\'.</string>
+    <string name="action_type_failed">No encontré un campo de texto donde escribir.</string>
+    <!-- Etiquetas de botón de envío de respaldo (ver values/strings.xml para el orden y motivo). -->
+    <string-array name="search_submit_labels">
+        <item>buscar</item>
+        <item>ir</item>
+        <item>enviar</item>
+        <item>aceptar</item>
+        <item>intro</item>
+    </string-array>
     <string name="setting_label_wifi">Wi-Fi</string>
     <string name="setting_label_bluetooth">Bluetooth</string>
     <string name="setting_label_dnd">No molestar</string>
