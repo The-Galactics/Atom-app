@@ -32,6 +32,8 @@ public enum ActionType {
     READ_SCREEN,
     /** {@code {text}} — tap an on-screen element by visible text (accessibility; confirm first). */
     TAP_ELEMENT,
+    /** {@code {text, submit?}} — type into the focused/first editable field (accessibility; submit defaults true). */
+    TYPE_TEXT,
     /** No action — just present {@code out_message}. Also the unknown/fallback value. */
     NONE;
 

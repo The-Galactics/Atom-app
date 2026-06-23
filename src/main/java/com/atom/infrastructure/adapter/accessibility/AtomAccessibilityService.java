@@ -4,12 +4,17 @@ import android.accessibilityservice.AccessibilityService;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.accessibilityservice.GestureDescription;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
 
 import androidx.annotation.Nullable;
+
+import com.atom.app.R;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +33,10 @@ public class AtomAccessibilityService extends AccessibilityService {
 
     // Bounds the snapshot so a huge tree never bloats the gRPC payload.
     private static final int MAX_NODES = 200;
+
+    // Retry the find a few times so a step tolerates render/network lag (~6 * 400ms ≈ 2.4s).
+    private static final int FIND_RETRIES = 6;
+    private static final long FIND_RETRY_DELAY_MS = 400L;
 
     /** Domain-friendly view of one on-screen node; proto mapping lives in the gRPC adapter. */
     public static final class ScreenNode {
@@ -137,6 +146,7 @@ public class AtomAccessibilityService extends AccessibilityService {
         }
         String dir = direction.toLowerCase(Locale.ROOT).trim();
         boolean forward = "down".equals(dir) || "right".equals(dir);
+        Log.i(TAG, "scroll direction=" + dir);
 
         AccessibilityNodeInfo root = getRootInActiveWindow();
         try {
@@ -197,51 +207,61 @@ public class AtomAccessibilityService extends AccessibilityService {
     /**
      * Taps the first clickable node whose visible text matches {@code text},
      * climbing to a clickable ancestor when the matched node itself is not
-     * clickable (e.g. a label inside a button row).
+     * clickable (e.g. a label inside a button row). Polls a few times so the
+     * target survives render/network lag.
      */
     public boolean tapByText(String text) {
         if (text == null || text.trim().isEmpty()) {
             return false;
         }
         String needle = text.trim();
-        // Prefer the active/foreground window so we never click a stale
-        // background window that merely contains matching text.
-        AccessibilityNodeInfo active = getRootInActiveWindow();
-        if (active != null) {
-            try {
-                if (tapInRoot(active, needle)) {
-                    return true;
-                }
-            } finally {
-                active.recycle();
-            }
-        }
-        // Fall back to other windows: at tap time the active window may be a
-        // just-dismissed dialog or the IME while the target lives behind it.
-        List<AccessibilityWindowInfo> windows = getWindows();
-        if (windows != null) {
-            for (AccessibilityWindowInfo window : windows) {
-                AccessibilityNodeInfo root = window.getRoot();
-                if (root == null) {
-                    continue;
-                }
+        for (int attempt = 0; attempt < FIND_RETRIES; attempt++) {
+            // Prefer the active/foreground window so we never click a stale
+            // background window that merely contains matching text.
+            AccessibilityNodeInfo active = getRootInActiveWindow();
+            if (active != null) {
                 try {
-                    if (tapInRoot(root, needle)) {
+                    if (tapInRoot(active, needle)) {
+                        Log.i(TAG, "tapByText matched in active window: \"" + needle + "\"");
                         return true;
                     }
                 } finally {
-                    root.recycle();
+                    active.recycle();
                 }
             }
+            // Fall back to other windows: at tap time the active window may be a
+            // just-dismissed dialog or the IME while the target lives behind it.
+            List<AccessibilityWindowInfo> windows = getWindows();
+            if (windows != null) {
+                for (AccessibilityWindowInfo window : windows) {
+                    AccessibilityNodeInfo root = window.getRoot();
+                    if (root == null) {
+                        continue;
+                    }
+                    try {
+                        if (tapInRoot(root, needle)) {
+                            Log.i(TAG, "tapByText matched in window: \"" + needle + "\"");
+                            return true;
+                        }
+                    } finally {
+                        root.recycle();
+                    }
+                }
+            }
+            sleepRetry(attempt);
         }
+        Log.w(TAG, "tapByText found no match for \"" + needle + "\" after "
+                + FIND_RETRIES + " attempts");
         return false;
     }
 
     /**
-     * Taps the first node whose text OR contentDescription contains {@code needle}
+     * Taps the first node whose text OR contentDescription matches {@code needle}
      * within one window root. We search both because icon buttons (e.g. the
      * top-bar "Ajustes"/"Historial") expose only a contentDescription, which the
      * framework's {@code findAccessibilityNodeInfosByText} does not match.
+     * When the matched node has no clickable ancestor, we fall back to clicking
+     * the node itself (last resort: its parent).
      */
     private boolean tapInRoot(AccessibilityNodeInfo root, String needle) {
         AccessibilityNodeInfo match = findByTextOrDesc(root, needle.toLowerCase(Locale.ROOT));
@@ -250,8 +270,20 @@ public class AtomAccessibilityService extends AccessibilityService {
         }
         AccessibilityNodeInfo clickable = firstClickable(match);
         try {
-            return clickable != null
-                    && clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            AccessibilityNodeInfo target = clickable != null ? clickable : match;
+            boolean done = target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+            if (!done && clickable == null) {
+                // Last resort: try the parent of an unclickable match.
+                AccessibilityNodeInfo parent = match.getParent();
+                if (parent != null) {
+                    try {
+                        done = parent.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    } finally {
+                        parent.recycle();
+                    }
+                }
+            }
+            return done;
         } finally {
             if (clickable != null && clickable != match) {
                 clickable.recycle();
@@ -260,37 +292,280 @@ public class AtomAccessibilityService extends AccessibilityService {
         }
     }
 
-    /** DFS for the first node whose text or contentDescription contains {@code needleLower}. */
+    /**
+     * DFS for the best node whose text or contentDescription matches
+     * {@code needleLower}, preferring (in order) exact match, prefix match, then
+     * substring. Atom's own overlay nodes are skipped so the bubble's labels can
+     * never shadow the foreground app's UI.
+     */
     @Nullable
     private AccessibilityNodeInfo findByTextOrDesc(@Nullable AccessibilityNodeInfo node,
                                                    String needleLower) {
-        if (node == null) {
+        Match best = findBest(node, needleLower, null);
+        if (best == null) {
             return null;
         }
-        if (contains(node.getText(), needleLower)
-                || contains(node.getContentDescription(), needleLower)) {
-            return node;
+        Log.i(TAG, "findByTextOrDesc rank=" + best.rank + " for \"" + needleLower + "\"");
+        return best.node;
+    }
+
+    /** Match quality ranks; lower is better. */
+    private static final int RANK_EXACT = 0;
+    private static final int RANK_PREFIX = 1;
+    private static final int RANK_SUBSTRING = 2;
+
+    /** A candidate node with its match quality, so the DFS can keep the best. */
+    private static final class Match {
+        final AccessibilityNodeInfo node;
+        final int rank;
+
+        Match(AccessibilityNodeInfo node, int rank) {
+            this.node = node;
+            this.rank = rank;
+        }
+    }
+
+    /**
+     * DFS keeping the best-ranked match. {@code current} is the best found so far
+     * (its node owned by the caller); we recycle whatever we don't keep so callers
+     * still own exactly one node.
+     */
+    @Nullable
+    private Match findBest(@Nullable AccessibilityNodeInfo node, String needleLower,
+                           @Nullable Match current) {
+        if (node == null || isOwnOverlay(node)) {
+            return current;
+        }
+        int rank = rankOf(node.getText(), needleLower);
+        if (rank < 0) {
+            rank = rankOf(node.getContentDescription(), needleLower);
+        }
+        if (rank >= 0 && (current == null || rank < current.rank)) {
+            if (current != null) {
+                current.node.recycle();
+            }
+            current = new Match(AccessibilityNodeInfo.obtain(node), rank);
+            if (rank == RANK_EXACT) {
+                return current; // can't do better; stop early
+            }
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) {
                 continue;
             }
-            AccessibilityNodeInfo found = findByTextOrDesc(child, needleLower);
-            if (found != null) {
-                if (found != child) {
-                    child.recycle();
+            current = findBest(child, needleLower, current);
+            child.recycle();
+            if (current != null && current.rank == RANK_EXACT) {
+                return current;
+            }
+        }
+        return current;
+    }
+
+    // Stable view-id markers on Atom's overlay roots, matched by suffix (no hardcoded
+    // package). Requires flagReportViewIds in accessibility_service_config.
+    private static final String[] OVERLAY_ROOT_ID_SUFFIXES = {
+            ":id/bubble_root",
+            ":id/overlay_panel_root",
+            ":id/handle_bar",
+            ":id/dismiss_root",
+    };
+
+    /**
+     * Skips Atom's own overlay nodes (bubble/panel) so their labels can't shadow the
+     * foreground app, without skipping the rest of Atom's UI. A node is overlay when its
+     * window is an accessibility overlay, or it/an ancestor carries an overlay-root view-id.
+     */
+    private boolean isOwnOverlay(AccessibilityNodeInfo node) {
+        if (isAccessibilityOverlayWindow(node)) {
+            return true;
+        }
+        // Walk up checking the view-id marker. Cheap: overlay trees are shallow,
+        // and the very common case (foreground app nodes) has no Atom view-id.
+        AccessibilityNodeInfo current = AccessibilityNodeInfo.obtain(node);
+        try {
+            while (current != null) {
+                if (matchesOverlayRootId(current.getViewIdResourceName())) {
+                    return true;
                 }
+                AccessibilityNodeInfo parent = current.getParent();
+                current.recycle();
+                current = parent;
+            }
+        } finally {
+            if (current != null) {
+                current.recycle();
+            }
+        }
+        return false;
+    }
+
+    /** True when the node belongs to a genuine accessibility-overlay window. */
+    private boolean isAccessibilityOverlayWindow(AccessibilityNodeInfo node) {
+        AccessibilityWindowInfo window = node.getWindow();
+        if (window == null) {
+            return false;
+        }
+        try {
+            return window.getType() == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY;
+        } finally {
+            window.recycle();
+        }
+    }
+
+    /** True when {@code viewId} ends with one of Atom's overlay-root id suffixes. */
+    private static boolean matchesOverlayRootId(@Nullable String viewId) {
+        if (viewId == null) {
+            return false;
+        }
+        for (String suffix : OVERLAY_ROOT_ID_SUFFIXES) {
+            if (viewId.endsWith(suffix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Exact/prefix/substring rank for one CharSequence, or -1 when no match. */
+    private static int rankOf(@Nullable CharSequence text, String needleLower) {
+        if (text == null) {
+            return -1;
+        }
+        String hay = text.toString().trim().toLowerCase(Locale.ROOT);
+        if (hay.isEmpty()) {
+            return -1;
+        }
+        if (hay.equals(needleLower)) {
+            return RANK_EXACT;
+        }
+        if (hay.startsWith(needleLower)) {
+            return RANK_PREFIX;
+        }
+        return hay.contains(needleLower) ? RANK_SUBSTRING : -1;
+    }
+
+    // --- text entry ---------------------------------------------------------
+
+    /**
+     * Types {@code text} into the focused editable field (or the first editable
+     * node in the active window), then optionally submits. Polls so the target
+     * field survives render lag. Returns true on a successful set-text.
+     */
+    public boolean typeText(String text, boolean submit) {
+        if (text == null) {
+            return false;
+        }
+        for (int attempt = 0; attempt < FIND_RETRIES; attempt++) {
+            AccessibilityNodeInfo target = resolveEditable();
+            if (target != null) {
+                try {
+                    Bundle args = new Bundle();
+                    args.putCharSequence(
+                            AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
+                    boolean set = target.performAction(
+                            AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                    Log.i(TAG, "typeText set=" + set + " submit=" + submit
+                            + " text=\"" + text + "\"");
+                    if (!set) {
+                        return false;
+                    }
+                    if (submit) {
+                        boolean submitted = submit(target);
+                        // A failed submit does not fail typeText: the typed text is set and
+                        // recoverable (user/loop can submit via a follow-up), so don't discard it.
+                        if (!submitted) {
+                            Log.w(TAG, "typeText: text set but submit did not fire "
+                                    + "(continuing; not treated as failure)");
+                        } else {
+                            Log.i(TAG, "typeText submit result=true");
+                        }
+                    }
+                    return true;
+                } finally {
+                    target.recycle();
+                }
+            }
+            sleepRetry(attempt);
+        }
+        Log.w(TAG, "typeText found no editable field after " + FIND_RETRIES + " attempts");
+        return false;
+    }
+
+    /** Focused input if it is editable, else the first editable node in the window. */
+    @Nullable
+    private AccessibilityNodeInfo resolveEditable() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return null;
+        }
+        try {
+            AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+            if (focused != null) {
+                if (focused.isEditable()) {
+                    return focused;
+                }
+                focused.recycle();
+            }
+            return findEditable(root);
+        } finally {
+            root.recycle();
+        }
+    }
+
+    /** DFS for the first editable node; returned node is owned by the caller. */
+    @Nullable
+    private AccessibilityNodeInfo findEditable(@Nullable AccessibilityNodeInfo node) {
+        if (node == null || isOwnOverlay(node)) {
+            return null;
+        }
+        if (node.isEditable()) {
+            return AccessibilityNodeInfo.obtain(node);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) {
+                continue;
+            }
+            AccessibilityNodeInfo found = findEditable(child);
+            child.recycle();
+            if (found != null) {
                 return found;
             }
-            child.recycle();
         }
         return null;
     }
 
-    private static boolean contains(@Nullable CharSequence text, String needleLower) {
-        return text != null
-                && text.toString().toLowerCase(Locale.ROOT).contains(needleLower);
+    /**
+     * Submits typed text: prefers IME enter/search (API 30+), else taps a localized
+     * search/submit button. Returns true only when a submit actually fired.
+     */
+    private boolean submit(AccessibilityNodeInfo field) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (field.performAction(
+                    AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId())) {
+                return true;
+            }
+        }
+        // Fallback (API 26-29, no ACTION_IME_ENTER): tap a localized search/submit button.
+        String[] labels = getResources().getStringArray(R.array.search_submit_labels);
+        for (String label : labels) {
+            if (tapByText(label)) {
+                return true;
+            }
+        }
+        // Nothing submitted: text set but search not sent. Log loudly so it isn't mistaken for success.
+        Log.w(TAG, "submit failed: text typed but NOT submitted (no IME action and "
+                + "no fallback button matched " + java.util.Arrays.toString(labels) + ")");
+        return false;
+    }
+
+    /** Sleeps between find attempts (no-op after the final attempt). */
+    private void sleepRetry(int attempt) {
+        if (attempt >= FIND_RETRIES - 1) {
+            return;
+        }
+        SystemClock.sleep(FIND_RETRY_DELAY_MS);
     }
 
     // --- helpers ------------------------------------------------------------

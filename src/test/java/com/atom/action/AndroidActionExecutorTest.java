@@ -52,11 +52,37 @@ class AndroidActionExecutorTest {
         ActionOutcome scroll = executor.execute(action(ActionType.SCROLL, Map.of("direction", "down")));
         ActionOutcome read = executor.execute(action(ActionType.READ_SCREEN, Collections.emptyMap()));
         ActionOutcome tap = executor.execute(action(ActionType.TAP_ELEMENT, Map.of("text", "OK")));
+        ActionOutcome type = executor.execute(
+                action(ActionType.TYPE_TEXT, Map.of("text", "hola", "submit", "true")));
 
         assertThat(navigate.success()).isFalse();
         assertThat(scroll.success()).isFalse();
         assertThat(read.success()).isFalse();
         assertThat(tap.success()).isFalse();
+        assertThat(type.success()).isFalse();
+    }
+
+    @Test
+    @DisplayName("TYPE_TEXT routes to the accessibility service; disabled -> graceful failure")
+    void typeTextDispatchesAndFailsGracefullyWhenDisabled() {
+        // Service singleton is null in plain JVM, so the dispatch reaches the
+        // null-service guard and returns the disabled failure (not a crash).
+        ActionOutcome withSubmit = executor.execute(
+                action(ActionType.TYPE_TEXT, Map.of("text", "rubius pokemon", "submit", "false")));
+        // Default submit: param absent -> dispatch still resolves the case branch.
+        ActionOutcome defaultSubmit = executor.execute(
+                action(ActionType.TYPE_TEXT, Map.of("text", "rubius pokemon")));
+
+        assertThat(withSubmit.success()).isFalse();
+        assertThat(defaultSubmit.success()).isFalse();
+    }
+
+    @Test
+    @DisplayName("TYPE_TEXT with blank text fails before reaching the service")
+    void typeTextBlankTextFails() {
+        ActionOutcome blank = executor.execute(
+                action(ActionType.TYPE_TEXT, Map.of("text", "  ")));
+        assertThat(blank.success()).isFalse();
     }
 
     @Test
@@ -65,4 +91,5 @@ class AndroidActionExecutorTest {
         ActionOutcome outcome = executor.execute(action(ActionType.NONE, Collections.emptyMap()));
         assertThat(outcome.success()).isTrue();
     }
+
 }

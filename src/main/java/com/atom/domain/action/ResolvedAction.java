@@ -15,13 +15,17 @@ import java.util.Map;
  * @param outMessage           natural-language reply to speak/show the user
  * @param confidence           recognition confidence in [0.0, 1.0]
  * @param requiresConfirmation true ⇒ confirm with the user before executing
+ * @param taskComplete         true ⇒ the ReAct task is finished; stop looping
+ * @param step                 current ReAct step index (telemetry/debug)
  */
 public record ResolvedAction(
         ActionType type,
         Map<String, String> parameters,
         String outMessage,
         float confidence,
-        boolean requiresConfirmation) {
+        boolean requiresConfirmation,
+        boolean taskComplete,
+        int step) {
 
     public ResolvedAction {
         if (type == null) {
@@ -35,9 +39,16 @@ public record ResolvedAction(
         }
     }
 
+    /** Back-compat constructor: defaults the loop fields (taskComplete=false, step=0). */
+    public ResolvedAction(ActionType type, Map<String, String> parameters, String outMessage,
+                          float confidence, boolean requiresConfirmation) {
+        this(type, parameters, outMessage, confidence, requiresConfirmation, false, 0);
+    }
+
     /** A purely conversational result carrying only the reply text. */
     public static ResolvedAction conversation(String outMessage) {
-        return new ResolvedAction(ActionType.NONE, Collections.emptyMap(), outMessage, 0.0f, false);
+        return new ResolvedAction(ActionType.NONE, Collections.emptyMap(), outMessage, 0.0f, false,
+                true, 0);
     }
 
     /** True when there is something to execute on the device. */
