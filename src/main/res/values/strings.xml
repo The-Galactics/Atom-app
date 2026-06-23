@@ -80,6 +80,8 @@
     <string name="action_confirm_no">Cancel</string>
     <string name="action_cancelled">Action canceled</string>
     <string name="action_permission_denied">Permission denied — action canceled</string>
+    <!-- Autonomous loop progress -->
+    <string name="automation_operating">Atom is operating…</string>
 
     <!-- Floating overlay -->
     <string name="overlay_notification_title">Atom is floating</string>
@@ -189,6 +191,21 @@
     <string name="action_tap_unknown">I didn\'t understand what to tap.</string>
     <string name="action_tapped">Tapped \'%1$s\'.</string>
     <string name="action_tap_not_found">I couldn\'t find \'%1$s\' on the screen.</string>
+    <string name="action_type_unknown">I didn\'t understand what to type.</string>
+    <string name="action_typed">Typed \'%1$s\'.</string>
+    <string name="action_type_failed">I couldn\'t find a text field to type into.</string>
+    <!--
+      Fallback submit-button labels tried (in order) when the IME "enter"/search
+      action is unavailable (API 26-29) or fails. Localized so the fallback isn't
+      English-only; see values-es for the Spanish set.
+    -->
+    <string-array name="search_submit_labels">
+        <item>search</item>
+        <item>go</item>
+        <item>submit</item>
+        <item>send</item>
+        <item>enter</item>
+    </string-array>
     <string name="setting_label_wifi">Wi-Fi</string>
     <string name="setting_label_bluetooth">Bluetooth</string>
     <string name="setting_label_dnd">Do not disturb</string>
