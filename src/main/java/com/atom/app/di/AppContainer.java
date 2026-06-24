@@ -14,6 +14,7 @@ import com.atom.application.port.in.SynthesizeSpeechPortIn;
 import com.atom.application.port.in.security.DeviceSecurityPort;
 import com.atom.application.port.in.security.InputValidationPort;
 import com.atom.application.port.out.ActionExecutorPortOut;
+import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.application.port.out.security.DeviceInspectorPort;
 import com.atom.application.usecase.ExternalCommandUseCase;
@@ -23,6 +24,7 @@ import com.atom.application.usecase.security.DeviceSecurityUseCase;
 import com.atom.application.usecase.security.InputValidationUsecase;
 import com.atom.infrastructure.adapter.action.AndroidActionExecutor;
 import com.atom.infrastructure.adapter.grpc.InteractionGrpcAdapter;
+import com.atom.infrastructure.adapter.out.device.ContactsContractResolver;
 import com.atom.infrastructure.adapter.out.device.DeviceInspectorAdapter;
 
 public class AppContainer {
@@ -75,7 +77,9 @@ public class AppContainer {
         ExternalInteractionPortOut externalInteractionPortOut = this.interactionGrpcAdapter;
 
         // On-device action executor (out-port). Needs an Android context.
-        this.actionExecutorPortOut = new AndroidActionExecutor(context);
+        // Resolves spoken contact names to numbers via the address book.
+        ContactResolverPortOut contactResolver = new ContactsContractResolver(context);
+        this.actionExecutorPortOut = new AndroidActionExecutor(context, contactResolver);
 
         // External interaction use-cases (chat streaming + command execution).
         this.externalMessageUseCase = new ExternalMessageUseCase(externalInteractionPortOut);
