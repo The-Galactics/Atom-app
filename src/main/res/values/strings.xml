@@ -161,11 +161,15 @@
     <string name="action_opening_app">Opening %1$s.</string>
     <string name="action_call_unknown">I didn\'t understand who to call.</string>
     <string name="action_calling">Calling %1$s.</string>
+    <string name="contact_not_found">I couldn\'t find that contact in your address book.</string>
     <string name="action_message_unknown">I didn\'t understand who to message.</string>
     <string name="action_message_preparing">Preparing a message for %1$s.</string>
+    <string name="action_telegram_opening">Opening Telegram to send your message.</string>
     <string name="action_alarm_unknown">I didn\'t understand the alarm time.</string>
+    <string name="action_alarm_invalid_time">I didn\'t understand the alarm time.</string>
     <string name="action_alarm_set">Alarm set for %1$s.</string>
     <string name="action_timer_unknown">I didn\'t understand the timer duration.</string>
+    <string name="action_timer_invalid_duration">I didn\'t understand the timer duration.</string>
     <string name="action_timer_invalid">That timer duration isn\'t valid.</string>
     <string name="action_timer_started">Timer started.</string>
     <string name="action_setting_unknown">I didn\'t understand which setting to change.</string>

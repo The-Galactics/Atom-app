@@ -13,12 +13,14 @@ import android.util.Log;
 
 import com.atom.app.R;
 import com.atom.application.port.out.ActionExecutorPortOut;
+import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Android adapter for {@link ActionExecutorPortOut}: turns a {@link ResolvedAction}
@@ -36,10 +38,12 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
     private static final String TAG = "AtomActionExec";
 
     private final Context appContext;
+    private final ContactResolverPortOut contactResolver;
 
-    public AndroidActionExecutor(Context context) {
+    public AndroidActionExecutor(Context context, ContactResolverPortOut contactResolver) {
         // Always hold the application context to avoid leaking an Activity.
         this.appContext = context.getApplicationContext();
+        this.contactResolver = contactResolver;
     }
 
     @Override
@@ -51,7 +55,7 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
             return switch (action.type()) {
                 case OPEN_APP -> openApp(action.param("app_name"));
                 case MAKE_CALL -> makeCall(action.param("target"));
-                case SEND_MESSAGE -> sendMessage(action.param("recipient"), action.param("body"));
+                case SEND_MESSAGE -> sendMessage(action.param("recipient"), action.param("body"), action.param("app"));
                 case SET_ALARM -> setAlarm(action.param("time"), action.param("label"));
                 case SET_TIMER -> setTimer(action.param("duration_seconds"), action.param("label"));
                 case TOGGLE_SETTING -> toggleSetting(action.param("setting"), action.param("state"));
@@ -115,21 +119,116 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         if (isBlank(target)) {
             return ActionOutcome.failed(appContext.getString(R.string.action_call_unknown));
         }
+
+        String number = target;
+        // A name (not a dialable string) is resolved against the device address
+        // book first; numbers and dial codes pass straight through.
+        if (!isDialable(target)) {
+            boolean canReadContacts = appContext.checkSelfPermission(
+                    android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED;
+            if (!canReadContacts) {
+                return ActionOutcome.failed(appContext.getString(R.string.action_permission_denied));
+            }
+            Optional<String> resolved = contactResolver.resolveNumber(target);
+            if (resolved.isEmpty()) {
+                return ActionOutcome.failed(appContext.getString(R.string.contact_not_found));
+            }
+            number = resolved.get();
+        }
+
         // Requires the CALL_PHONE runtime permission. Without it, fall back to
         // the dialer (ACTION_DIAL needs no permission) so the order still helps.
         boolean canCall = appContext.checkSelfPermission(android.Manifest.permission.CALL_PHONE)
                 == PackageManager.PERMISSION_GRANTED;
         String action = canCall ? Intent.ACTION_CALL : Intent.ACTION_DIAL;
-        Intent intent = new Intent(action, Uri.parse("tel:" + Uri.encode(target)));
+        Intent intent = new Intent(action, Uri.parse("tel:" + Uri.encode(number)));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
-        return ActionOutcome.ok(appContext.getString(R.string.action_calling, target));
+        return ActionOutcome.ok(appContext.getString(R.string.action_calling, number));
     }
 
-    private ActionOutcome sendMessage(String recipient, String body) {
+    private static boolean isDialable(String target) {
+        return target != null && target.matches("[+0-9 \\-()]+");
+    }
+
+    /**
+     * Routes a message to the requested instant-messaging app. The {@code app}
+     * param ({@code whatsapp}/{@code telegram}/{@code sms}, case-insensitive,
+     * may be null/blank) decides the target so a single SEND_MESSAGE reaches the
+     * right composer directly, instead of opening SMS and then the IM app.
+     */
+    private ActionOutcome sendMessage(String recipient, String body, String app) {
         if (isBlank(recipient)) {
             return ActionOutcome.failed(appContext.getString(R.string.action_message_unknown));
         }
+        String normalized = app == null ? "" : app.toLowerCase(Locale.ROOT).trim();
+        if (normalized.contains("whatsapp")) {
+            return sendWhatsApp(recipient, body);
+        }
+        if (normalized.contains("telegram")) {
+            return sendTelegram(recipient, body);
+        }
+        return sendSms(recipient, body);
+    }
+
+    /**
+     * Opens WhatsApp targeted at the recipient via a wa.me deep link. Dialable
+     * recipients are used as-is; names are resolved against the address book. If
+     * no number is available, falls back to WhatsApp's compose without a target
+     * (still WhatsApp, never SMS).
+     */
+    private ActionOutcome sendWhatsApp(String recipient, String body) {
+        String number = isDialable(recipient)
+                ? recipient
+                : contactResolver.resolveNumber(recipient).orElse(null);
+        Uri uri = isBlank(number)
+                ? Uri.parse("https://wa.me/?text=" + Uri.encode(body == null ? "" : body))
+                : Uri.parse("https://wa.me/" + digitsOnly(number)
+                        + "?text=" + Uri.encode(body == null ? "" : body));
+        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        appContext.startActivity(intent);
+        return ActionOutcome.ok(appContext.getString(R.string.action_message_preparing, recipient));
+    }
+
+    /**
+     * Opens Telegram for the message. Telegram has no reliable public deep link to
+     * target a chat by phone number, so we don't pretend to: a @username opens that
+     * user directly via {@code tg://resolve} (Telegram can't attach text there), and
+     * anything else opens Telegram's share-to-chat picker with the body prefilled so
+     * the user picks the chat. The outcome message stays honest about this.
+     */
+    private ActionOutcome sendTelegram(String recipient, String body) {
+        Uri uri;
+        String handle = telegramHandle(recipient);
+        if (handle != null) {
+            uri = Uri.parse("tg://resolve?domain=" + handle);
+        } else {
+            uri = Uri.parse("https://t.me/share/url?url=&text="
+                    + Uri.encode(body == null ? "" : body));
+        }
+        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        appContext.startActivity(intent);
+        return ActionOutcome.ok(appContext.getString(R.string.action_telegram_opening));
+    }
+
+    /**
+     * Returns a bare Telegram username (no leading {@code @}) when {@code recipient}
+     * looks like a handle and is not a dialable number, else null.
+     */
+    private static String telegramHandle(String recipient) {
+        if (isBlank(recipient) || isDialable(recipient)) {
+            return null;
+        }
+        String trimmed = recipient.trim();
+        if (trimmed.matches("@?[A-Za-z0-9_]{5,}")) {
+            return trimmed.startsWith("@") ? trimmed.substring(1) : trimmed;
+        }
+        return null;
+    }
+
+    private ActionOutcome sendSms(String recipient, String body) {
         // Open the SMS composer pre-filled (ACTION_SENDTO needs no permission;
         // the user taps send). SmsManager could send silently but needs SEND_SMS.
         Intent intent = new Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + Uri.encode(recipient)));
@@ -141,18 +240,30 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         return ActionOutcome.ok(appContext.getString(R.string.action_message_preparing, recipient));
     }
 
+    private static String digitsOnly(String s) {
+        return s == null ? "" : s.replaceAll("[^0-9]", "");
+    }
+
     private ActionOutcome setAlarm(String time, String label) {
-        if (isBlank(time) || !time.contains(":")) {
+        if (isBlank(time)) {
             return ActionOutcome.failed(appContext.getString(R.string.action_alarm_unknown));
         }
-        String[] parts = time.trim().split(":");
+        // Validate explicitly so non-numeric LLM input ("noon") returns a clear,
+        // specific failure instead of an Integer.parseInt NumberFormatException
+        // surfaced as the generic action_failed. The regex also enforces the
+        // colon, so a missing-colon string is rejected here too.
+        String trimmedTime = time.trim();
+        if (!trimmedTime.matches("\\d{1,2}:\\d{2}")) {
+            return ActionOutcome.failed(appContext.getString(R.string.action_alarm_invalid_time));
+        }
+        String[] parts = trimmedTime.split(":");
         int hour = Integer.parseInt(parts[0].trim());
         int minute = Integer.parseInt(parts[1].trim());
 
-        Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM)
-                .putExtra(AlarmClock.EXTRA_HOUR, hour)
-                .putExtra(AlarmClock.EXTRA_MINUTES, minute)
-                .putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+        Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM);
+        intent.putExtra(AlarmClock.EXTRA_HOUR, hour);
+        intent.putExtra(AlarmClock.EXTRA_MINUTES, minute);
+        intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
         if (!isBlank(label)) {
             intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
         }
@@ -165,13 +276,20 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         if (isBlank(durationSeconds)) {
             return ActionOutcome.failed(appContext.getString(R.string.action_timer_unknown));
         }
+        // Validate explicitly so non-numeric LLM input ("five") returns a clear,
+        // specific failure instead of a Double.parseDouble NumberFormatException
+        // surfaced as the generic action_failed.
+        if (!isPositiveNumber(durationSeconds.trim())) {
+            return ActionOutcome.failed(
+                    appContext.getString(R.string.action_timer_invalid_duration));
+        }
         int seconds = (int) Math.round(Double.parseDouble(durationSeconds.trim()));
         if (seconds <= 0) {
             return ActionOutcome.failed(appContext.getString(R.string.action_timer_invalid));
         }
-        Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER)
-                .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
-                .putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+        Intent intent = new Intent(AlarmClock.ACTION_SET_TIMER);
+        intent.putExtra(AlarmClock.EXTRA_LENGTH, seconds);
+        intent.putExtra(AlarmClock.EXTRA_SKIP_UI, true);
         if (!isBlank(label)) {
             intent.putExtra(AlarmClock.EXTRA_MESSAGE, label);
         }
@@ -319,5 +437,14 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
 
     private static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
+    }
+
+    /** True when {@code s} parses as a strictly positive decimal number. */
+    private static boolean isPositiveNumber(String s) {
+        try {
+            return Double.parseDouble(s) > 0d;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 }
