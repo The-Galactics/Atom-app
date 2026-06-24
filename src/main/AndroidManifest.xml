@@ -1,34 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ============================================================= -->
+    <!-- Permissions                                                   -->
+    <!-- ============================================================= -->
 
-    <!-- Overlay / "super position": draw the assistant UI on top of other apps. -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Network -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Foreground services (wake-word listener, floating bubble). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
+    <!-- Always-on wake word ("Hey Atom") runs as a microphone foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Floating bubble overlay runs as a "special use" foreground service. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Action catalog permissions. MAKE_CALL: ACTION_CALL needs CALL_PHONE
-         (falls back to the dialer when not granted). TOGGLE_SETTING/do_not_disturb
-         needs notification-policy access. Flashlight (CameraManager.setTorchMode)
-         needs no permission. SET_ALARM/SET_TIMER use AlarmClock intents (no perm).
-         SEND_MESSAGE opens the SMS composer via ACTION_SENDTO (no perm). -->
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
-
+    <!-- Audio / microphone -->
     <!-- Speech-to-text: capture microphone audio for voice orders. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Always-on wake word ("Hey Atom") runs as a microphone foreground service. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Telephony / contacts (action catalog).
+         MAKE_CALL: ACTION_CALL needs CALL_PHONE (falls back to the dialer when
+         not granted). TOGGLE_SETTING/do_not_disturb needs notification-policy
+         access. Flashlight (CameraManager.setTorchMode) needs no permission.
+         SET_ALARM/SET_TIMER use AlarmClock intents (no perm). SEND_MESSAGE opens
+         the SMS composer via ACTION_SENDTO (no perm). -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
-    <!-- OPEN_APP must see other apps' launch intents under package visibility
-         (Android 11+). We only need to resolve launchable activities. -->
+    <!-- Notifications / system UI -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Overlay / "super position": draw the assistant UI on top of other apps. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- ============================================================= -->
+    <!-- Package visibility (Android 11+)                              -->
+    <!-- ============================================================= -->
+
+    <!-- OPEN_APP must see other apps' launch intents under package visibility.
+         We only need to resolve launchable activities. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
@@ -36,8 +47,8 @@
         </intent>
     </queries>
 
-    <!-- Speech: TTS engine and the speech-recognition service must be visible
-         under package visibility (Android 11+). -->
+    <!-- Speech: the TTS engine and the speech-recognition service must be
+         visible under package visibility. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
@@ -56,6 +67,12 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.AtomApp">
+
+        <!-- ========================================================= -->
+        <!-- Activities                                                -->
+        <!-- ========================================================= -->
+
+        <!-- Launcher entry point. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -73,6 +90,10 @@
 
         <!-- First-run onboarding (name + assistant name + permissions intro). -->
         <activity android:name=".OnboardingActivity" />
+
+        <!-- ========================================================= -->
+        <!-- Services                                                  -->
+        <!-- ========================================================= -->
 
         <!-- Accessibility service: enabled by the user from system Settings. -->
         <service
