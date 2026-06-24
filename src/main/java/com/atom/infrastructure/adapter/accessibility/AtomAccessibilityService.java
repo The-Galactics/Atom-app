@@ -15,6 +15,7 @@ import android.view.accessibility.AccessibilityWindowInfo;
 import androidx.annotation.Nullable;
 
 import com.atom.app.R;
+import com.atom.domain.utils.TextNormalizer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -264,13 +265,25 @@ public class AtomAccessibilityService extends AccessibilityService {
      * the node itself (last resort: its parent).
      */
     private boolean tapInRoot(AccessibilityNodeInfo root, String needle) {
-        AccessibilityNodeInfo match = findByTextOrDesc(root, needle.toLowerCase(Locale.ROOT));
+        AccessibilityNodeInfo match = findByTextOrDesc(root, TextNormalizer.fold(needle));
         if (match == null) {
             return false;
         }
         AccessibilityNodeInfo clickable = firstClickable(match);
         try {
-            AccessibilityNodeInfo target = clickable != null ? clickable : match;
+            // Prefer the interactive wrapper when it geometrically contains the text
+            // node (icon/row overlapping the label) — gives the real hit target instead
+            // of a blind center coordinate. Otherwise fall back to the match itself.
+            AccessibilityNodeInfo target = match;
+            if (clickable != null && clickable != match) {
+                Rect textBounds = new Rect();
+                Rect wrapBounds = new Rect();
+                match.getBoundsInScreen(textBounds);
+                clickable.getBoundsInScreen(wrapBounds);
+                target = wrapBounds.contains(textBounds) ? clickable : match;
+            } else if (clickable != null) {
+                target = clickable;
+            }
             boolean done = target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
             if (!done && clickable == null) {
                 // Last resort: try the parent of an unclickable match.
@@ -312,7 +325,14 @@ public class AtomAccessibilityService extends AccessibilityService {
     /** Match quality ranks; lower is better. */
     private static final int RANK_EXACT = 0;
     private static final int RANK_PREFIX = 1;
-    private static final int RANK_SUBSTRING = 2;
+    // A whole-word (token) match ranks below prefix but above a bare substring,
+    // so a short needle like "ana" matches the token "ana" but not "susana".
+    private static final int RANK_WORD = 2;
+    private static final int RANK_SUBSTRING = 3;
+
+    // Bare (non-word) substring matches are only allowed for needles this long,
+    // so short needles can't sub-word-match a longer label ("ana"/"susana").
+    private static final int MIN_SUBSTRING_NEEDLE = 4;
 
     /** A candidate node with its match quality, so the DFS can keep the best. */
     private static final class Match {
@@ -427,12 +447,24 @@ public class AtomAccessibilityService extends AccessibilityService {
         return false;
     }
 
-    /** Exact/prefix/substring rank for one CharSequence, or -1 when no match. */
+    /**
+     * Exact/prefix/word/substring rank for one CharSequence, or -1 when no match.
+     * {@code needleLower} is already folded by the caller; the haystack is folded here.
+     */
     private static int rankOf(@Nullable CharSequence text, String needleLower) {
         if (text == null) {
             return -1;
         }
-        String hay = text.toString().trim().toLowerCase(Locale.ROOT);
+        return rankFolded(TextNormalizer.fold(text.toString()), needleLower);
+    }
+
+    /**
+     * Ranks an already-folded haystack against an already-folded needle. Exact &gt;
+     * prefix &gt; whole-word token &gt; bare substring. A bare substring only counts
+     * when the needle is at least {@link #MIN_SUBSTRING_NEEDLE} chars, so a short
+     * needle ("ana") can't sub-word-match a longer label ("susana").
+     */
+    private static int rankFolded(String hay, String needleLower) {
         if (hay.isEmpty()) {
             return -1;
         }
@@ -442,7 +474,24 @@ public class AtomAccessibilityService extends AccessibilityService {
         if (hay.startsWith(needleLower)) {
             return RANK_PREFIX;
         }
-        return hay.contains(needleLower) ? RANK_SUBSTRING : -1;
+        for (String token : hay.split("[^\\p{Alnum}]+")) {
+            if (token.equals(needleLower)) {
+                return RANK_WORD;
+            }
+        }
+        if (needleLower.length() >= MIN_SUBSTRING_NEEDLE && hay.contains(needleLower)) {
+            return RANK_SUBSTRING;
+        }
+        return -1;
+    }
+
+    /**
+     * Package-private JVM test entry point: folds both operands (as the caller +
+     * {@link #rankOf} do at runtime) and runs the same ranking logic, so the tier
+     * ordering and length guard are unit-testable without an Android runtime.
+     */
+    static int rankFor(String hayRaw, String needleRaw) {
+        return rankFolded(TextNormalizer.fold(hayRaw), TextNormalizer.fold(needleRaw));
     }
 
     // --- text entry ---------------------------------------------------------
@@ -495,22 +544,53 @@ public class AtomAccessibilityService extends AccessibilityService {
     /** Focused input if it is editable, else the first editable node in the window. */
     @Nullable
     private AccessibilityNodeInfo resolveEditable() {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) {
-            return null;
-        }
-        try {
-            AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-            if (focused != null) {
-                if (focused.isEditable()) {
-                    return focused;
+        // 1. Active/foreground window first (current behavior).
+        AccessibilityNodeInfo active = getRootInActiveWindow();
+        if (active != null) {
+            try {
+                AccessibilityNodeInfo target = editableInRoot(active);
+                if (target != null) {
+                    return target;
                 }
-                focused.recycle();
+            } finally {
+                active.recycle();
             }
-            return findEditable(root);
-        } finally {
-            root.recycle();
         }
+        // 2. Fall back to every window (mirrors tapByText): when typing into a
+        //    search box (e.g. Google), the active window is the IME/suggestions
+        //    popup while the editable field lives in another window.
+        List<AccessibilityWindowInfo> windows = getWindows();
+        if (windows != null) {
+            for (AccessibilityWindowInfo window : windows) {
+                AccessibilityNodeInfo root = window.getRoot();
+                if (root == null) {
+                    continue;
+                }
+                try {
+                    AccessibilityNodeInfo target = editableInRoot(root);
+                    if (target != null) {
+                        return target;
+                    }
+                } finally {
+                    root.recycle();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Focused input if it is editable, else the first editable node within one
+     *  root. Returns a caller-owned node, or null. */
+    @Nullable
+    private AccessibilityNodeInfo editableInRoot(AccessibilityNodeInfo root) {
+        AccessibilityNodeInfo focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (focused != null) {
+            if (focused.isEditable()) {
+                return focused;
+            }
+            focused.recycle();
+        }
+        return findEditable(root);
     }
 
     /** DFS for the first editable node; returned node is owned by the caller. */
@@ -541,21 +621,31 @@ public class AtomAccessibilityService extends AccessibilityService {
      * search/submit button. Returns true only when a submit actually fired.
      */
     private boolean submit(AccessibilityNodeInfo field) {
+        // 1. Preferred: IME enter/search action (API 30+).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (field.performAction(
                     AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId())) {
+                Log.i(TAG, "submit via ACTION_IME_ENTER");
                 return true;
             }
         }
-        // Fallback (API 26-29, no ACTION_IME_ENTER): tap a localized search/submit button.
+        // 2. Apps with non-standard IME hooks (e.g. TikTok) often fire their editor
+        //    action on a click of the focused field itself. Accessibility-only; no
+        //    hardware KeyEvent injection is possible without INJECT_EVENTS/root.
+        if (field.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            Log.i(TAG, "submit via field ACTION_CLICK fallback");
+            return true;
+        }
+        // 3. Fallback (also covers API 26-29): tap a localized search/submit button.
         String[] labels = getResources().getStringArray(R.array.search_submit_labels);
         for (String label : labels) {
             if (tapByText(label)) {
+                Log.i(TAG, "submit via localized button \"" + label + "\"");
                 return true;
             }
         }
         // Nothing submitted: text set but search not sent. Log loudly so it isn't mistaken for success.
-        Log.w(TAG, "submit failed: text typed but NOT submitted (no IME action and "
+        Log.w(TAG, "submit failed: text typed but NOT submitted (no IME action, no field click, "
                 + "no fallback button matched " + java.util.Arrays.toString(labels) + ")");
         return false;
     }
@@ -570,14 +660,14 @@ public class AtomAccessibilityService extends AccessibilityService {
 
     // --- helpers ------------------------------------------------------------
 
-    /** Depth-first search for the first scrollable node. */
+    /** Depth-first search for the first scrollable node; returned node is owned by the caller. */
     @Nullable
     private AccessibilityNodeInfo findScrollable(@Nullable AccessibilityNodeInfo node) {
         if (node == null) {
             return null;
         }
         if (node.isScrollable()) {
-            return node;
+            return AccessibilityNodeInfo.obtain(node);
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
@@ -585,13 +675,10 @@ public class AtomAccessibilityService extends AccessibilityService {
                 continue;
             }
             AccessibilityNodeInfo found = findScrollable(child);
+            child.recycle();
             if (found != null) {
-                if (found != child) {
-                    child.recycle();
-                }
                 return found;
             }
-            child.recycle();
         }
         return null;
     }
