@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -36,5 +37,15 @@ class PermissionCoordinatorTest {
         assertThat(PermissionCoordinator.requiresAccessibility(action(ActionType.MAKE_CALL))).isFalse();
         assertThat(PermissionCoordinator.requiresAccessibility(action(ActionType.NONE))).isFalse();
         assertThat(PermissionCoordinator.requiresAccessibility(null)).isFalse();
+    }
+
+    @Test
+    void makeCall_requiresCallPhoneAndReadContacts() {
+        ResolvedAction action = new ResolvedAction(
+                ActionType.MAKE_CALL, Map.of("target", "Mom"), "", 1.0f, false);
+        String[] perms = PermissionCoordinator.requiredPermissions(action);
+        assertThat(perms).containsExactlyInAnyOrder(
+                android.Manifest.permission.CALL_PHONE,
+                android.Manifest.permission.READ_CONTACTS);
     }
 }

@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.provider.Settings;
 import android.text.TextUtils;
 
+import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 
@@ -27,6 +28,22 @@ public final class PermissionCoordinator {
             case MAKE_CALL -> Manifest.permission.CALL_PHONE;
             default -> null;
         };
+    }
+
+    /**
+     * All dangerous runtime permissions an action needs before it runs. MAKE_CALL
+     * also reads contacts to resolve a spoken name to a number, so it requests
+     * both up front.
+     */
+    public static String[] requiredPermissions(ResolvedAction action) {
+        if (action != null && action.type() == ActionType.MAKE_CALL) {
+            return new String[] {
+                    Manifest.permission.CALL_PHONE,
+                    Manifest.permission.READ_CONTACTS
+            };
+        }
+        String single = requiredPermission(action);
+        return single == null ? new String[0] : new String[] { single };
     }
 
     /**

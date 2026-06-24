@@ -160,6 +160,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
+    // Requested once on startup so calls can place directly and resolve names from
+    // contacts; the per-action permission gate still enforces before each call.
+    private final ActivityResultLauncher<String[]> startupPermissionLauncher =
+            registerForActivityResult(
+                    new ActivityResultContracts.RequestMultiplePermissions(), results -> { });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -210,6 +216,8 @@ public class MainActivity extends AppCompatActivity {
 
         setupObservers();
         setupInputBar();
+
+        requestCallPermissionsIfNeeded();
 
         btnMic.setOnClickListener(v -> onMicTapped());
 
@@ -738,6 +746,27 @@ public class MainActivity extends AppCompatActivity {
         }
         if (coreGlow != null) {
             coreGlow.animate().alpha(glowAlpha).setDuration(CORE_GLOW_ANIM_MS).start();
+        }
+    }
+
+    /**
+     * Requests CALL_PHONE and READ_CONTACTS together on startup so a "call Mom"
+     * order can place the call and resolve the name without a mid-action prompt.
+     */
+    private void requestCallPermissionsIfNeeded() {
+        String[] callPerms = {
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.READ_CONTACTS
+        };
+        boolean needsAny = false;
+        for (String p : callPerms) {
+            if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) {
+                needsAny = true;
+                break;
+            }
+        }
+        if (needsAny) {
+            startupPermissionLauncher.launch(callPerms);
         }
     }
 
