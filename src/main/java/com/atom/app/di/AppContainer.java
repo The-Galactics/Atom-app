@@ -16,6 +16,7 @@ import com.atom.application.port.in.security.InputValidationPort;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.application.port.out.ExternalInteractionPortOut;
+import com.atom.application.port.out.PhoneNumberNormalizerPortOut;
 import com.atom.application.port.out.security.DeviceInspectorPort;
 import com.atom.application.port.out.security.TokenStore;
 import com.atom.application.usecase.ExternalCommandUseCase;
@@ -32,6 +33,7 @@ import com.atom.infrastructure.adapter.grpc.InteractionGrpcAdapter;
 import com.atom.infrastructure.adapter.out.device.ContactsContractResolver;
 import com.atom.infrastructure.adapter.out.device.DeviceInspectorAdapter;
 import com.atom.infrastructure.adapter.out.security.EncryptedTokenStore;
+import com.atom.infrastructure.adapter.out.device.TelephonyE164Normalizer;
 
 public class AppContainer {
 
@@ -111,7 +113,11 @@ public class AppContainer {
         // On-device action executor (out-port). Needs an Android context.
         // Resolves spoken contact names to numbers via the address book.
         ContactResolverPortOut contactResolver = new ContactsContractResolver(context);
-        this.actionExecutorPortOut = new AndroidActionExecutor(context, contactResolver);
+        // Upgrades local numbers to E.164 (region inferred from the device) so the
+        // WhatsApp deep link lands on the chat instead of WhatsApp's home screen.
+        PhoneNumberNormalizerPortOut phoneNumberNormalizer = new TelephonyE164Normalizer(context);
+        this.actionExecutorPortOut =
+                new AndroidActionExecutor(context, contactResolver, phoneNumberNormalizer);
 
         // External interaction use-cases (chat streaming + command execution).
         this.externalMessageUseCase = new ExternalMessageUseCase(externalInteractionPortOut);
