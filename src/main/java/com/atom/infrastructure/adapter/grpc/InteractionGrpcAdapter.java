@@ -1,5 +1,6 @@
 package com.atom.infrastructure.adapter.grpc;
 
+import com.atom.app.BuildConfig;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
