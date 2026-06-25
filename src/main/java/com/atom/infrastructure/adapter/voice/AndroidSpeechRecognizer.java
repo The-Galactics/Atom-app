@@ -7,6 +7,8 @@ import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 
+import com.atom.app.settings.AtomPreferences;
+
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -58,10 +60,30 @@ public class AndroidSpeechRecognizer implements RecognitionListener {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        // EXTRA_LANGUAGE must be a BCP-47 String tag (e.g. "es"); passing a Locale
+        // object is silently ignored and the service falls back to its default
+        // (en-US), mis-transcribing the user's speech. Follow the app's own
+        // language setting — the source of truth — not the device locale.
+        String languageTag = resolveLanguageTag();
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageTag);
         // Ask for live partial hypotheses so the UI can show speech as it lands.
         intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
         return intent;
+    }
+
+    /**
+     * Recognition language from the app's language preference (the same setting
+     * shown in Settings). "system" follows the device locale; otherwise the
+     * chosen tag ("en"/"es") wins — so a Spanish-set app transcribes Spanish
+     * even on an English phone.
+     */
+    private String resolveLanguageTag() {
+        String preference = new AtomPreferences(appContext).getLanguage();
+        if (preference == null || AtomPreferences.LANGUAGE_SYSTEM.equals(preference)) {
+            return Locale.getDefault().toLanguageTag();
+        }
+        return preference;
     }
 
     public void destroy() {

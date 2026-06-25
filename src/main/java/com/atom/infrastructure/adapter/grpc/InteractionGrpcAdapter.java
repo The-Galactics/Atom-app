@@ -1,12 +1,12 @@
 package com.atom.infrastructure.adapter.grpc;
 
+import com.atom.app.BuildConfig;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 import com.google.protobuf.ByteString;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import io.grpc.Channel;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -21,28 +21,15 @@ import java.util.stream.StreamSupport;
 
 public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
-    private final String host;
-    private final int port;
-
-    private ManagedChannel channel;
+    private final Channel channel;
     private AtomAgentServiceGrpc.AtomAgentServiceBlockingStub blockingStub;
 
-    public InteractionGrpcAdapter(String host, int port){
-
-        this.host = host;
-        this.port = port;
-
+    public InteractionGrpcAdapter(Channel authedChannel) {
+        this.channel = authedChannel;
     }
 
-    public void init(){
-
-        this.channel = ManagedChannelBuilder.forAddress(host, port)
-                .usePlaintext()
-                .build();
-
+    public void init() {
         this.blockingStub = AtomAgentServiceGrpc.newBlockingStub(channel);
-        System.out.println("gRPC open to connect with python");
-
     }
 
     @Override
@@ -180,13 +167,8 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
     }
 
-    public void shutdown () {
-
-        if (channel != null && !channel.isShutdown()){
-            channel.shutdown();
-            System.out.println("gRPC closed correctly");
-        }
-
+    public void shutdown() {
+        // Channel lifecycle is owned by GrpcChannelProvider.
     }
 
 }
