@@ -7,9 +7,9 @@
     NetworkSecurityPolicy.
 
     Scoped on purpose: a blanket android:usesCleartextTraffic="true" would disable
-    cleartext protection app-wide. Production traffic goes to atom.crudzaso.com
-    over TLS (nginx terminates TLS and proxies to the backend's gRPC), so the
-    production host is intentionally NOT listed here.
+    cleartext protection app-wide. Cleartext is allowed ONLY for local loopback
+    (emulator/on-device dev). Any REMOTE host (including the VPS) must use TLS — the
+    gRPC client only falls back to usePlaintext() for these loopback hosts.
 
       - 10.0.2.2 : emulator alias to the host machine's localhost.
       - localhost / 127.0.0.1 : on-device loopback / direct runs.

@@ -1,0 +1,20 @@
+package com.atom.application.port.in.security;
+
+import com.atom.domain.security.TokenPair;
+
+/** Driving port for authentication. Implementations persist tokens on success. */
+public interface AuthPortIn {
+
+    TokenPair register(String email, String password, String displayName);
+
+    TokenPair login(String email, String password);
+
+    TokenPair loginWithGoogle(String idToken);
+
+    void logout();
+
+    boolean isAuthenticated();
+
+    /** A non-expired access token, refreshing if needed; {@code null} when re-login is required. */
+    String getValidAccessToken();
+}

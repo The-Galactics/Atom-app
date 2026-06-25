@@ -6,8 +6,7 @@ import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 import com.google.protobuf.ByteString;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import io.grpc.Channel;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -22,35 +21,15 @@ import java.util.stream.StreamSupport;
 
 public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
-    private final String host;
-    private final int port;
-
-    private ManagedChannel channel;
+    private final Channel channel;
     private AtomAgentServiceGrpc.AtomAgentServiceBlockingStub blockingStub;
 
-    public InteractionGrpcAdapter(String host, int port){
-
-        this.host = host;
-        this.port = port;
-
+    public InteractionGrpcAdapter(Channel authedChannel) {
+        this.channel = authedChannel;
     }
 
-    public void init(){
-
-        // TLS in production (nginx terminates TLS on :443 and proxies to the
-        // backend's plaintext gRPC), plaintext for local/dev backends. Driven by
-        // BuildConfig.GRPC_TLS so the emulator (10.0.2.2) keeps working unchanged.
-        ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forAddress(host, port);
-        if (BuildConfig.GRPC_TLS) {
-            builder.useTransportSecurity();
-        } else {
-            builder.usePlaintext();
-        }
-        this.channel = builder.build();
-
+    public void init() {
         this.blockingStub = AtomAgentServiceGrpc.newBlockingStub(channel);
-        System.out.println("gRPC open to connect with python (tls=" + BuildConfig.GRPC_TLS + ")");
-
     }
 
     @Override
@@ -188,13 +167,8 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
     }
 
-    public void shutdown () {
-
-        if (channel != null && !channel.isShutdown()){
-            channel.shutdown();
-            System.out.println("gRPC closed correctly");
-        }
-
+    public void shutdown() {
+        // Channel lifecycle is owned by GrpcChannelProvider.
     }
 
 }
