@@ -87,22 +87,9 @@ class InteractionGrpcAdapterTest {
                 .directExecutor()
                 .build());
 
-        // 4. Instantiate the target adapter with dummy host and port parameters
-        adapter = new InteractionGrpcAdapter("localhost", 50051);
-
-        // Reflection mechanism to inject the in-memory channel and stub instances.
-        // This isolates the test class completely, avoiding loading the heavy Spring Boot context (@SpringBootTest)
-        try {
-            java.lang.reflect.Field channelField = InteractionGrpcAdapter.class.getDeclaredField("channel");
-            channelField.setAccessible(true);
-            channelField.set(adapter, inProcessChannel);
-
-            java.lang.reflect.Field stubField = InteractionGrpcAdapter.class.getDeclaredField("blockingStub");
-            stubField.setAccessible(true);
-            stubField.set(adapter, AtomAgentServiceGrpc.newBlockingStub(inProcessChannel));
-        } catch (Exception e) {
-            fail("Failed to set up infrastructure dependencies for gRPC unit test: " + e.getMessage());
-        }
+        // 4. Instantiate the adapter with the in-process channel (new channel-injected constructor).
+        adapter = new InteractionGrpcAdapter(inProcessChannel);
+        adapter.init();
     }
 
     @AfterEach
