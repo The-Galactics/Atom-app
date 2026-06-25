@@ -20,6 +20,7 @@ import com.atom.application.port.out.security.DeviceInspectorPort;
 import com.atom.application.usecase.ExternalCommandUseCase;
 import com.atom.application.usecase.ExternalMessageUseCase;
 import com.atom.application.usecase.SynthesizeSpeechUseCase;
+import com.atom.application.usecase.security.DeviceSecurityGuard;
 import com.atom.application.usecase.security.DeviceSecurityUseCase;
 import com.atom.application.usecase.security.InputValidationUsecase;
 import com.atom.infrastructure.adapter.action.AndroidActionExecutor;
@@ -39,6 +40,7 @@ public class AppContainer {
     private final ExecuteCommandPortIn externalCommandUseCase;
     private final SynthesizeSpeechPortIn synthesizeSpeechUseCase;
     private final DeviceSecurityPort deviceSecurityUseCase;
+    private final DeviceSecurityGuard deviceSecurityGuard;
     private final InputValidationPort inputValidationUsecase;
 
     // Persistent conversation identity. Stored in SharedPreferences and reused across
@@ -89,6 +91,13 @@ public class AppContainer {
         // Device security use-case <- device inspector adapter.
         this.deviceInspectorPort = new DeviceInspectorAdapter();
         this.deviceSecurityUseCase = new DeviceSecurityUseCase(deviceInspectorPort);
+        // Opaque, fail-closed gate consulted by the protected services before they
+        // grant elevated reach. Evaluate the verdict off the main thread now (the
+        // probes do disk I/O + exec), so the services read a cached result later.
+        this.deviceSecurityGuard = new DeviceSecurityGuard(this.deviceSecurityUseCase);
+        Thread securityEval = new Thread(deviceSecurityGuard::refresh, "atom-security-eval");
+        securityEval.setDaemon(true);
+        securityEval.start();
 
         // Input validation use-case (no out-port dependencies).
         this.inputValidationUsecase = new InputValidationUsecase();
@@ -116,6 +125,10 @@ public class AppContainer {
 
     public DeviceSecurityPort getDeviceSecurityUseCase() {
         return deviceSecurityUseCase;
+    }
+
+    public DeviceSecurityGuard getDeviceSecurityGuard() {
+        return deviceSecurityGuard;
     }
 
     public InputValidationPort getInputValidationUsecase() {
