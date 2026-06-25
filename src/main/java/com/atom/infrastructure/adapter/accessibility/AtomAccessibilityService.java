@@ -14,7 +14,9 @@ import android.view.accessibility.AccessibilityWindowInfo;
 
 import androidx.annotation.Nullable;
 
+import com.atom.app.AtomApp;
 import com.atom.app.R;
+import com.atom.app.security.SecureShutdownCoordinator;
 import com.atom.domain.utils.TextNormalizer;
 
 import java.util.ArrayList;
@@ -74,8 +76,27 @@ public class AtomAccessibilityService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        // Runtime attestation gate. Accessibility is the most powerful grant (it can drive
+        // the autonomous action loop), so refuse it on a compromised device: tear down the
+        // sibling services and self-disable WITHOUT registering as the live instance.
+        if (!isEnvironmentSafe()) {
+            Log.w(TAG, "Unsafe runtime environment; accessibility service self-disabling.");
+            SecureShutdownCoordinator.shutdownProtectedComponents(this);
+            disableSelf();
+            return;
+        }
         instance = this;
         Log.i(TAG, "Atom accessibility service connected.");
+    }
+
+    /** Opaque, fail-closed runtime security verdict (cached, computed off the main thread). */
+    private boolean isEnvironmentSafe() {
+        try {
+            return ((AtomApp) getApplication())
+                    .getAppContainer().getDeviceSecurityGuard().isEnvironmentSafe();
+        } catch (Throwable failClosed) {
+            return false;
+        }
     }
 
     @Override

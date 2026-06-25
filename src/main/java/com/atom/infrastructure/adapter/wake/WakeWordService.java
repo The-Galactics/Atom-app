@@ -18,8 +18,10 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import com.atom.app.AtomApp;
 import com.atom.app.R;
 import com.atom.app.overlay.FloatingBubbleService;
+import com.atom.app.security.SecureShutdownCoordinator;
 import com.atom.app.settings.AtomPreferences;
 
 import org.vosk.Model;
@@ -98,6 +100,16 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
     };
 
+    /** Opaque, fail-closed runtime security verdict (cached, computed off the main thread). */
+    private boolean isEnvironmentSafe() {
+        try {
+            return ((AtomApp) getApplication())
+                    .getAppContainer().getDeviceSecurityGuard().isEnvironmentSafe();
+        } catch (Throwable failClosed) {
+            return false;
+        }
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : ACTION_START;
@@ -114,6 +126,15 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             // Mic FGS not allowed right now (e.g. app not foreground): fulfil the
             // promise typelessly, then stop; it'll start again when eligible.
             startForegroundFallback();
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        // Runtime attestation gate: the wake word holds the microphone, so refuse to
+        // run on a compromised device. FGS promise already fulfilled above.
+        if (!isEnvironmentSafe()) {
+            Log.w(TAG, "Unsafe runtime environment; wake word refused.");
+            SecureShutdownCoordinator.shutdownProtectedComponents(this);
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
