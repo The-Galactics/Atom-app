@@ -234,4 +234,5 @@
     <string name="auth_switch_to_login">¿Ya tienes cuenta? Inicia sesión</string>
     <string name="auth_google_button">Continuar con Google</string>
     <string name="auth_logout">Cerrar sesión</string>
+    <string name="auth_fields_required">Completa todos los campos.</string>
 </resources>

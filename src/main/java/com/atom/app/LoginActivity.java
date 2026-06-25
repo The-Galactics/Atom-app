@@ -71,7 +71,7 @@ public class LoginActivity extends AppCompatActivity {
         String email = emailInput.getText().toString().trim();
         String password = passwordInput.getText().toString();
         if (email.isEmpty() || password.isEmpty()) {
-            errorText.setText(getString(R.string.auth_email_hint));
+            errorText.setText(getString(R.string.auth_fields_required));
             errorText.setVisibility(View.VISIBLE);
             return;
         }
