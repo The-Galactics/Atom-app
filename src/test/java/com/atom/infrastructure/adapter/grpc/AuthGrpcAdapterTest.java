@@ -66,4 +66,36 @@ class AuthGrpcAdapterTest {
 
         assertThat(ex.getReason()).isEqualTo(AuthException.Reason.SESSION_EXPIRED);
     }
+
+    @Test
+    void login_invalidArgument_mapsToInvalidInput() {
+        when(stub.login(LoginRequest.newBuilder().setEmail("u@b.com").setPassword("pw").build()))
+                .thenThrow(new StatusRuntimeException(Status.INVALID_ARGUMENT));
+        AuthException ex = catchThrowableOfType(() -> adapter.login("u@b.com", "pw"), AuthException.class);
+        assertThat(ex.getReason()).isEqualTo(AuthException.Reason.INVALID_INPUT);
+    }
+
+    @Test
+    void login_unavailable_mapsToNetwork() {
+        when(stub.login(LoginRequest.newBuilder().setEmail("u@b.com").setPassword("pw").build()))
+                .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
+        AuthException ex = catchThrowableOfType(() -> adapter.login("u@b.com", "pw"), AuthException.class);
+        assertThat(ex.getReason()).isEqualTo(AuthException.Reason.NETWORK);
+    }
+
+    @Test
+    void login_deadlineExceeded_mapsToNetwork() {
+        when(stub.login(LoginRequest.newBuilder().setEmail("u@b.com").setPassword("pw").build()))
+                .thenThrow(new StatusRuntimeException(Status.DEADLINE_EXCEEDED));
+        AuthException ex = catchThrowableOfType(() -> adapter.login("u@b.com", "pw"), AuthException.class);
+        assertThat(ex.getReason()).isEqualTo(AuthException.Reason.NETWORK);
+    }
+
+    @Test
+    void login_internalError_mapsToUnknown() {
+        when(stub.login(LoginRequest.newBuilder().setEmail("u@b.com").setPassword("pw").build()))
+                .thenThrow(new StatusRuntimeException(Status.INTERNAL));
+        AuthException ex = catchThrowableOfType(() -> adapter.login("u@b.com", "pw"), AuthException.class);
+        assertThat(ex.getReason()).isEqualTo(AuthException.Reason.UNKNOWN);
+    }
 }

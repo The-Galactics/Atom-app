@@ -53,7 +53,7 @@ public class LoginActivity extends AppCompatActivity {
 
         if (!BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()) {
             googleButton.setVisibility(View.VISIBLE);
-            com.atom.infrastructure.adapter.out.security.CredentialManagerGoogleSignIn googleSignIn =
+            com.atom.application.port.out.security.GoogleSignInPortOut googleSignIn =
                     new com.atom.infrastructure.adapter.out.security.CredentialManagerGoogleSignIn(
                             BuildConfig.GOOGLE_WEB_CLIENT_ID);
             googleButton.setOnClickListener(v -> googleSignIn.requestIdToken(this,
