@@ -20,6 +20,7 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -51,6 +52,8 @@ import com.atom.app.data.ChatMessage;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
 import com.atom.app.permission.PermissionCoordinator;
+import com.atom.app.security.SecureShutdownCoordinator;
+import com.atom.application.usecase.security.DeviceSecurityGuard;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
 import com.atom.app.repository.VoiceRepository;
@@ -197,6 +200,18 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             stopOverlay();
             return START_NOT_STICKY;
         }
+        // Runtime attestation gate. The overlay grants elevated reach (draw-over-apps +
+        // the autonomous action loop), so refuse to come up on a compromised device. The
+        // verdict is opaque: on rejection we tear everything down silently.
+        if (!isEnvironmentSafe()) {
+            Log.w("AtomSecurity", "Unsafe runtime environment; overlay refused.");
+            // Launched via startForegroundService(): honour the foreground contract before
+            // stopping, or the system kills us with ForegroundServiceDidNotStartInTimeException.
+            startForegroundWithNotification();
+            SecureShutdownCoordinator.shutdownProtectedComponents(this);
+            stopOverlay();
+            return START_NOT_STICKY;
+        }
         overlayEnabled = true;
         if (ACTION_SHOW.equals(action)) {
             // Brought back from the notification after a hide.
@@ -216,6 +231,20 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             showBubble();
         }
         return START_STICKY;
+    }
+
+    /**
+     * Consults the opaque, fail-closed security gate (reads the verdict precomputed
+     * off the main thread at app startup). Any failure to obtain a verdict — e.g. the
+     * container is unavailable — is itself treated as unsafe.
+     */
+    private boolean isEnvironmentSafe() {
+        try {
+            DeviceSecurityGuard guard = app.getAppContainer().getDeviceSecurityGuard();
+            return guard.isEnvironmentSafe();
+        } catch (Throwable failClosed) {
+            return false;
+        }
     }
 
     @Override
