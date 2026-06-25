@@ -61,12 +61,16 @@ android {
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         }
         debug {
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         }
     }
     compileOptions {
@@ -137,6 +141,11 @@ dependencies {
     testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+
+    // Credential Manager + Google Identity Services (Google Sign-In, gated by GOOGLE_WEB_CLIENT_ID).
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // Wake word — Vosk on-device keyword spotting (any typed name, no model file).
     implementation("com.alphacephei:vosk-android:0.3.47")

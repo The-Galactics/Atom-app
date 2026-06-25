@@ -51,6 +51,29 @@ public class LoginActivity extends AppCompatActivity {
         primaryButton.setOnClickListener(v -> submit());
         toggleModeButton.setOnClickListener(v -> toggleMode());
 
+        if (!BuildConfig.GOOGLE_WEB_CLIENT_ID.isEmpty()) {
+            googleButton.setVisibility(View.VISIBLE);
+            com.atom.infrastructure.adapter.out.security.CredentialManagerGoogleSignIn googleSignIn =
+                    new com.atom.infrastructure.adapter.out.security.CredentialManagerGoogleSignIn(
+                            BuildConfig.GOOGLE_WEB_CLIENT_ID);
+            googleButton.setOnClickListener(v -> googleSignIn.requestIdToken(this,
+                    new com.atom.application.port.out.security.GoogleSignInPortOut.Callback() {
+                        @Override
+                        public void onIdToken(String idToken) {
+                            runOnUiThread(() -> viewModel.loginWithGoogle(idToken));
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            runOnUiThread(() -> {
+                                errorText.setText(message);
+                                errorText.setVisibility(View.VISIBLE);
+                            });
+                        }
+                    }));
+        }
+        // else: googleButton stays GONE (layout default) — no client ID configured.
+
         viewModel.state().observe(this, state -> {
             boolean loading = state.getStatus() == AuthViewModel.Status.LOADING;
             progress.setVisibility(loading ? View.VISIBLE : View.GONE);
