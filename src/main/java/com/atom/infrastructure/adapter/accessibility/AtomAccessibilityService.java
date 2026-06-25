@@ -377,17 +377,21 @@ public class AtomAccessibilityService extends AccessibilityService {
         if (node == null || isOwnOverlay(node)) {
             return current;
         }
-        int rank = rankOf(node.getText(), needleLower);
-        if (rank < 0) {
-            rank = rankOf(node.getContentDescription(), needleLower);
-        }
-        if (rank >= 0 && (current == null || rank < current.rank)) {
-            if (current != null) {
-                current.node.recycle();
+        // Guard candidate selection only: a structural profile image (avatar) is never
+        // chosen as a match, but we still recurse into its children below.
+        if (!isStructuralImage(node)) {
+            int rank = rankOf(node.getText(), needleLower);
+            if (rank < 0) {
+                rank = rankOf(node.getContentDescription(), needleLower);
             }
-            current = new Match(AccessibilityNodeInfo.obtain(node), rank);
-            if (rank == RANK_EXACT) {
-                return current; // can't do better; stop early
+            if (rank >= 0 && (current == null || rank < current.rank)) {
+                if (current != null) {
+                    current.node.recycle();
+                }
+                current = new Match(AccessibilityNodeInfo.obtain(node), rank);
+                if (rank == RANK_EXACT) {
+                    return current; // can't do better; stop early
+                }
             }
         }
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -513,6 +517,38 @@ public class AtomAccessibilityService extends AccessibilityService {
      */
     static int rankFor(String hayRaw, String needleRaw) {
         return rankFolded(TextNormalizer.fold(hayRaw), TextNormalizer.fold(needleRaw));
+    }
+
+    // Folded (lowercase, accent-stripped) markers that label a node as a contact's
+    // profile photo/avatar rather than the chat row itself. WhatsApp's avatar is an
+    // ImageView whose contentDescription is e.g. "Foto de perfil de María"; without
+    // this skip the name DFS matches the avatar and opens the photo, not the chat.
+    private static final String[] PROFILE_IMAGE_MARKERS = {
+            "foto de perfil", "foto del perfil", "imagen de perfil",
+            "avatar", "profile picture", "profile photo",
+    };
+
+    /** True when a folded contentDescription/text names a profile photo/avatar. */
+    static boolean isProfileImageDesc(String raw) {
+        if (raw == null) return false;
+        String folded = TextNormalizer.fold(raw);
+        for (String marker : PROFILE_IMAGE_MARKERS) {
+            if (folded.contains(marker)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * True when a node is a structural profile image (avatar), checked via both its
+     * contentDescription and text. Such a node is never chosen as a match, but the DFS
+     * still recurses into its children. We deliberately do not skip all ImageViews,
+     * since icon buttons ("Ajustes"/"Historial") are tapped via their contentDescription.
+     */
+    private static boolean isStructuralImage(AccessibilityNodeInfo node) {
+        CharSequence desc = node.getContentDescription();
+        if (desc != null && isProfileImageDesc(desc.toString())) return true;
+        CharSequence text = node.getText();
+        return text != null && isProfileImageDesc(text.toString());
     }
 
     // --- text entry ---------------------------------------------------------
