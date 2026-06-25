@@ -132,6 +132,7 @@ dependencies {
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
     testImplementation("org.assertj:assertj-core:3.27.3")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("io.grpc:grpc-testing:1.62.2")
     testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

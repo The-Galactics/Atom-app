@@ -222,4 +222,16 @@
     <string name="mic_permission_open_settings">Open settings</string>
     <string name="stt_unavailable">Speech recognition is not available on this device</string>
     <string name="stt_error">Sorry, I didn\'t catch that</string>
+
+    <!-- Auth / login screen -->
+    <string name="auth_login_title">Iniciar sesión</string>
+    <string name="auth_register_title">Crear cuenta</string>
+    <string name="auth_email_hint">Email</string>
+    <string name="auth_password_hint">Contraseña</string>
+    <string name="auth_login_button">Entrar</string>
+    <string name="auth_register_button">Registrarme</string>
+    <string name="auth_switch_to_register">¿No tienes cuenta? Regístrate</string>
+    <string name="auth_switch_to_login">¿Ya tienes cuenta? Inicia sesión</string>
+    <string name="auth_google_button">Continuar con Google</string>
+    <string name="auth_logout">Cerrar sesión</string>
 </resources>
