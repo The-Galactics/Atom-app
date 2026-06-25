@@ -10,7 +10,6 @@ build/
 
 # Android Specific
 local.properties
-keystore.properties
 /src/main/assets/google-services.json
 /src/main/res/xml/google_services.xml
 *.jks
@@ -35,3 +34,4 @@ src/debug/
 
 # Local tooling / skill docs (not part of the app)
 docs/superpowers/
+keystore.properties

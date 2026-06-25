@@ -12,6 +12,14 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
+// Release signing config — credentials live in keystore.properties (gitignored),
+// never committed. Absent the file (e.g. CI without secrets), release stays unsigned.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.atom.app"
     compileSdk = 35
@@ -30,21 +38,39 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            buildConfigField("boolean", "GRPC_TLS", grpcTls)
         }
         debug {
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            buildConfigField("boolean", "GRPC_TLS", grpcTls)
         }
     }
     compileOptions {
