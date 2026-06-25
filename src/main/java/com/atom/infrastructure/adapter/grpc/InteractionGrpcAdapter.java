@@ -1,5 +1,6 @@
 package com.atom.infrastructure.adapter.grpc;
 
+import com.atom.app.BuildConfig;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.application.port.out.security.TokenStore;
 import com.atom.domain.action.ActionType;
@@ -37,11 +38,12 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
     public void init(){
         ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forAddress(host, port);
-        if (isLoopbackHost(host)) {
+        if (BuildConfig.DEBUG && isLoopbackHost(host)) {
             // Dev only: plaintext to the local/emulator backend (see network_security_config).
             builder.usePlaintext();
         }
-        // Any remote host uses TLS (the default); the app never sends plaintext off-device.
+        // Release builds and all remote hosts use TLS (the default); the app never
+        // sends plaintext off-device.
         this.channel = builder
                 .intercept(new BearerTokenClientInterceptor(tokenStore::getAccessToken))
                 .build();
