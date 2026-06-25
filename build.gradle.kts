@@ -25,11 +25,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.atom.app"
+        applicationId = "ai.atom"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -59,6 +59,7 @@ android {
 
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
             val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
@@ -67,6 +68,7 @@ android {
         debug {
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
             val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
