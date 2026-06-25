@@ -56,6 +56,7 @@
     <string name="settings_your_name_hint">Enter your name</string>
     <string name="settings_assistant_name_hint">Atom</string>
 
+    <string name="settings_account">Account</string>
     <string name="settings_membership">Membership</string>
     <string name="settings_plan_free">Free</string>
     <string name="settings_plan_free_desc">Basic features</string>

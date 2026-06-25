@@ -170,6 +170,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Auth gate: redirect to LoginActivity if the user is not authenticated.
+        // This runs before any UI inflation so an unauthenticated user never sees
+        // a flash of the home screen.
+        AppContainer authContainer = ((AtomApp) getApplication()).getAppContainer();
+        if (!authContainer.getAuthUseCase().isAuthenticated()) {
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+
         // First-run routing: if onboarding hasn't been completed, hand off to it
         // before inflating the main UI so the user never sees a flash of the home
         // screen. We finish() immediately so back from onboarding leaves the app.
