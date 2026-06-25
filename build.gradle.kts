@@ -62,7 +62,8 @@ android {
             val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
-            buildConfigField("boolean", "GRPC_TLS", grpcTls)
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         }
         debug {
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
@@ -70,7 +71,8 @@ android {
             val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
-            buildConfigField("boolean", "GRPC_TLS", grpcTls)
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         }
     }
     compileOptions {
@@ -127,16 +129,25 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     annotationProcessor("androidx.room:room-compiler:2.6.1")
 
+    // Encrypted storage for the session tokens (HU-27): EncryptedSharedPreferences.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
     testImplementation("org.assertj:assertj-core:3.27.3")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("io.grpc:grpc-testing:1.62.2")
     testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+
+    // Credential Manager + Google Identity Services (Google Sign-In, gated by GOOGLE_WEB_CLIENT_ID).
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // Wake word — Vosk on-device keyword spotting (any typed name, no model file).
     implementation("com.alphacephei:vosk-android:0.3.47")

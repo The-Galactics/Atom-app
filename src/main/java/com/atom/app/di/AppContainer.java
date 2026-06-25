@@ -17,6 +17,7 @@ import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.application.port.out.security.DeviceInspectorPort;
+import com.atom.application.port.out.security.TokenStore;
 import com.atom.application.usecase.ExternalCommandUseCase;
 import com.atom.application.usecase.ExternalMessageUseCase;
 import com.atom.application.usecase.SynthesizeSpeechUseCase;
@@ -24,14 +25,20 @@ import com.atom.application.usecase.security.DeviceSecurityGuard;
 import com.atom.application.usecase.security.DeviceSecurityUseCase;
 import com.atom.application.usecase.security.InputValidationUsecase;
 import com.atom.infrastructure.adapter.action.AndroidActionExecutor;
+import com.atom.infrastructure.adapter.grpc.AtomAgentServiceGrpc;
+import com.atom.infrastructure.adapter.grpc.AuthGrpcAdapter;
+import com.atom.infrastructure.adapter.grpc.GrpcChannelProvider;
 import com.atom.infrastructure.adapter.grpc.InteractionGrpcAdapter;
 import com.atom.infrastructure.adapter.out.device.ContactsContractResolver;
 import com.atom.infrastructure.adapter.out.device.DeviceInspectorAdapter;
+import com.atom.infrastructure.adapter.out.security.EncryptedTokenStore;
 
 public class AppContainer {
 
     // Infrastructure adapters (out-ports).
     private final InteractionGrpcAdapter interactionGrpcAdapter;
+    private final TokenStore tokenStore;
+    private final GrpcChannelProvider channelProvider;
     private final DeviceInspectorPort deviceInspectorPort;
     private final ActionExecutorPortOut actionExecutorPortOut;
 
@@ -42,6 +49,7 @@ public class AppContainer {
     private final DeviceSecurityPort deviceSecurityUseCase;
     private final DeviceSecurityGuard deviceSecurityGuard;
     private final InputValidationPort inputValidationUsecase;
+    private final com.atom.application.port.in.security.AuthPortIn authUseCase;
 
     // Persistent conversation identity. Stored in SharedPreferences and reused across
     // app restarts so the backend keeps the same session (and its memory) for this
@@ -70,11 +78,33 @@ public class AppContainer {
         this.sessionUserId = loadOrCreateUuid(sessionPrefs, KEY_USER_ID);
         this.sessionChatId = loadOrCreateUuid(sessionPrefs, KEY_CHAT_ID);
 
-        // gRPC adapter -> external interaction out-port. Host/port from BuildConfig.
-        this.interactionGrpcAdapter = new InteractionGrpcAdapter(
-                BuildConfig.GRPC_HOST,
-                BuildConfig.GRPC_PORT
-        );
+        // Encrypted store for the session tokens (HU-27).
+        this.tokenStore = new EncryptedTokenStore(context);
+
+        // Deferred token supplier: the interceptor is built before AuthUseCase exists,
+        // so it reads through a holder we point at AuthUseCase::getValidAccessToken below.
+        java.util.concurrent.atomic.AtomicReference<java.util.function.Supplier<String>> tokenSupplierHolder =
+                new java.util.concurrent.atomic.AtomicReference<>(() -> null);
+
+        this.channelProvider = new GrpcChannelProvider(
+                BuildConfig.GRPC_HOST, BuildConfig.GRPC_PORT,
+                () -> tokenSupplierHolder.get().get());
+
+        // Auth gateway over the RAW channel (public RPCs, no Bearer -> no refresh recursion).
+        java.util.function.LongSupplier clock = () -> System.currentTimeMillis() / 1000L;
+        com.atom.application.port.out.security.AuthGatewayPortOut authGateway =
+                new AuthGrpcAdapter(
+                        AtomAgentServiceGrpc.newBlockingStub(channelProvider.getRawChannel()),
+                        clock);
+        com.atom.application.usecase.security.AuthUseCase authUseCaseImpl =
+                new com.atom.application.usecase.security.AuthUseCase(authGateway, tokenStore, clock);
+        this.authUseCase = authUseCaseImpl;
+
+        // Now point the interceptor at the live refresh-aware supplier.
+        tokenSupplierHolder.set(authUseCaseImpl::getValidAccessToken);
+
+        // Protected interaction adapter over the AUTHED channel.
+        this.interactionGrpcAdapter = new InteractionGrpcAdapter(channelProvider.getAuthedChannel());
         this.interactionGrpcAdapter.init();
         ExternalInteractionPortOut externalInteractionPortOut = this.interactionGrpcAdapter;
 
@@ -167,8 +197,18 @@ public class AppContainer {
         return sessionChatId;
     }
 
+    /** Secure store for the session tokens; the login flow saves the pair here. */
+    public TokenStore getTokenStore() {
+        return tokenStore;
+    }
+
+    /** Auth use-case: register, login, refresh, logout. */
+    public com.atom.application.port.in.security.AuthPortIn getAuthUseCase() {
+        return authUseCase;
+    }
+
     /** Releases process-scoped resources. Call once on application teardown. */
     public void shutdown() {
-        this.interactionGrpcAdapter.shutdown();
+        this.channelProvider.shutdown();
     }
 }
