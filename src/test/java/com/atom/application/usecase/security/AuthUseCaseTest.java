@@ -91,6 +91,26 @@ class AuthUseCaseTest {
     }
 
     @Test
+    void isAuthenticated_falseWhenNoRefreshToken() {
+        when(store.getRefreshToken()).thenReturn(null);
+        assertThat(useCase.isAuthenticated()).isFalse();
+    }
+
+    @Test
+    void register_success_savesTokenPair() {
+        when(gateway.register("u@b.com", "pw", "Name")).thenReturn(new TokenPair("acc", "ref", 1_900));
+        useCase.register("u@b.com", "pw", "Name");
+        verify(store).save("acc", "ref", 1_900);
+    }
+
+    @Test
+    void loginWithGoogle_success_savesTokenPair() {
+        when(gateway.authenticateWithGoogle("idtok")).thenReturn(new TokenPair("acc", "ref", 1_900));
+        useCase.loginWithGoogle("idtok");
+        verify(store).save("acc", "ref", 1_900);
+    }
+
+    @Test
     void logout_clearsStore() {
         useCase.logout();
         verify(store).clear();
