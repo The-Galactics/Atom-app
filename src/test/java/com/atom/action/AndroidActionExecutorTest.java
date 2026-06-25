@@ -3,17 +3,21 @@ package com.atom.action;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 
 import com.atom.app.R;
 import com.atom.application.port.out.ContactResolverPortOut;
+import com.atom.application.port.out.PhoneNumberNormalizerPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
@@ -36,6 +40,7 @@ import java.util.Optional;
 class AndroidActionExecutorTest {
 
     private Context context;
+    private PhoneNumberNormalizerPortOut normalizer;
     private AndroidActionExecutor executor;
 
     @BeforeEach
@@ -45,7 +50,14 @@ class AndroidActionExecutorTest {
         // The graceful path only formats strings; return a stable marker.
         lenient().when(context.getString(anyInt())).thenReturn("disabled");
         lenient().when(context.getString(anyInt(), any())).thenReturn("disabled");
-        executor = new AndroidActionExecutor(context, mock(ContactResolverPortOut.class));
+        // Default-stub the normalizer as an identity passthrough so a resolved
+        // number flows straight through the WhatsApp fast path. Lenient because
+        // most tests never reach normalization.
+        normalizer = mock(PhoneNumberNormalizerPortOut.class);
+        lenient().when(normalizer.toE164(any()))
+                .thenAnswer(inv -> Optional.ofNullable(inv.getArgument(0)));
+        executor = new AndroidActionExecutor(
+                context, mock(ContactResolverPortOut.class), normalizer);
     }
 
     private static ResolvedAction action(ActionType type, Map<String, String> params) {
@@ -105,7 +117,7 @@ class AndroidActionExecutorTest {
         when(resolver.resolveNumber("Mom")).thenReturn(Optional.of("+15551234567"));
         when(context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS))
                 .thenReturn(PackageManager.PERMISSION_GRANTED);
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.MAKE_CALL, Map.of("target", "Mom"), "", 1.0f, false);
@@ -122,7 +134,7 @@ class AndroidActionExecutorTest {
         when(context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS))
                 .thenReturn(PackageManager.PERMISSION_GRANTED);
         when(context.getString(R.string.contact_not_found)).thenReturn("not found");
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.MAKE_CALL, Map.of("target", "Nobody"), "", 1.0f, false);
@@ -135,7 +147,7 @@ class AndroidActionExecutorTest {
     @Test
     void makeCall_bypassesResolver_whenTargetIsNumeric() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.MAKE_CALL, Map.of("target", "+1 555 123 4567"), "", 1.0f, false);
@@ -148,7 +160,7 @@ class AndroidActionExecutorTest {
     void sendMessage_withWhatsappApp_routesThroughContactResolver_notSms() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
         when(resolver.resolveNumber("Mom")).thenReturn(Optional.of("+15551234567"));
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.SEND_MESSAGE,
@@ -164,7 +176,7 @@ class AndroidActionExecutorTest {
     @Test
     void sendMessage_withSmsApp_doesNotUseResolver() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.SEND_MESSAGE,
@@ -178,7 +190,7 @@ class AndroidActionExecutorTest {
     @Test
     void sendMessage_withWhatsappApp_andDialableRecipient_skipsResolverLookup() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.SEND_MESSAGE,
@@ -196,7 +208,7 @@ class AndroidActionExecutorTest {
     @DisplayName("Telegram with a plain name opens the share flow and succeeds (no number resolution)")
     void sendTelegram_plainName_opensShareFlowAndSucceeds() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         ResolvedAction action = new ResolvedAction(
                 ActionType.SEND_MESSAGE,
@@ -214,7 +226,7 @@ class AndroidActionExecutorTest {
     @DisplayName("Telegram with a null body is null-safe (no NPE) and still succeeds")
     void sendTelegram_nullBody_isNullSafe() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver);
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
 
         // No "body" key -> ResolvedAction.param returns null; the encode must not NPE.
         ResolvedAction action = new ResolvedAction(
@@ -267,6 +279,91 @@ class AndroidActionExecutorTest {
         ActionOutcome outcome = executor.execute(action(
                 ActionType.SET_TIMER, Map.of("duration_seconds", "300")));
 
+        assertThat(outcome.success()).isTrue();
+    }
+
+    // --- WhatsApp: normalize to E.164, else hand off to the search loop -------
+
+    @Test
+    @DisplayName("WhatsApp with an unresolved contact opens WhatsApp's home for a name search")
+    void sendMessage_whatsapp_unresolvedContact_opensHomeForSearchFallback() {
+        ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
+        when(resolver.resolveNumber("Susana")).thenReturn(Optional.empty());
+        // No usable number -> normalization is never reached, but be explicit.
+        when(normalizer.toE164(any())).thenReturn(Optional.empty());
+
+        // The fallback opens WhatsApp via its launch intent; provide one so the
+        // path reaches startActivity and returns success (not a hard failure).
+        PackageManager packageManager = mock(PackageManager.class);
+        when(context.getPackageManager()).thenReturn(packageManager);
+        when(packageManager.getLaunchIntentForPackage("com.whatsapp"))
+                .thenReturn(mock(Intent.class));
+        // Distinct marker for the fallback string so the outcome message proves the
+        // search-fallback branch ran (not the deep-link branch). The lenient setUp
+        // stub collapses every getString to one constant, which would hide it.
+        when(context.getString(eq(R.string.action_whatsapp_search_fallback), any()))
+                .thenReturn("SEARCH_FALLBACK");
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
+
+        ResolvedAction action = new ResolvedAction(
+                ActionType.SEND_MESSAGE,
+                Map.of("recipient", "Susana", "body", "hola", "app", "whatsapp"),
+                "", 1.0f, false);
+        ActionOutcome outcome = executor.execute(action);
+
+        verify(resolver).resolveNumber("Susana");
+        // Branch proof: it opened WhatsApp's home via the launch intent and returned
+        // the fallback message.
+        verify(packageManager).getLaunchIntentForPackage("com.whatsapp");
+        verify(context).startActivity(any(Intent.class));
+        assertThat(outcome.message()).isEqualTo("SEARCH_FALLBACK");
+        assertThat(outcome.success()).isTrue();
+    }
+
+    @Test
+    @DisplayName("WhatsApp with a local number normalizes it to E.164 before deep linking")
+    void sendMessage_whatsapp_localNumber_isNormalizedToE164() {
+        ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
+        when(resolver.resolveNumber("Mom")).thenReturn(Optional.of("3001234567"));
+        when(normalizer.toE164("3001234567")).thenReturn(Optional.of("+573001234567"));
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
+
+        ResolvedAction action = new ResolvedAction(
+                ActionType.SEND_MESSAGE,
+                Map.of("recipient", "Mom", "body", "hola", "app", "whatsapp"),
+                "", 1.0f, false);
+        ActionOutcome outcome = executor.execute(action);
+
+        verify(normalizer).toE164("3001234567");
+        // Branch proof: the deep-link path dispatched an Intent and never reached
+        // the WhatsApp-home fallback (which is the only branch that touches the
+        // PackageManager).
+        verify(context).startActivity(any(Intent.class));
+        verify(context, never()).getPackageManager();
+        assertThat(outcome.success()).isTrue();
+    }
+
+    @Test
+    @DisplayName("WhatsApp with a dialable but un-normalizable number falls back to the home search")
+    void sendMessage_whatsapp_dialableButUnnormalizable_fallsBackToSearch() {
+        ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
+        // Dialable recipient, so the resolver is skipped; but it can't be made into a
+        // valid E.164 number -> must degrade to the home search, not a hard failure.
+        when(normalizer.toE164(any())).thenReturn(Optional.empty());
+        PackageManager packageManager = mock(PackageManager.class);
+        when(context.getPackageManager()).thenReturn(packageManager);
+        when(packageManager.getLaunchIntentForPackage("com.whatsapp"))
+                .thenReturn(mock(Intent.class));
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
+
+        ResolvedAction action = new ResolvedAction(
+                ActionType.SEND_MESSAGE,
+                Map.of("recipient", "+1 555", "body", "hi", "app", "whatsapp"),
+                "", 1.0f, false);
+        ActionOutcome outcome = executor.execute(action);
+
+        verifyNoInteractions(resolver);
+        verify(packageManager).getLaunchIntentForPackage("com.whatsapp");
         assertThat(outcome.success()).isTrue();
     }
 
