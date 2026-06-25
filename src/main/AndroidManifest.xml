@@ -91,6 +91,9 @@
         <!-- First-run onboarding (name + assistant name + permissions intro). -->
         <activity android:name=".OnboardingActivity" />
 
+        <!-- Login / register screen. -->
+        <activity android:name=".LoginActivity" android:exported="false" />
+
         <!-- ========================================================= -->
         <!-- Services                                                  -->
         <!-- ========================================================= -->
