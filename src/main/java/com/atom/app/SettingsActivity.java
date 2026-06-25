@@ -29,6 +29,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.atom.app.di.AppContainer;
 import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
@@ -157,6 +158,17 @@ public class SettingsActivity extends AppCompatActivity {
         setupPermissionDashboard();
         setupWakeWordSection();
         setupLanguageSection();
+
+        // Logout: clear the session tokens and return to the login screen.
+        MaterialButton btnLogout = findViewById(R.id.logoutButton);
+        btnLogout.setOnClickListener(v -> {
+            AppContainer container = ((AtomApp) getApplication()).getAppContainer();
+            container.getAuthUseCase().logout();
+            Intent logoutIntent = new Intent(this, LoginActivity.class);
+            logoutIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(logoutIntent);
+            finish();
+        });
     }
 
     // --- Permission dashboard ------------------------------------------------
