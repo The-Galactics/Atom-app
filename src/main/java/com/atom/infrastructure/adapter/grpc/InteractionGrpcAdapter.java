@@ -1,5 +1,6 @@
 package com.atom.infrastructure.adapter.grpc;
 
+import com.atom.app.BuildConfig;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
@@ -36,12 +37,19 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
     public void init(){
 
-        this.channel = ManagedChannelBuilder.forAddress(host, port)
-                .usePlaintext()
-                .build();
+        // TLS in production (nginx terminates TLS on :443 and proxies to the
+        // backend's plaintext gRPC), plaintext for local/dev backends. Driven by
+        // BuildConfig.GRPC_TLS so the emulator (10.0.2.2) keeps working unchanged.
+        ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forAddress(host, port);
+        if (BuildConfig.GRPC_TLS) {
+            builder.useTransportSecurity();
+        } else {
+            builder.usePlaintext();
+        }
+        this.channel = builder.build();
 
         this.blockingStub = AtomAgentServiceGrpc.newBlockingStub(channel);
-        System.out.println("gRPC open to connect with python");
+        System.out.println("gRPC open to connect with python (tls=" + BuildConfig.GRPC_TLS + ")");
 
     }
 
