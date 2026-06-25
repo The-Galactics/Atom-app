@@ -14,6 +14,7 @@ import android.util.Log;
 import com.atom.app.R;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.application.port.out.ContactResolverPortOut;
+import com.atom.application.port.out.PhoneNumberNormalizerPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
@@ -39,11 +40,15 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
 
     private final Context appContext;
     private final ContactResolverPortOut contactResolver;
+    private final PhoneNumberNormalizerPortOut normalizer;
 
-    public AndroidActionExecutor(Context context, ContactResolverPortOut contactResolver) {
+    public AndroidActionExecutor(Context context,
+                                 ContactResolverPortOut contactResolver,
+                                 PhoneNumberNormalizerPortOut normalizer) {
         // Always hold the application context to avoid leaking an Activity.
         this.appContext = context.getApplicationContext();
         this.contactResolver = contactResolver;
+        this.normalizer = normalizer;
     }
 
     @Override
@@ -172,23 +177,38 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
     }
 
     /**
-     * Opens WhatsApp targeted at the recipient via a wa.me deep link. Dialable
-     * recipients are used as-is; names are resolved against the address book. If
-     * no number is available, falls back to WhatsApp's compose without a target
-     * (still WhatsApp, never SMS).
+     * Opens a wa.me deep link for the recipient (number normalized to E.164 — required
+     * by wa.me). When no normalizable number exists, opens WhatsApp's home screen so
+     * the backend ReAct loop can search the recipient by name on the next turn.
      */
     private ActionOutcome sendWhatsApp(String recipient, String body) {
-        String number = isDialable(recipient)
+        String raw = isDialable(recipient)
                 ? recipient
                 : contactResolver.resolveNumber(recipient).orElse(null);
-        Uri uri = isBlank(number)
-                ? Uri.parse("https://wa.me/?text=" + Uri.encode(body == null ? "" : body))
-                : Uri.parse("https://wa.me/" + digitsOnly(number)
-                        + "?text=" + Uri.encode(body == null ? "" : body));
-        Intent intent = new Intent(Intent.ACTION_VIEW, uri);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        appContext.startActivity(intent);
-        return ActionOutcome.ok(appContext.getString(R.string.action_message_preparing, recipient));
+        String e164 = (raw == null) ? null : normalizer.toE164(raw).orElse(null);
+
+        if (e164 != null) {
+            Uri uri = Uri.parse("https://wa.me/" + digitsOnly(e164)
+                    + "?text=" + Uri.encode(body == null ? "" : body));
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            appContext.startActivity(intent);
+            return ActionOutcome.ok(
+                    appContext.getString(R.string.action_message_preparing, recipient));
+        }
+
+        // No usable number: hand off to the search loop by opening WhatsApp's home
+        // screen. Never a targetless wa.me link, never a hard failure (unless
+        // WhatsApp isn't installed at all).
+        Intent launch = appContext.getPackageManager().getLaunchIntentForPackage("com.whatsapp");
+        if (launch == null) {
+            return ActionOutcome.failed(
+                    appContext.getString(R.string.action_open_app_not_found, "WhatsApp"));
+        }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        appContext.startActivity(launch);
+        return ActionOutcome.ok(
+                appContext.getString(R.string.action_whatsapp_search_fallback, recipient));
     }
 
     /**

@@ -164,6 +164,7 @@
     <string name="contact_not_found">No encontré ese contacto en tu agenda</string>
     <string name="action_message_unknown">No entendí a quién enviar el mensaje.</string>
     <string name="action_message_preparing">Preparando un mensaje para %1$s.</string>
+    <string name="action_whatsapp_search_fallback">Abriendo WhatsApp para buscar a %1$s…</string>
     <string name="action_telegram_opening">Abriendo Telegram para enviar tu mensaje.</string>
     <string name="action_alarm_unknown">No entendí la hora de la alarma.</string>
     <string name="action_alarm_invalid_time">No entendí la hora de la alarma.</string>

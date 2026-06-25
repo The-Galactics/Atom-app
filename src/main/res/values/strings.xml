@@ -165,6 +165,7 @@
     <string name="contact_not_found">I couldn\'t find that contact in your address book.</string>
     <string name="action_message_unknown">I didn\'t understand who to message.</string>
     <string name="action_message_preparing">Preparing a message for %1$s.</string>
+    <string name="action_whatsapp_search_fallback">Opening WhatsApp to search for %1$s…</string>
     <string name="action_telegram_opening">Opening Telegram to send your message.</string>
     <string name="action_alarm_unknown">I didn\'t understand the alarm time.</string>
     <string name="action_alarm_invalid_time">I didn\'t understand the alarm time.</string>

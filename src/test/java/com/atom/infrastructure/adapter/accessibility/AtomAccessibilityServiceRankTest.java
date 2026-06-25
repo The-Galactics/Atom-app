@@ -56,4 +56,53 @@ class AtomAccessibilityServiceRankTest {
         assertThat(AtomAccessibilityService.rankFor("luisgarcia", "garcia"))
                 .isEqualTo(RANK_SUBSTRING);
     }
+
+    @Test
+    @DisplayName("Spanish 'foto de perfil' avatar description is a profile image")
+    void fotoDePerfilIsProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("Foto de perfil de María")).isTrue();
+    }
+
+    @Test
+    @DisplayName("Spanish 'foto del perfil' variant is a profile image")
+    void fotoDelPerfilIsProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("Foto del perfil de Juan")).isTrue();
+    }
+
+    @Test
+    @DisplayName("Bare 'avatar' marker is a profile image")
+    void avatarIsProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("avatar")).isTrue();
+    }
+
+    @Test
+    @DisplayName("English 'profile picture' marker is a profile image")
+    void profilePictureIsProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("profile picture")).isTrue();
+    }
+
+    @Test
+    @DisplayName("Marker matching is case/accent insensitive")
+    void profileImageMarkerIsCaseInsensitive() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("FOTO DE PERFIL")).isTrue();
+    }
+
+    @Test
+    @DisplayName("An icon button label ('Ajustes') is NOT a profile image")
+    void iconButtonIsNotProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("Ajustes")).isFalse();
+    }
+
+    @Test
+    @DisplayName("A plain contact name is NOT a profile image")
+    void contactNameIsNotProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc("María")).isFalse();
+    }
+
+    @Test
+    @DisplayName("Null and empty descriptions are NOT profile images")
+    void nullAndEmptyAreNotProfileImage() {
+        assertThat(AtomAccessibilityService.isProfileImageDesc(null)).isFalse();
+        assertThat(AtomAccessibilityService.isProfileImageDesc("")).isFalse();
+    }
 }
