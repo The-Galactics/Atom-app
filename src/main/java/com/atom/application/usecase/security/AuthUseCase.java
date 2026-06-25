@@ -57,9 +57,9 @@ public class AuthUseCase implements AuthPortIn {
             return null; // no session
         }
         long now = clockEpochSeconds.getAsLong();
-        TokenPair current = new TokenPair(access, refresh, tokenStore.getExpiresAtEpochSeconds());
+        long expiresAt = tokenStore.getExpiresAtEpochSeconds();
         if (access != null && !access.isEmpty()
-                && !current.isAccessExpired(now, REFRESH_MARGIN_SECONDS)) {
+                && !new TokenPair(access, refresh, expiresAt).isAccessExpired(now, REFRESH_MARGIN_SECONDS)) {
             return access; // still fresh
         }
         try {
