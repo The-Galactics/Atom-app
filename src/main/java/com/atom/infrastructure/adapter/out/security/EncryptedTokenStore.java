@@ -17,6 +17,7 @@ public class EncryptedTokenStore implements TokenStore {
     private static final String FILE = "atom_tokens";
     private static final String KEY_ACCESS = "access_token";
     private static final String KEY_REFRESH = "refresh_token";
+    private static final String KEY_EXPIRES = "expires_at_epoch_seconds";
 
     private final SharedPreferences prefs;
 
@@ -38,10 +39,11 @@ public class EncryptedTokenStore implements TokenStore {
     }
 
     @Override
-    public void save(String accessToken, String refreshToken) {
+    public void save(String accessToken, String refreshToken, long expiresAtEpochSeconds) {
         prefs.edit()
                 .putString(KEY_ACCESS, accessToken)
                 .putString(KEY_REFRESH, refreshToken)
+                .putLong(KEY_EXPIRES, expiresAtEpochSeconds)
                 .apply();
     }
 
@@ -56,7 +58,12 @@ public class EncryptedTokenStore implements TokenStore {
     }
 
     @Override
+    public long getExpiresAtEpochSeconds() {
+        return prefs.getLong(KEY_EXPIRES, 0L);
+    }
+
+    @Override
     public void clear() {
-        prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).apply();
+        prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).remove(KEY_EXPIRES).apply();
     }
 }
