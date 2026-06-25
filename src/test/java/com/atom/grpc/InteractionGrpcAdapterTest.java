@@ -87,8 +87,9 @@ class InteractionGrpcAdapterTest {
                 .directExecutor()
                 .build());
 
-        // 4. Instantiate the target adapter with dummy host and port parameters
-        adapter = new InteractionGrpcAdapter("localhost", 50051);
+        // 4. Instantiate the target adapter with dummy host/port. The token store is
+        //    only used by init(), which this test bypasses (channel/stub injected below).
+        adapter = new InteractionGrpcAdapter("localhost", 50051, null);
 
         // Reflection mechanism to inject the in-memory channel and stub instances.
         // This isolates the test class completely, avoiding loading the heavy Spring Boot context (@SpringBootTest)

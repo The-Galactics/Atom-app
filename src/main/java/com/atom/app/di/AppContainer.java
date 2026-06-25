@@ -17,6 +17,7 @@ import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.application.port.out.ExternalInteractionPortOut;
 import com.atom.application.port.out.security.DeviceInspectorPort;
+import com.atom.application.port.out.security.TokenStore;
 import com.atom.application.usecase.ExternalCommandUseCase;
 import com.atom.application.usecase.ExternalMessageUseCase;
 import com.atom.application.usecase.SynthesizeSpeechUseCase;
@@ -27,11 +28,13 @@ import com.atom.infrastructure.adapter.action.AndroidActionExecutor;
 import com.atom.infrastructure.adapter.grpc.InteractionGrpcAdapter;
 import com.atom.infrastructure.adapter.out.device.ContactsContractResolver;
 import com.atom.infrastructure.adapter.out.device.DeviceInspectorAdapter;
+import com.atom.infrastructure.adapter.out.security.EncryptedTokenStore;
 
 public class AppContainer {
 
     // Infrastructure adapters (out-ports).
     private final InteractionGrpcAdapter interactionGrpcAdapter;
+    private final TokenStore tokenStore;
     private final DeviceInspectorPort deviceInspectorPort;
     private final ActionExecutorPortOut actionExecutorPortOut;
 
@@ -70,10 +73,15 @@ public class AppContainer {
         this.sessionUserId = loadOrCreateUuid(sessionPrefs, KEY_USER_ID);
         this.sessionChatId = loadOrCreateUuid(sessionPrefs, KEY_CHAT_ID);
 
+        // Encrypted store for the session tokens (HU-27). The gRPC adapter attaches
+        // the access token to every call via a client interceptor.
+        this.tokenStore = new EncryptedTokenStore(context);
+
         // gRPC adapter -> external interaction out-port. Host/port from BuildConfig.
         this.interactionGrpcAdapter = new InteractionGrpcAdapter(
                 BuildConfig.GRPC_HOST,
-                BuildConfig.GRPC_PORT
+                BuildConfig.GRPC_PORT,
+                this.tokenStore
         );
         this.interactionGrpcAdapter.init();
         ExternalInteractionPortOut externalInteractionPortOut = this.interactionGrpcAdapter;
@@ -165,6 +173,11 @@ public class AppContainer {
 
     public UUID getSessionChatId() {
         return sessionChatId;
+    }
+
+    /** Secure store for the session tokens; the login flow saves the pair here. */
+    public TokenStore getTokenStore() {
+        return tokenStore;
     }
 
     /** Releases process-scoped resources. Call once on application teardown. */

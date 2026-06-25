@@ -101,6 +101,9 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     annotationProcessor("androidx.room:room-compiler:2.6.1")
 
+    // Encrypted storage for the session tokens (HU-27): EncryptedSharedPreferences.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")

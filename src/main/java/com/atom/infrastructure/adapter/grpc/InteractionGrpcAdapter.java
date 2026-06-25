@@ -1,6 +1,7 @@
 package com.atom.infrastructure.adapter.grpc;
 
 import com.atom.application.port.out.ExternalInteractionPortOut;
+import com.atom.application.port.out.security.TokenStore;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
@@ -23,26 +24,33 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
     private final String host;
     private final int port;
+    private final TokenStore tokenStore;
 
     private ManagedChannel channel;
     private AtomAgentServiceGrpc.AtomAgentServiceBlockingStub blockingStub;
 
-    public InteractionGrpcAdapter(String host, int port){
-
+    public InteractionGrpcAdapter(String host, int port, TokenStore tokenStore){
         this.host = host;
         this.port = port;
-
+        this.tokenStore = tokenStore;
     }
 
     public void init(){
-
-        this.channel = ManagedChannelBuilder.forAddress(host, port)
-                .usePlaintext()
+        ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forAddress(host, port);
+        if (isLoopbackHost(host)) {
+            // Dev only: plaintext to the local/emulator backend (see network_security_config).
+            builder.usePlaintext();
+        }
+        // Any remote host uses TLS (the default); the app never sends plaintext off-device.
+        this.channel = builder
+                .intercept(new BearerTokenClientInterceptor(tokenStore::getAccessToken))
                 .build();
 
         this.blockingStub = AtomAgentServiceGrpc.newBlockingStub(channel);
-        System.out.println("gRPC open to connect with python");
+    }
 
+    private static boolean isLoopbackHost(String host) {
+        return "10.0.2.2".equals(host) || "localhost".equals(host) || "127.0.0.1".equals(host);
     }
 
     @Override
