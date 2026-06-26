@@ -12,7 +12,7 @@ import io.grpc.ManagedChannelBuilder;
 /**
  * Owns the single gRPC {@link ManagedChannel} and exposes two views:
  * a raw channel for the public auth RPCs, and a Bearer-intercepted channel for
- * protected RPCs. TLS by default; plaintext only for loopback in debug builds.
+ * protected RPCs. TLS in release builds; plaintext in debug builds.
  */
 public class GrpcChannelProvider {
 
@@ -21,7 +21,8 @@ public class GrpcChannelProvider {
 
     public GrpcChannelProvider(String host, int port, Supplier<String> accessTokenSupplier) {
         ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forAddress(host, port);
-        if (BuildConfig.DEBUG && isLoopbackHost(host)) {
+        // Debug builds use plaintext (dev agent is insecure); release keeps TLS.
+        if (BuildConfig.DEBUG) {
             builder.usePlaintext();
         }
         this.channel = builder.build();
@@ -43,9 +44,5 @@ public class GrpcChannelProvider {
         if (!channel.isShutdown()) {
             channel.shutdown();
         }
-    }
-
-    private static boolean isLoopbackHost(String host) {
-        return "10.0.2.2".equals(host) || "localhost".equals(host) || "127.0.0.1".equals(host);
     }
 }
