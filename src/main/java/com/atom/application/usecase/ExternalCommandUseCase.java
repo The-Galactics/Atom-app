@@ -16,9 +16,9 @@ public class ExternalCommandUseCase implements ExecuteCommandPortIn {
 
     // Delegate order recognition to the backend.
     @Override
-    public ResolvedAction execute(UUID userId, String command) {
+    public ResolvedAction execute(UUID userId, UUID orderId, String command) {
 
-        return out.commandResponse(userId, command);
+        return out.commandResponse(userId, orderId, command);
 
     }
 
