@@ -27,16 +27,15 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.atom.app.di.AppContainer;
-import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
 import com.atom.app.ui.MicAnimations;
 import com.atom.app.ui.main.MainInputBarComponent;
+import com.atom.app.ui.main.MainViewModelBinder;
 import com.atom.app.ui.main.SpeechRecognitionCoordinator;
 import com.atom.app.ui.motion.CoreState;
 import com.atom.app.ui.motion.CoreStatePresenter;
 import com.atom.app.ui.motion.StatusCrossfader;
-import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
@@ -63,22 +62,12 @@ public class MainActivity extends AppCompatActivity {
     private final MicAnimations micAnimations = new MicAnimations();
 
     private MainInputBarComponent inputBar;
+    private MainViewModelBinder binder;
 
-    // Action awaiting a permission grant; resumed in permissionLauncher's callback.
-    private ResolvedAction awaitingPermission;
-
+    // Routes permission results to the binder once it is initialized in onCreate.
     private final ActivityResultLauncher<String> permissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-                ResolvedAction action = awaitingPermission;
-                awaitingPermission = null;
-                if (action == null) {
-                    return;
-                }
-                if (granted) {
-                    viewModel.runAction(action);
-                } else {
-                    toast(getString(R.string.action_permission_denied));
-                }
+                if (binder != null) binder.onPermissionResult(granted);
             });
 
     private AndroidTextToSpeech tts;
@@ -184,7 +173,51 @@ public class MainActivity extends AppCompatActivity {
             atomCore.setEnergy(CoreStatePresenter.energyFor(CoreState.IDLE));
         }
 
-        setupObservers();
+        binder = new MainViewModelBinder(this, viewModel, permissionLauncher,
+                new MainViewModelBinder.Host() {
+                    @Override
+                    public void showResponse(String response) {
+                        fadeSwap(statusText, response);
+                        fadeSwap(subStatusText, getString(R.string.sub_status_responded));
+                        applyCoreState(CoreState.RESPONDED);
+                        if (preferences.isTtsEnabled()) {
+                            tts.speak(response);
+                        }
+                    }
+
+                    @Override
+                    public void showThinking() {
+                        fadeSwap(statusText, getString(R.string.status_thinking));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
+                        applyCoreState(CoreState.THINKING);
+                    }
+
+                    @Override
+                    public void showError(String error) {
+                        fadeSwap(statusText, getString(R.string.status_error));
+                        fadeSwap(subStatusText,
+                                error != null
+                                        ? error.toUpperCase(java.util.Locale.getDefault())
+                                        : getString(R.string.status_error));
+                        applyCoreState(CoreState.ERROR);
+                        statusText.removeCallbacks(errorRecoverRunnable);
+                        statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
+                    }
+
+                    @Override
+                    public void setInputEnabled(boolean enabled) {
+                        inputBar.setInputEnabled(enabled);
+                    }
+
+                    @Override
+                    public void showOperating() {
+                        fadeSwap(statusText, getString(R.string.automation_operating));
+                        fadeSwap(subStatusText, getString(R.string.automation_operating));
+                        applyCoreState(CoreState.OPERATING);
+                    }
+                });
+        binder.bind();
+
         inputBar = new MainInputBarComponent(this, new MainInputBarComponent.Host() {
             @Override
             public void onSubmitText(String t) {
@@ -339,12 +372,7 @@ public class MainActivity extends AppCompatActivity {
                 state.getFloat(KEY_GLOW, CoreStatePresenter.glowFor(CoreState.IDLE)));
     }
 
-    /**
-     * Single entry point for dispatching an order (typed or spoken). The ViewModel
-     * owns transcript persistence now (it records the user turn at the event source,
-     * so it can't be duplicated by a replayed UI observer); this stays as the shared
-     * chokepoint for the keyboard, chip, and voice paths.
-     */
+    /** Shared dispatch point for keyboard, chip, and voice order paths. */
     private void dispatchOrder(String text) {
         viewModel.sendOrder(text);
     }
@@ -524,10 +552,7 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
-    /**
-     * Crossfades a status TextView to new text: fade out, swap the text, fade back in.
-     * Replaces the previous abrupt {@code setText} swaps so state changes read smoothly.
-     */
+    /** Crossfades a status TextView to new text via fade-out, swap, fade-in. */
     private void fadeSwap(TextView view, CharSequence text) {
         StatusCrossfader.swap(view, text);
     }
@@ -570,124 +595,4 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupObservers() {
-        // When the back-end responds
-        viewModel.getChatResponse().observe(this, response -> {
-            // Persistence happens in the ViewModel at the event source; this observer
-            // only renders the reply. (A retained LiveData replays its last value to
-            // each new observer, so saving here would duplicate the last turn on every
-            // Activity re-creation — e.g. rotation or the locale-switch recreate.)
-            fadeSwap(statusText, response);
-            fadeSwap(subStatusText, getString(R.string.sub_status_responded));
-            // Reply landed: ease the core back to its calm idle with a settle pulse.
-            applyCoreState(CoreState.RESPONDED);
-            // Speak the assistant reply aloud when enabled in Settings.
-            if (preferences.isTtsEnabled()) {
-                tts.speak(response);
-            }
-        });
-
-        // When waiting for the back-end
-        viewModel.getIsLoading().observe(this, isLoading -> {
-            if (isLoading) {
-                fadeSwap(statusText, getString(R.string.status_thinking));
-                fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
-                applyCoreState(CoreState.THINKING);
-            }
-        });
-
-        // When something goes wrong
-        viewModel.getErrorMessage().observe(this, error -> {
-            fadeSwap(statusText, getString(R.string.status_error));
-            fadeSwap(subStatusText,
-                    error != null ? error.toUpperCase(java.util.Locale.getDefault()) : getString(R.string.status_error));
-            applyCoreState(CoreState.ERROR);
-            // Don't leave the error on screen: ease back to idle after a short delay.
-            statusText.removeCallbacks(errorRecoverRunnable);
-            statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
-        });
-
-        // Sensitive actions require confirmation; one-shot Event avoids re-prompting on recreation.
-        viewModel.getPendingConfirmation().observe(this,
-                e -> confirmAction(e.getContentIfNotHandled()));
-
-        // Destructive action mid-loop: prompt before it runs (loop thread waits for the answer).
-        viewModel.getDestructiveConfirmation().observe(this,
-                e -> confirmDestructive(e.getContentIfNotHandled()));
-
-        // Accessibility-powered actions need the service enabled first.
-        viewModel.getAccessibilityRequired().observe(this,
-                e -> promptEnableAccessibility(e.getContentIfNotHandled()));
-
-        // While the loop runs, freeze input and show the operating indicator.
-        viewModel.getAutomationActive().observe(this, active -> {
-            boolean operating = Boolean.TRUE.equals(active);
-            inputBar.setInputEnabled(!operating);
-            if (operating) {
-                fadeSwap(statusText, getString(R.string.automation_operating));
-                fadeSwap(subStatusText, getString(R.string.automation_operating));
-                applyCoreState(CoreState.OPERATING);
-            }
-        });
-    }
-
-    /** Prompts the user to enable Atom's accessibility service, then opens Settings. */
-    private void promptEnableAccessibility(ResolvedAction action) {
-        if (action == null) {
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.accessibility_prompt_title)
-                .setMessage(R.string.accessibility_prompt_message)
-                .setPositiveButton(R.string.accessibility_prompt_open,
-                        (d, w) -> startActivity(PermissionCoordinator.accessibilitySettingsIntent()))
-                .setNegativeButton(R.string.action_confirm_no, null)
-                .show();
-    }
-
-    /** Asks the user to confirm a sensitive action before executing it. */
-    private void confirmAction(ResolvedAction action) {
-        if (action == null) {
-            return;
-        }
-        String prompt = action.outMessage().isEmpty()
-                ? getString(R.string.action_confirm_default)
-                : action.outMessage();
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(prompt)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> executeWithPermission(action))
-                .setNegativeButton(R.string.action_confirm_no, null)
-                .show();
-    }
-
-    /** Confirms a destructive action mid-loop; the paused loop resumes or aborts on the answer. */
-    private void confirmDestructive(ResolvedAction action) {
-        if (action == null) {
-            return;
-        }
-        String prompt = action.outMessage().isEmpty()
-                ? getString(R.string.action_confirm_default)
-                : action.outMessage();
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(prompt)
-                .setCancelable(false)
-                .setPositiveButton(R.string.action_confirm_yes,
-                        (d, w) -> viewModel.resolveDestructiveConfirmation(true))
-                .setNegativeButton(R.string.action_confirm_no,
-                        (d, w) -> viewModel.resolveDestructiveConfirmation(false))
-                .show();
-    }
-
-    /** Run the action, first requesting its runtime permission if one is missing. */
-    private void executeWithPermission(ResolvedAction action) {
-        String permission = PermissionCoordinator.requiredPermission(action);
-        if (permission == null || PermissionCoordinator.isGranted(this, permission)) {
-            viewModel.runAction(action);
-            return;
-        }
-        awaitingPermission = action;
-        permissionLauncher.launch(permission);
-    }
 }
