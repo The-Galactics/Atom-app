@@ -226,15 +226,15 @@
     <string name="stt_error">Sorry, I didn\'t catch that</string>
 
     <!-- Auth / login screen -->
-    <string name="auth_login_title">Iniciar sesión</string>
-    <string name="auth_register_title">Crear cuenta</string>
+    <string name="auth_login_title">Sign in</string>
+    <string name="auth_register_title">Create account</string>
     <string name="auth_email_hint">Email</string>
-    <string name="auth_password_hint">Contraseña</string>
-    <string name="auth_login_button">Entrar</string>
-    <string name="auth_register_button">Registrarme</string>
-    <string name="auth_switch_to_register">¿No tienes cuenta? Regístrate</string>
-    <string name="auth_switch_to_login">¿Ya tienes cuenta? Inicia sesión</string>
-    <string name="auth_google_button">Continuar con Google</string>
-    <string name="auth_logout">Cerrar sesión</string>
-    <string name="auth_fields_required">Completa todos los campos.</string>
+    <string name="auth_password_hint">Password</string>
+    <string name="auth_login_button">Sign in</string>
+    <string name="auth_register_button">Register</string>
+    <string name="auth_switch_to_register">No account? Register</string>
+    <string name="auth_switch_to_login">Already have an account? Sign in</string>
+    <string name="auth_google_button">Continue with Google</string>
+    <string name="auth_logout">Sign out</string>
+    <string name="auth_fields_required">Please fill in all fields.</string>
 </resources>
