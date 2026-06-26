@@ -32,13 +32,13 @@ import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
 import com.atom.app.ui.MicAnimations;
 import com.atom.app.ui.main.MainInputBarComponent;
+import com.atom.app.ui.main.SpeechRecognitionCoordinator;
 import com.atom.app.ui.motion.CoreState;
 import com.atom.app.ui.motion.CoreStatePresenter;
 import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
-import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 
@@ -46,9 +46,6 @@ public class MainActivity extends AppCompatActivity {
 
     // Delay before an error message fades back to the idle resting state.
     private static final long ERROR_AUTO_RECOVER_MS = 4000;
-
-    // Let the wake word release the mic before the manual recognizer grabs it.
-    private static final long MIC_HANDOFF_DELAY_MS = 350;
 
     // Saved-instance keys for surviving configuration changes (e.g. rotation).
     private static final String KEY_STATUS = "status_text";
@@ -86,10 +83,7 @@ public class MainActivity extends AppCompatActivity {
 
     private AndroidTextToSpeech tts;
     private AtomPreferences preferences;
-    private AndroidSpeechRecognizer speechRecognizer;
-
-    // True while a recognition is in flight; lets a tap cancel it and gates error recovery.
-    private boolean isListening;
+    private SpeechRecognitionCoordinator recognition;
 
     // Last applied core state, kept so it can be restored across configuration changes.
     private float currentEnergy = CoreStatePresenter.energyFor(CoreState.IDLE);
@@ -102,10 +96,10 @@ public class MainActivity extends AppCompatActivity {
     private final BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (!isListening
+            if (!recognition.isListening()
                     && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                             == PackageManager.PERMISSION_GRANTED) {
-                startListening();
+                recognition.start();
             } else {
                 // Can't capture now (already listening / no permission): release the
                 // wake engine immediately instead of letting it wait for the fallback.
@@ -125,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String> micPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
                 if (granted) {
-                    startListening();
+                    recognition.start();
                 } else {
                     onMicPermissionDenied();
                 }
@@ -204,6 +198,61 @@ public class MainActivity extends AppCompatActivity {
         });
 
         requestCallPermissionsIfNeeded();
+
+        recognition = new SpeechRecognitionCoordinator(this, preferences,
+                new SpeechRecognitionCoordinator.Host() {
+                    @Override
+                    public void onListeningStarted() {
+                        if (tts != null) tts.stop();
+                        statusText.removeCallbacks(errorRecoverRunnable);
+                        clearRetryAffordance();
+                        fadeSwap(statusText, getString(R.string.status_listening));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_listening));
+                        applyCoreState(CoreState.LISTENING);
+                        micAnimations.startMicPulse(btnMic);
+                    }
+
+                    @Override
+                    public void onThinking() {
+                        fadeSwap(statusText, getString(R.string.status_thinking));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
+                        micAnimations.stopMicPulse(btnMic);
+                        applyCoreState(CoreState.THINKING);
+                    }
+
+                    @Override
+                    public void onPartialTranscript(String text) {
+                        if (subStatusText != null && text != null && !text.trim().isEmpty()) {
+                            subStatusText.animate().cancel();
+                            subStatusText.setAlpha(1f);
+                            subStatusText.setText(text);
+                        }
+                    }
+
+                    @Override
+                    public void onFinalTranscript(String text) {
+                        dispatchOrder(text);
+                    }
+
+                    @Override
+                    public void onRecognitionError(String message) {
+                        int msg = "unavailable".equals(message)
+                                ? R.string.stt_unavailable
+                                : R.string.stt_error;
+                        fadeSwap(statusText, getString(R.string.status_idle));
+                        micAnimations.stopMicPulse(btnMic);
+                        applyCoreState(CoreState.IDLE);
+                        toast(getString(msg));
+                        showRetryAffordance();
+                    }
+
+                    @Override
+                    public void onListeningCancelled() {
+                        micAnimations.stopMicPulse(btnMic);
+                        applyCoreState(CoreState.IDLE);
+                        fadeSwap(statusText, getString(R.string.status_idle));
+                    }
+                });
 
         btnMic.setOnClickListener(v -> onMicTapped());
 
@@ -313,14 +362,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         // Tapping mid-listen cancels the in-flight recognition.
-        if (isListening) {
-            tearDownRecognizer();
+        if (recognition.isListening()) {
+            recognition.cancel();
             fadeSwap(subStatusText, getString(R.string.sub_status_tap_mic));
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED) {
-            startListening();
+            recognition.start();
         } else {
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
         }
@@ -350,19 +399,6 @@ public class MainActivity extends AppCompatActivity {
                 Uri.fromParts("package", getPackageName(), null)));
     }
 
-    /** Stops any active recognition and eases the core back to idle. */
-    private void tearDownRecognizer() {
-        if (speechRecognizer != null) {
-            // AndroidSpeechRecognizer has no stopListening(); destroy() is its stop path.
-            speechRecognizer.destroy();
-            speechRecognizer = null;
-        }
-        isListening = false;
-        micAnimations.stopMicPulse(btnMic);
-        applyCoreState(CoreState.IDLE);
-        fadeSwap(statusText, getString(R.string.status_idle));
-    }
-
     /** Flips the persisted mute flag, refreshes the FAB, and stops capture if muting mid-listen. */
     private void toggleMicMuted() {
         boolean muted = !preferences.isMicMuted();
@@ -370,8 +406,8 @@ public class MainActivity extends AppCompatActivity {
         applyMicMutedState(muted);
         btnMic.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
         MicAnimations.playPressSettle(btnMic);
-        if (muted && isListening) {
-            tearDownRecognizer();
+        if (muted && recognition.isListening()) {
+            recognition.cancel();
         }
         fadeSwap(subStatusText, getString(
                 muted ? R.string.sub_status_muted : R.string.sub_status_tap_mic));
@@ -387,94 +423,6 @@ public class MainActivity extends AppCompatActivity {
         // Desaturate/dim the core so a muted mic doesn't look like plain idle.
         if (atomCore != null) {
             atomCore.setMuted(muted);
-        }
-    }
-
-    private void startListening() {
-        if (speechRecognizer == null) {
-            speechRecognizer = new AndroidSpeechRecognizer(this, new SttListener());
-        }
-        isListening = true;
-        // Silence any reply still being spoken before capturing the next one.
-        if (tts != null) {
-            tts.stop();
-        }
-        // Drop any pending error recovery now that we're active again.
-        statusText.removeCallbacks(errorRecoverRunnable);
-        // Clear a leftover retry hint so the sub-status is plain again while listening.
-        clearRetryAffordance();
-        fadeSwap(statusText, getString(R.string.status_listening));
-        fadeSwap(subStatusText, getString(R.string.sub_status_listening));
-        // Drive the atom core brighter/faster and start the listening mic pulse.
-        applyCoreState(CoreState.LISTENING);
-        micAnimations.startMicPulse(btnMic);
-        // The always-on wake word holds the mic; ask it to release first, then give
-        // it a moment to free the AudioRecord before we start capturing.
-        if (preferences.isWakeWordEnabled()) {
-            sendBroadcast(new Intent(WakeWordService.ACTION_WAKE_PAUSE).setPackage(getPackageName()));
-            statusText.postDelayed(() -> {
-                if (isListening && speechRecognizer != null) {
-                    speechRecognizer.startListening();
-                }
-            }, MIC_HANDOFF_DELAY_MS);
-        } else {
-            speechRecognizer.startListening();
-        }
-    }
-
-    /** Routes recognizer callbacks to UI state and dispatches the transcript as an order. */
-    private final class SttListener implements AndroidSpeechRecognizer.Listener {
-        @Override
-        public void onReadyForSpeech() {
-            fadeSwap(statusText, getString(R.string.status_listening));
-            fadeSwap(subStatusText, getString(R.string.sub_status_listening));
-            applyCoreState(CoreState.LISTENING);
-        }
-
-        @Override
-        public void onEndOfSpeech() {
-            isListening = false;
-            fadeSwap(statusText, getString(R.string.status_thinking));
-            fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
-            // Speech captured: settle the mic pulse and ease the core to thinking.
-            micAnimations.stopMicPulse(btnMic);
-            applyCoreState(CoreState.THINKING);
-        }
-
-        @Override
-        public void onPartialResult(String text) {
-            // Live transcript: set directly (no fadeSwap) so the fast, frequent
-            // partials don't queue janky crossfades. Cleared on the next state change.
-            if (subStatusText != null && text != null && !text.trim().isEmpty()) {
-                subStatusText.animate().cancel();
-                subStatusText.setAlpha(1f);
-                subStatusText.setText(text);
-            }
-        }
-
-        @Override
-        public void onResult(String text) {
-            notifyWakeDone();
-            // Speech is treated as an ORDER, same as typed input (persist + dispatch).
-            dispatchOrder(text);
-        }
-
-        @Override
-        public void onError(String message) {
-            isListening = false;
-            notifyWakeDone();
-            int msg = "unavailable".equals(message)
-                    ? R.string.stt_unavailable
-                    : R.string.stt_error;
-            fadeSwap(statusText, getString(R.string.status_idle));
-            // Recognition failed: stop the pulse and return the core to its calm idle.
-            micAnimations.stopMicPulse(btnMic);
-            applyCoreState(CoreState.IDLE);
-            toast(getString(msg));
-            // Offer a subtle, on-brand retry: the sub-status becomes a tappable
-            // "Tap to try again" that re-runs the listen path. Cleared on the next
-            // successful listen (startListening resets the sub-status + tap handler).
-            showRetryAffordance();
         }
     }
 
@@ -549,15 +497,15 @@ public class MainActivity extends AppCompatActivity {
         if (tts != null) {
             tts.shutdown();
         }
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
+        if (recognition != null) {
+            recognition.destroy();
         }
         super.onDestroy();
     }
 
     /** Eases the status line back to its resting state after an error, unless we're listening. */
     private void recoverFromError() {
-        if (isListening) {
+        if (recognition != null && recognition.isListening()) {
             return;
         }
         fadeSwap(statusText, getString(R.string.status_idle));
