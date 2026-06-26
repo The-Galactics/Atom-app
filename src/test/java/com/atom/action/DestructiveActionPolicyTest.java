@@ -85,7 +85,23 @@ class DestructiveActionPolicyTest {
     }
 
     @Test
-    @DisplayName("Non-TAP actions are never flagged, even with a destructive keyword")
+    @DisplayName("MAKE_CALL always requires confirmation by type, with benign params")
+    void flagsMakeCallByType() {
+        ResolvedAction call = new ResolvedAction(
+                ActionType.MAKE_CALL, Map.of("target", "Mom"), "", 1.0f, false);
+        assertThat(policy.requiresConfirmation(call)).isTrue();
+    }
+
+    @Test
+    @DisplayName("SEND_MESSAGE always requires confirmation by type, with benign params")
+    void flagsSendMessageByType() {
+        ResolvedAction msg = new ResolvedAction(
+                ActionType.SEND_MESSAGE, Map.of("recipient", "Ana", "body", "hola"), "", 1.0f, false);
+        assertThat(policy.requiresConfirmation(msg)).isTrue();
+    }
+
+    @Test
+    @DisplayName("Other non-TAP actions are never flagged, even with a destructive keyword")
     void neverFlagsNonTapActions() {
         ResolvedAction openApp = new ResolvedAction(
                 ActionType.OPEN_APP, Map.of("app_name", "eliminar"), "", 1.0f, false);
