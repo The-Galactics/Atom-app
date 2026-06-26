@@ -60,6 +60,7 @@ import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
+import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.domain.action.DestructiveActionPolicy;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
@@ -159,7 +160,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (panelView != null) {
             TextView status = panelView.findViewById(R.id.overlay_status);
             if (status != null && status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_panel_hint);
+                StatusCrossfader.swap(status, getString(R.string.overlay_panel_hint));
             }
         }
     };
@@ -808,7 +809,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             applyOverlayMicMuted(mic, muted);
             v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             MicAnimations.playPressSettle(mic);
-            status.setText(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint);
+            StatusCrossfader.swap(status,
+                    getString(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint));
             return true;
         });
 
@@ -850,7 +852,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void dispatchPrompt(EditText editText, TextView status) {
         String text = editText.getText().toString().trim();
         if (text.isEmpty()) {
-            status.setText(R.string.input_empty);
+            StatusCrossfader.swap(status, getString(R.string.input_empty));
             return;
         }
         // Silence any reply still being spoken so it doesn't talk over the next turn.
@@ -858,7 +860,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             tts.stop();
         }
         status.removeCallbacks(statusResetRunnable);
-        status.setText(R.string.overlay_sending);
+        StatusCrossfader.swap(status, getString(R.string.overlay_sending));
         editText.setText("");
         handlePrompt(text, status);
     }
@@ -901,7 +903,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             @Override
             public void onError(String error) {
                 if (status.isAttachedToWindow()) {
-                    status.setText(error);
+                    StatusCrossfader.swap(status, error);
                     scheduleStatusReset(status);
                 }
             }
@@ -960,7 +962,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      */
     private void promptEnableAccessibility(TextView status) {
         if (status.isAttachedToWindow()) {
-            status.setText(R.string.action_accessibility_disabled);
+            StatusCrossfader.swap(status, getString(R.string.action_accessibility_disabled));
             scheduleStatusReset(status);
         }
         startActivity(PermissionCoordinator.accessibilitySettingsIntent()
@@ -982,7 +984,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 .setPositiveButton(R.string.action_confirm_yes, (d, w) -> runAutonomous(order, status))
                 .setNegativeButton(R.string.action_confirm_no, (d, w) -> {
                     if (status.isAttachedToWindow()) {
-                        status.setText(R.string.action_cancelled);
+                        StatusCrossfader.swap(status, getString(R.string.action_cancelled));
                         scheduleStatusReset(status);
                     }
                 })
@@ -1076,12 +1078,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void startVoiceCapture(TextView status, View mic) {
         // Respect the app-wide mute: a muted mic can't dictate from the bubble either.
         if (preferences.isMicMuted()) {
-            status.setText(R.string.mic_muted_hint);
+            StatusCrossfader.swap(status, getString(R.string.mic_muted_hint));
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            status.setText(R.string.overlay_mic_denied);
+            StatusCrossfader.swap(status, getString(R.string.overlay_mic_denied));
             return;
         }
         // Silence any reply still being spoken before capturing the next one.
@@ -1148,7 +1150,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         @Override
         public void onReadyForSpeech() {
             if (status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_listening);
+                StatusCrossfader.swap(status, getString(R.string.overlay_listening));
             }
         }
 
@@ -1156,7 +1158,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         public void onPartialResult(String text) {
             // Live transcript in the overlay status line as the user speaks.
             if (status.isAttachedToWindow() && text != null && !text.trim().isEmpty()) {
-                status.setText(text);
+                StatusCrossfader.swap(status, text);
             }
         }
 
@@ -1164,7 +1166,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         public void onEndOfSpeech() {
             micAnimations.stopMicPulse(mic);
             if (status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_thinking);
+                StatusCrossfader.swap(status, getString(R.string.overlay_thinking));
             }
         }
 
@@ -1174,7 +1176,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             notifyWakeWordListenDone();
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
-                    status.setText(R.string.overlay_voice_error);
+                    StatusCrossfader.swap(status, getString(R.string.overlay_voice_error));
                     scheduleStatusReset(status);
                 }
                 return;
@@ -1189,9 +1191,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             if (!status.isAttachedToWindow()) {
                 return;
             }
-            status.setText("unavailable".equals(message)
+            StatusCrossfader.swap(status, getString("unavailable".equals(message)
                     ? R.string.overlay_voice_unavailable
-                    : R.string.overlay_voice_error);
+                    : R.string.overlay_voice_error));
             scheduleStatusReset(status);
         }
     }
@@ -1212,7 +1214,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         // Record Atom's reply in the shared transcript before showing/speaking it.
         conversationRepository.saveAssistantMessage(text);
         if (status != null && status.isAttachedToWindow()) {
-            status.setText(text);
+            StatusCrossfader.swap(status, text);
         }
         if (text == null || text.trim().isEmpty() || !preferences.isTtsEnabled()) {
             return;
@@ -1241,7 +1243,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             public void onError(String error) {
                 micAnimations.stopMicPulse(mic);
                 if (status.isAttachedToWindow()) {
-                    status.setText(error);
+                    StatusCrossfader.swap(status, error);
                     scheduleStatusReset(status);
                 }
             }
