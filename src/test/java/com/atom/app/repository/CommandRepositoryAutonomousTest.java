@@ -257,6 +257,23 @@ class CommandRepositoryAutonomousTest {
         verify(executorPort, times(1)).execute(any());
     }
 
+    @Test
+    @DisplayName("Default gate is fail-closed: a sensitive action with no UI gate is denied, not run")
+    void defaultGateFailsClosedOnSensitiveAction() throws InterruptedException {
+        // Any surface that installs no prompting gate falls back to this default; it
+        // must DENY sensitive actions (the loop aborts), never auto-approve them (2B.1).
+        when(useCase.execute(any(UUID.class), any()))
+                .thenReturn(action(ActionType.MAKE_CALL, Map.of("target", "Mom"), false));
+
+        RecordingCallback cb = new RecordingCallback();
+        new CommandRepository(useCase, executorPort, CommandRepository.defaultGate(), 0L, 20, Runnable::run)
+                .executeAutonomous("llama a mama", cb);
+        cb.await();
+
+        assertThat(cb.aborted).isTrue();
+        verify(executorPort, never()).execute(any());
+    }
+
     /** Awaits a single onResolved/onError from #recognize. */
     private static final class RecognizeCallback implements CommandRepository.CommandCallback {
         final CountDownLatch done = new CountDownLatch(1);

@@ -4,12 +4,22 @@ import java.text.Normalizer;
 import java.util.Set;
 
 /**
- * Pure, contextual-semantic safety check for the autonomous loop. A
- * {@link ActionType#TAP_ELEMENT} whose target text/params hint at a destructive
- * operation (delete, uninstall, format…) must be confirmed by the user before it
- * runs; every other action is hands-free. No Android deps — trivially testable.
+ * Pure safety check for the autonomous loop, with two layers (2B.1):
+ * <ul>
+ *   <li><b>Positive by type:</b> intrinsically sensitive actions ({@link ActionType#MAKE_CALL},
+ *       {@link ActionType#SEND_MESSAGE}) ALWAYS require confirmation, regardless of params,
+ *       keywords or the backend's {@code requires_confirmation} flag.</li>
+ *   <li><b>Contextual:</b> a {@link ActionType#TAP_ELEMENT} whose target text/params hint at a
+ *       destructive operation (delete, pay, call…) must also be confirmed.</li>
+ * </ul>
+ * Every other action is hands-free. No Android deps — trivially testable.
  */
 public final class DestructiveActionPolicy {
+
+    // Intrinsically sensitive action types: confirmation is mandatory on every step of the
+    // loop, never auto-approved (purchases arrive as TAP_ELEMENT and are covered by keywords).
+    private static final Set<ActionType> ALWAYS_CONFIRM = Set.of(
+            ActionType.MAKE_CALL, ActionType.SEND_MESSAGE);
 
     // es/en high-stakes verbs, accent-stripped and lower-cased. Matched on whole tokens
     // (see #containsKeyword), not substrings, so "pay"/"call" don't hit "display"/"recall".
@@ -25,9 +35,17 @@ public final class DestructiveActionPolicy {
     public DestructiveActionPolicy() {
     }
 
-    /** True when {@code action} is a TAP_ELEMENT targeting a destructive keyword. */
+    /** True when {@code action} is intrinsically sensitive by type, or a TAP_ELEMENT
+     *  targeting a destructive keyword. */
     public boolean requiresConfirmation(ResolvedAction action) {
-        if (action == null || action.type() != ActionType.TAP_ELEMENT) {
+        if (action == null) {
+            return false;
+        }
+        // Positive-by-type: always confirm, independent of params/keywords/backend flag.
+        if (ALWAYS_CONFIRM.contains(action.type())) {
+            return true;
+        }
+        if (action.type() != ActionType.TAP_ELEMENT) {
             return false;
         }
         String haystack = normalize(action.param("text"));
