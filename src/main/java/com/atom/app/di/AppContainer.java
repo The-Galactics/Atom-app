@@ -98,8 +98,15 @@ public class AppContainer {
                 new AuthGrpcAdapter(
                         AtomAgentServiceGrpc.newBlockingStub(channelProvider.getRawChannel()),
                         clock);
+        // Redirect to Login in real time when a refresh is rejected (US-10.3). The
+        // Application implements SessionListener; fall back to a no-op otherwise.
+        com.atom.application.port.out.security.SessionListener sessionListener =
+                (context instanceof com.atom.application.port.out.security.SessionListener)
+                        ? (com.atom.application.port.out.security.SessionListener) context
+                        : com.atom.application.port.out.security.SessionListener.NONE;
         com.atom.application.usecase.security.AuthUseCase authUseCaseImpl =
-                new com.atom.application.usecase.security.AuthUseCase(authGateway, tokenStore, clock);
+                new com.atom.application.usecase.security.AuthUseCase(
+                        authGateway, tokenStore, clock, sessionListener);
         this.authUseCase = authUseCaseImpl;
 
         // Now point the interceptor at the live refresh-aware supplier.
