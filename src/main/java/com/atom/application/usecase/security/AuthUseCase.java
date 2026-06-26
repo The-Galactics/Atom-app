@@ -91,6 +91,14 @@ public class AuthUseCase implements AuthPortIn {
     private TokenPair persist(TokenPair pair) {
         tokenStore.save(pair.getAccessToken(), pair.getRefreshToken(),
                 pair.getExpiresAtEpochSeconds());
+        if (pair.getUserId() != null && !pair.getUserId().isEmpty()) {
+            tokenStore.saveUserId(pair.getUserId());
+        }
         return pair;
+    }
+
+    /** The server-verified user id from the last successful auth, or null pre-auth. */
+    public String getServerUserId() {
+        return tokenStore.getUserId();
     }
 }

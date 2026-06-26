@@ -18,6 +18,7 @@ public class EncryptedTokenStore implements TokenStore {
     private static final String KEY_ACCESS = "access_token";
     private static final String KEY_REFRESH = "refresh_token";
     private static final String KEY_EXPIRES = "expires_at_epoch_seconds";
+    private static final String KEY_USER_ID = "server_user_id";
 
     private final SharedPreferences prefs;
 
@@ -97,6 +98,17 @@ public class EncryptedTokenStore implements TokenStore {
 
     @Override
     public void clear() {
-        prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).remove(KEY_EXPIRES).apply();
+        prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).remove(KEY_EXPIRES)
+                .remove(KEY_USER_ID).apply();
+    }
+
+    @Override
+    public void saveUserId(String userId) {
+        prefs.edit().putString(KEY_USER_ID, userId).apply();
+    }
+
+    @Override
+    public String getUserId() {
+        return prefs.getString(KEY_USER_ID, null);
     }
 }

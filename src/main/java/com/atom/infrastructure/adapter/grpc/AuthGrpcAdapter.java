@@ -74,7 +74,7 @@ public class AuthGrpcAdapter implements AuthGatewayPortOut {
     private TokenPair toPair(AuthResponse r) {
         return TokenPair.fromExpiresIn(
                 r.getAccessToken(), r.getRefreshToken(), r.getExpiresIn(),
-                clockEpochSeconds.getAsLong());
+                clockEpochSeconds.getAsLong(), r.getUserId());
     }
 
     /** Maps a gRPC status to an {@link AuthException.Reason}. {@code refreshFlow}
