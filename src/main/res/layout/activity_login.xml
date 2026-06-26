@@ -4,51 +4,65 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp">
+    android:background="@color/deep_onyx"
+    android:fitsSystemWindows="true"
+    android:padding="@dimen/space_l">
 
     <TextView
         android:id="@+id/title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/auth_login_title"
-        android:textSize="22sp"
-        android:layout_marginBottom="24dp" />
+        android:textAppearance="@style/TextAppearance.Atom.Display"
+        android:layout_marginBottom="@dimen/space_l" />
 
     <EditText
         android:id="@+id/emailInput"
+        style="@style/Widget.Atom.Input"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_surface_card"
+        android:paddingHorizontal="@dimen/space_m"
+        android:paddingVertical="@dimen/space_s"
         android:hint="@string/auth_email_hint"
         android:inputType="textEmailAddress"
         android:autofillHints="emailAddress" />
 
     <EditText
         android:id="@+id/passwordInput"
+        style="@style/Widget.Atom.Input"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_m"
+        android:background="@drawable/bg_surface_card"
+        android:paddingHorizontal="@dimen/space_m"
+        android:paddingVertical="@dimen/space_s"
         android:hint="@string/auth_password_hint"
         android:inputType="textPassword"
         android:autofillHints="password" />
 
     <Button
         android:id="@+id/primaryButton"
+        style="@style/Widget.Atom.Button.Primary"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="@dimen/space_m"
         android:text="@string/auth_login_button" />
 
     <Button
         android:id="@+id/toggleModeButton"
-        style="?attr/borderlessButtonStyle"
+        style="@style/Widget.Atom.Button.Tonal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_s"
         android:text="@string/auth_switch_to_register" />
 
     <Button
         android:id="@+id/googleButton"
+        style="@style/Widget.Atom.Button.Tonal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_s"
         android:visibility="gone"
         android:text="@string/auth_google_button" />
 
@@ -56,15 +70,17 @@
         android:id="@+id/progress"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="@dimen/space_m"
+        android:indeterminateTint="@color/accent"
         android:visibility="gone" />
 
     <TextView
         android:id="@+id/errorText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textColor="#B00020"
+        android:layout_marginTop="@dimen/space_s"
+        android:textAppearance="@style/TextAppearance.Atom.Caption"
+        android:textColor="@color/status_error"
         android:visibility="gone" />
 
 </LinearLayout>
