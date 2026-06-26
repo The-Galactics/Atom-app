@@ -232,7 +232,7 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
         chip.setText(granted ? R.string.settings_perm_granted : R.string.settings_perm_not_granted);
-        chip.setTextColor(getColor(granted ? R.color.accent : R.color.on_surface_label));
+        chip.setTextColor(getColor(granted ? R.color.accent : R.color.status_error));
     }
 
     // --- Wake word section ---------------------------------------------------

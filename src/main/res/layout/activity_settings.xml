@@ -61,7 +61,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
+                android:background="@drawable/bg_card_input"
                 android:hint="@string/settings_your_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
@@ -79,7 +79,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
+                android:background="@drawable/bg_card_input"
                 android:hint="@string/settings_assistant_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
