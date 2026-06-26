@@ -32,6 +32,10 @@ class InteractionGrpcAdapterTest {
     private static class FakeAtomAgentService extends AtomAgentServiceGrpc.AtomAgentServiceImplBase {
         CommandResponse commandResponseResult;
         List<MessageResponse> streamChatResults;
+        // Captured so tests can assert what the adapter put on the request.
+        CommandRequest lastCommandRequest;
+        // Captured so tests can assert a deadline was set on the call.
+        io.grpc.Deadline lastDeadline;
 
         /**
          * Simulates the synchronous executeCommand unary RPC method.
@@ -39,6 +43,8 @@ class InteractionGrpcAdapterTest {
          */
         @Override
         public void executeCommand(CommandRequest request, StreamObserver<CommandResponse> responseObserver) {
+            lastCommandRequest = request;
+            lastDeadline = io.grpc.Context.current().getDeadline();
             if (commandResponseResult != null) {
                 responseObserver.onNext(commandResponseResult);
                 responseObserver.onCompleted();
@@ -84,22 +90,9 @@ class InteractionGrpcAdapterTest {
                 .directExecutor()
                 .build());
 
-        // 4. Instantiate the target adapter with dummy host and port parameters
-        adapter = new InteractionGrpcAdapter("localhost", 50051);
-
-        // Reflection mechanism to inject the in-memory channel and stub instances.
-        // This isolates the test class completely, avoiding loading the heavy Spring Boot context (@SpringBootTest)
-        try {
-            java.lang.reflect.Field channelField = InteractionGrpcAdapter.class.getDeclaredField("channel");
-            channelField.setAccessible(true);
-            channelField.set(adapter, inProcessChannel);
-
-            java.lang.reflect.Field stubField = InteractionGrpcAdapter.class.getDeclaredField("blockingStub");
-            stubField.setAccessible(true);
-            stubField.set(adapter, AtomAgentServiceGrpc.newBlockingStub(inProcessChannel));
-        } catch (Exception e) {
-            fail("Failed to set up infrastructure dependencies for gRPC unit test: " + e.getMessage());
-        }
+        // 4. Instantiate the adapter with the in-process channel (new channel-injected constructor).
+        adapter = new InteractionGrpcAdapter(inProcessChannel);
+        adapter.init();
     }
 
     @AfterEach
@@ -156,6 +149,69 @@ class InteractionGrpcAdapterTest {
     }
 
     @Test
+    void shouldMapTaskCompleteAndStepFromWire() {
+        // GIVEN a mid-loop action response that is not yet complete.
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setActionType("OPEN_APP")
+                .setTaskComplete(false)
+                .setStep(3)
+                .build();
+
+        // WHEN
+        ResolvedAction result = adapter.commandResponse(userId, "abre youtube");
+
+        // THEN the loop fields are projected into the domain action.
+        assertEquals(ActionType.OPEN_APP, result.type());
+        assertFalse(result.taskComplete());
+        assertEquals(3, result.step());
+    }
+
+    @Test
+    void shouldMapTaskCompleteTrueOnFinalResponse() {
+        // GIVEN a terminal response signalling the ReAct task is done.
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setOutMessage("Listo")
+                .setTaskComplete(true)
+                .setStep(5)
+                .build();
+
+        // WHEN
+        ResolvedAction result = adapter.commandResponse(userId, "abre youtube");
+
+        // THEN
+        assertTrue(result.taskComplete());
+        assertEquals(5, result.step());
+        assertEquals("Listo", result.outMessage());
+    }
+
+    @Test
+    void shouldPopulateRequestFieldsAndSendScreenElements() {
+        // GIVEN any response; we only assert what the adapter put on the request.
+        UUID userId = UUID.randomUUID();
+
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setSuccess(true)
+                .setActionType("OPEN_APP")
+                .build();
+
+        // WHEN
+        adapter.commandResponse(userId, "abre youtube");
+
+        // THEN the request carries the user id and command, and the screen_elements
+        // field is always populated (empty here: no accessibility service in the JVM).
+        assertNotNull(fakeService.lastCommandRequest);
+        assertEquals(userId.toString(), fakeService.lastCommandRequest.getUserId());
+        assertEquals("abre youtube", fakeService.lastCommandRequest.getCommand());
+        assertEquals(0, fakeService.lastCommandRequest.getScreenElementsCount());
+    }
+
+    @Test
     void shouldReturnStreamChatTokensCorrectly() {
         // GIVEN
         UUID userId = UUID.randomUUID();
@@ -178,5 +234,17 @@ class InteractionGrpcAdapterTest {
         assertEquals(2, collectedTokens.size());
         assertEquals("Hello", collectedTokens.get(0));
         assertEquals(", bro!", collectedTokens.get(1));
+    }
+
+    @Test
+    void executeCommand_setsADeadlineOnTheCall() {
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setActionType("NONE").setTaskComplete(true).build();
+
+        adapter.commandResponse(UUID.randomUUID(), "hola");
+
+        // The fake captures the call's Context deadline; a deadline must be present.
+        assertNotNull(fakeService.lastDeadline,
+                "executeCommand must call withDeadlineAfter(...)");
     }
 }

@@ -29,10 +29,10 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.atom.app.di.AppContainer;
 import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
-import com.atom.infrastructure.adapter.screen.ScreenCaptureService;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.materialswitch.MaterialSwitch;
@@ -77,23 +77,6 @@ public class SettingsActivity extends AppCompatActivity {
                             toast("Overlay permission denied");
                         }
                         refreshBubbleControl();
-                    });
-
-    // FUTURE WORK: consent result just starts the scaffolding service to test the round-trip.
-    private final ActivityResultLauncher<Intent> screenCaptureLauncher =
-            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
-                    result -> {
-                        if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                            Intent serviceIntent = new Intent(this, ScreenCaptureService.class);
-                            serviceIntent.putExtra(
-                                    ScreenCaptureService.EXTRA_RESULT_CODE, result.getResultCode());
-                            serviceIntent.putExtra(
-                                    ScreenCaptureService.EXTRA_RESULT_DATA, result.getData());
-                            startForegroundService(serviceIntent);
-                            toast("Screen capture consent granted (scaffolding)");
-                        } else {
-                            toast("Screen capture consent denied");
-                        }
                     });
 
     @Override
@@ -153,13 +136,17 @@ public class SettingsActivity extends AppCompatActivity {
             preferences.setUserName(etUserName.getText().toString());
             preferences.setAssistantName(etAiName.getText().toString());
 
-            // The assistant name IS the wake word: store it and (re)start the
-            // always-on listener so Vosk picks up the new name. setAssistantName
-            // falls back to "Atom" when blank, mirrored here for the wake word.
+            // The assistant name IS the wake word. Reconfigure in place when the
+            // listener is already running (no stop->start FGS churn); only do a
+            // full start when enabling from a stopped state.
+            boolean wasEnabled = preferences.isWakeWordEnabled();
             preferences.setWakeWordName(preferences.getAssistantName());
             preferences.setWakeWordEnabled(true);
-            stopWakeService();
-            startWakeService();
+            if (wasEnabled) {
+                reconfigureWakeService();
+            } else {
+                startWakeService();
+            }
 
             toast(getString(R.string.settings_saved));
             ensureAssistantPermissions();
@@ -171,6 +158,17 @@ public class SettingsActivity extends AppCompatActivity {
         setupPermissionDashboard();
         setupWakeWordSection();
         setupLanguageSection();
+
+        // Logout: clear the session tokens and return to the login screen.
+        MaterialButton btnLogout = findViewById(R.id.logoutButton);
+        btnLogout.setOnClickListener(v -> {
+            AppContainer container = ((AtomApp) getApplication()).getAppContainer();
+            container.getAuthUseCase().logout();
+            Intent logoutIntent = new Intent(this, LoginActivity.class);
+            logoutIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(logoutIntent);
+            finish();
+        });
     }
 
     // --- Permission dashboard ------------------------------------------------
@@ -344,12 +342,7 @@ public class SettingsActivity extends AppCompatActivity {
         if (!PermissionCoordinator.isAccessibilityServiceEnabled(this)) {
             toast("Enable \"Atom\" under Accessibility");
             startActivity(PermissionCoordinator.accessibilitySettingsIntent());
-            return;
         }
-
-        // Screen capture (MediaProjection). FUTURE WORK: capture itself is not implemented.
-        screenCaptureLauncher.launch(
-                PermissionCoordinator.screenCaptureIntent(this));
     }
 
     private void toggleFloatingBubble() {
@@ -488,6 +481,12 @@ public class SettingsActivity extends AppCompatActivity {
     private void startWakeService() {
         startForegroundService(new Intent(this, WakeWordService.class)
                 .setAction(WakeWordService.ACTION_START));
+    }
+
+    /** Rebuilds the running listener for a changed name without an FGS stop->start. */
+    private void reconfigureWakeService() {
+        startForegroundService(new Intent(this, WakeWordService.class)
+                .setAction(WakeWordService.ACTION_RECONFIGURE));
     }
 
     private void stopWakeService() {

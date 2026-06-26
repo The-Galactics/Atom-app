@@ -18,8 +18,10 @@ import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import com.atom.app.AtomApp;
 import com.atom.app.R;
 import com.atom.app.overlay.FloatingBubbleService;
+import com.atom.app.security.SecureShutdownCoordinator;
 import com.atom.app.settings.AtomPreferences;
 
 import org.vosk.Model;
@@ -98,16 +100,42 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
     };
 
+    /** Opaque, fail-closed runtime security verdict (cached, computed off the main thread). */
+    private boolean isEnvironmentSafe() {
+        try {
+            return ((AtomApp) getApplication())
+                    .getAppContainer().getDeviceSecurityGuard().isEnvironmentSafe();
+        } catch (Throwable failClosed) {
+            return false;
+        }
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : ACTION_START;
+        // A startForegroundService() promise must be fulfilled before any stopSelf(),
+        // or the OS throws ForegroundServiceDidNotStartInTimeException. Satisfy it on
+        // every teardown path with a typeless startForeground, then stop cleanly.
         if (ACTION_STOP.equals(action)) {
+            startForegroundFallback();
+            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
         if (!startForegroundNotification()) {
-            // Not allowed to be a mic FGS right now (e.g. app not foreground).
-            // Stop cleanly instead of crashing; it'll start when eligible.
+            // Mic FGS not allowed right now (e.g. app not foreground): fulfil the
+            // promise typelessly, then stop; it'll start again when eligible.
+            startForegroundFallback();
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        // Runtime attestation gate: the wake word holds the microphone, so refuse to
+        // run on a compromised device. FGS promise already fulfilled above.
+        if (!isEnvironmentSafe()) {
+            Log.w(TAG, "Unsafe runtime environment; wake word refused.");
+            SecureShutdownCoordinator.shutdownProtectedComponents(this);
+            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -297,6 +325,26 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
             // (foreground) state throws. Don't crash the app — bail out.
             Log.e(TAG, "startForeground(microphone) not allowed right now", e);
             return false;
+        }
+    }
+
+    /**
+     * Fulfils a pending FGS promise with a typeless notification when the mic
+     * type isn't allowed, so we can stopSelf() without a DidNotStartInTime crash.
+     */
+    private void startForegroundFallback() {
+        ensureChannel();
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(getString(R.string.wake_notification_title))
+                .setContentText(getString(R.string.wake_notification_text))
+                .setSmallIcon(R.drawable.ic_mic)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .build();
+        try {
+            startForeground(NOTIF_ID, notification);
+        } catch (Exception e) {
+            Log.e(TAG, "Fallback startForeground failed", e);
         }
     }
 

@@ -12,16 +12,24 @@ if (localPropertiesFile.exists()) {
     localProperties.load(localPropertiesFile.inputStream())
 }
 
+// Release signing config — credentials live in keystore.properties (gitignored),
+// never committed. Absent the file (e.g. CI without secrets), release stays unsigned.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
 android {
     namespace = "com.atom.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.atom.app"
+        applicationId = "ai.atom"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -30,21 +38,41 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         }
         debug {
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
             buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
             buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
         }
     }
     compileOptions {
@@ -55,6 +83,9 @@ android {
     testOptions {
         // Tests use JUnit 5 (Jupiter); AGP runs them on the JUnit Platform.
         unitTests.all { it.useJUnitPlatform() }
+        // android.jar stubs return defaults instead of throwing, so happy-path
+        // android.util.Log calls in code under test are no-ops in unit tests.
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -98,16 +129,25 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     annotationProcessor("androidx.room:room-compiler:2.6.1")
 
+    // Encrypted storage for the session tokens (HU-27): EncryptedSharedPreferences.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testRuntimeOnly("org.junit.platform:launcher")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
     testImplementation("org.assertj:assertj-core:3.27.3")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("io.grpc:grpc-testing:1.62.2")
     testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+
+    // Credential Manager + Google Identity Services (Google Sign-In, gated by GOOGLE_WEB_CLIENT_ID).
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
     // Wake word — Vosk on-device keyword spotting (any typed name, no model file).
     implementation("com.alphacephei:vosk-android:0.3.47")

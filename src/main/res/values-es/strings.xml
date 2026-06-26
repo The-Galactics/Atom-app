@@ -80,6 +80,8 @@
     <string name="action_confirm_no">Cancelar</string>
     <string name="action_cancelled">Acción cancelada</string>
     <string name="action_permission_denied">Permiso denegado — acción cancelada</string>
+    <!-- Progreso del bucle autónomo -->
+    <string name="automation_operating">Atom está operando…</string>
 
     <!-- Superposición flotante -->
     <string name="overlay_notification_title">Atom está flotando</string>
@@ -159,11 +161,16 @@
     <string name="action_opening_app">Abriendo %1$s.</string>
     <string name="action_call_unknown">No entendí a quién llamar.</string>
     <string name="action_calling">Llamando a %1$s.</string>
+    <string name="contact_not_found">No encontré ese contacto en tu agenda</string>
     <string name="action_message_unknown">No entendí a quién enviar el mensaje.</string>
     <string name="action_message_preparing">Preparando un mensaje para %1$s.</string>
+    <string name="action_whatsapp_search_fallback">Abriendo WhatsApp para buscar a %1$s…</string>
+    <string name="action_telegram_opening">Abriendo Telegram para enviar tu mensaje.</string>
     <string name="action_alarm_unknown">No entendí la hora de la alarma.</string>
+    <string name="action_alarm_invalid_time">No entendí la hora de la alarma.</string>
     <string name="action_alarm_set">Alarma puesta a las %1$s.</string>
     <string name="action_timer_unknown">No entendí la duración del temporizador.</string>
+    <string name="action_timer_invalid_duration">No entendí la duración del temporizador.</string>
     <string name="action_timer_invalid">La duración del temporizador no es válida.</string>
     <string name="action_timer_started">Temporizador iniciado.</string>
     <string name="action_setting_unknown">No entendí qué ajuste cambiar.</string>
@@ -174,6 +181,17 @@
     <string name="action_torch_on">Linterna encendida.</string>
     <string name="action_torch_off">Linterna apagada.</string>
     <string name="action_opening_settings">Abriendo ajustes de %1$s.</string>
+    <string name="action_type_unknown">No entendí qué escribir.</string>
+    <string name="action_typed">Escribí \'%1$s\'.</string>
+    <string name="action_type_failed">No encontré un campo de texto donde escribir.</string>
+    <!-- Etiquetas de botón de envío de respaldo (ver values/strings.xml para el orden y motivo). -->
+    <string-array name="search_submit_labels">
+        <item>buscar</item>
+        <item>ir</item>
+        <item>enviar</item>
+        <item>aceptar</item>
+        <item>intro</item>
+    </string-array>
     <string name="setting_label_wifi">Wi-Fi</string>
     <string name="setting_label_bluetooth">Bluetooth</string>
     <string name="setting_label_dnd">No molestar</string>

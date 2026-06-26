@@ -20,6 +20,7 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -50,18 +51,24 @@ import com.atom.app.R;
 import com.atom.app.data.ChatMessage;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
+import com.atom.app.permission.PermissionCoordinator;
+import com.atom.app.security.SecureShutdownCoordinator;
+import com.atom.application.usecase.security.DeviceSecurityGuard;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
 import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
+import com.atom.domain.action.DestructiveActionPolicy;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
@@ -130,6 +137,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private AtomApp app;
     private boolean overlayEnabled; // set between START and STOP
 
+    // Hands the user's confirm/decline back to the blocked loop thread (capacity 1).
+    private final BlockingQueue<Boolean> destructiveAnswer = new ArrayBlockingQueue<>(1);
+    // Runs callbacks on the main thread; the loop runs on a background executor.
+    private final android.os.Handler mainHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
     // Keeps the panel mic icon in sync when mute is toggled from the main screen.
     private final SharedPreferences.OnSharedPreferenceChangeListener muteListener =
             (sp, key) -> {
@@ -162,10 +175,15 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         chatRepository = new ChatRepository(
                 app.getAppContainer().getExternalMessageUseCase(),
                 app.getAppContainer().getSessionUserId(),
-                app.getAppContainer().getSessionChatId());
+                app.getAppContainer().getSessionChatId(),
+                app.getAppContainer().getAuthUseCase());
         commandRepository = new CommandRepository(
                 app.getAppContainer().getExternalCommandUseCase(),
-                app.getAppContainer().getActionExecutor());
+                app.getAppContainer().getActionExecutor(),
+                app.getAppContainer().getSessionUserId(),
+                app.getAppContainer().getAuthUseCase());
+        // Prompt (and pause the loop) when a destructive action is detected mid-loop.
+        commandRepository.setConfirmationGate(new DestructiveConfirmationGate());
         preferences = new AtomPreferences(this);
         conversationRepository = new ConversationRepository(this);
         preferences.registerChangeListener(muteListener);
@@ -182,6 +200,18 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : ACTION_START;
         if (ACTION_STOP.equals(action)) {
+            stopOverlay();
+            return START_NOT_STICKY;
+        }
+        // Runtime attestation gate. The overlay grants elevated reach (draw-over-apps +
+        // the autonomous action loop), so refuse to come up on a compromised device. The
+        // verdict is opaque: on rejection we tear everything down silently.
+        if (!isEnvironmentSafe()) {
+            Log.w("AtomSecurity", "Unsafe runtime environment; overlay refused.");
+            // Launched via startForegroundService(): honour the foreground contract before
+            // stopping, or the system kills us with ForegroundServiceDidNotStartInTimeException.
+            startForegroundWithNotification();
+            SecureShutdownCoordinator.shutdownProtectedComponents(this);
             stopOverlay();
             return START_NOT_STICKY;
         }
@@ -204,6 +234,20 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             showBubble();
         }
         return START_STICKY;
+    }
+
+    /**
+     * Consults the opaque, fail-closed security gate (reads the verdict precomputed
+     * off the main thread at app startup). Any failure to obtain a verdict — e.g. the
+     * container is unavailable — is itself treated as unsafe.
+     */
+    private boolean isEnvironmentSafe() {
+        try {
+            DeviceSecurityGuard guard = app.getAppContainer().getDeviceSecurityGuard();
+            return guard.isEnvironmentSafe();
+        } catch (Throwable failClosed) {
+            return false;
+        }
     }
 
     @Override
@@ -841,10 +885,16 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     askAtom(prompt, status, null);
                     return;
                 }
+                // Accessibility-powered actions need the service enabled first.
+                if (PermissionCoordinator.requiresAccessibility(action)
+                        && !PermissionCoordinator.isAccessibilityServiceEnabled(FloatingBubbleService.this)) {
+                    promptEnableAccessibility(status);
+                    return;
+                }
                 if (action.requiresConfirmation()) {
-                    confirmAndRun(action, status);
+                    confirmAndRun(prompt, action, status);
                 } else {
-                    runAction(action, status);
+                    runAutonomous(prompt, status);
                 }
             }
 
@@ -858,9 +908,63 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         });
     }
 
-    /** Executes a resolved action and shows its outcome in the panel status. */
-    private void runAction(ResolvedAction action, TextView status) {
-        commandRepository.run(action, outcome -> respond(outcome.message(), status));
+    /**
+     * Drives the autonomous loop for an order. The bubble tucks to the edge handle
+     * the moment an action runs (so it never covers Atom's taps/scrolls) and
+     * re-expands when the chain finishes, then speaks/shows the final reply.
+     */
+    private void runAutonomous(String order, TextView status) {
+        commandRepository.executeAutonomous(order, new CommandRepository.AutomationCallback() {
+            @Override
+            public void onActionStarted(ResolvedAction action, int step) {
+                // Leave the screen unobstructed for Atom's taps/scrolls.
+                if (bubbleView != null || panelView != null) {
+                    hideToHandle();
+                }
+            }
+
+            @Override
+            public void onComplete(String finalMessage) {
+                reExpandAfterAutomation();
+                respondFromAutomation(finalMessage);
+            }
+
+            @Override
+            public void onAborted(String message) {
+                reExpandAfterAutomation();
+                if (message != null && !message.trim().isEmpty()) {
+                    respondFromAutomation(message);
+                }
+            }
+        });
+    }
+
+    // Brings the overlay back after the loop tucked it to the handle.
+    private void reExpandAfterAutomation() {
+        if (collapsedToHandle) {
+            restoreBubble();
+        } else if (bubbleView == null && panelView == null && handleView == null && overlayEnabled) {
+            showBubble();
+        }
+    }
+
+    // Speaks/shows a loop result through the panel when open, else via the bubble path.
+    private void respondFromAutomation(String message) {
+        TextView status = panelView != null ? panelView.findViewById(R.id.overlay_status) : null;
+        respond(message, status);
+    }
+
+    /**
+     * Tells the user the accessibility service is needed and opens its Settings
+     * screen. From a Service the Intent needs its own task.
+     */
+    private void promptEnableAccessibility(TextView status) {
+        if (status.isAttachedToWindow()) {
+            status.setText(R.string.action_accessibility_disabled);
+            scheduleStatusReset(status);
+        }
+        startActivity(PermissionCoordinator.accessibilitySettingsIntent()
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     /**
@@ -868,14 +972,14 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      * dialog because a Service has no Activity window; relies on the same
      * SYSTEM_ALERT_WINDOW permission the bubble already requires.
      */
-    private void confirmAndRun(ResolvedAction action, TextView status) {
+    private void confirmAndRun(String order, ResolvedAction action, TextView status) {
         String message = action.outMessage().isEmpty()
                 ? getString(R.string.action_confirm_default)
                 : action.outMessage();
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.action_confirm_title)
                 .setMessage(message)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> runAction(action, status))
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> runAutonomous(order, status))
                 .setNegativeButton(R.string.action_confirm_no, (d, w) -> {
                     if (status.isAttachedToWindow()) {
                         status.setText(R.string.action_cancelled);
@@ -889,6 +993,72 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     : WindowManager.LayoutParams.TYPE_PHONE);
         }
         dialog.show();
+        hardenAgainstTapjacking(dialog);
+    }
+
+    /**
+     * Anti-tapjacking (2B.4): discard touches that pass through another window
+     * overlaying our confirmation, so a malicious overlay cannot force the "Yes".
+     * Buttons exist only after {@link AlertDialog#show()}, so call this after it.
+     */
+    private static void hardenAgainstTapjacking(AlertDialog dialog) {
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().getDecorView().setFilterTouchesWhenObscured(true);
+        }
+        android.widget.Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (positive != null) {
+            positive.setFilterTouchesWhenObscured(true);
+        }
+        android.widget.Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+        if (negative != null) {
+            negative.setFilterTouchesWhenObscured(true);
+        }
+    }
+
+    /**
+     * Shows the destructive-action confirmation as an overlay dialog. Called on the
+     * main thread; the loop thread is blocked meanwhile and resumes/aborts on the answer.
+     */
+    private void promptDestructive(ResolvedAction action) {
+        String message = action.outMessage().isEmpty()
+                ? getString(R.string.action_confirm_default)
+                : action.outMessage();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.action_confirm_title)
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> destructiveAnswer.offer(true))
+                .setNegativeButton(R.string.action_confirm_no, (d, w) -> destructiveAnswer.offer(false))
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
+        hardenAgainstTapjacking(dialog);
+    }
+
+    /** Prompting gate: shows the overlay confirmation and blocks the loop thread until the user answers. */
+    private final class DestructiveConfirmationGate implements CommandRepository.ConfirmationGate {
+        private final DestructiveActionPolicy policy = new DestructiveActionPolicy();
+
+        @Override
+        public boolean requiresConfirmation(ResolvedAction action) {
+            return policy.requiresConfirmation(action);
+        }
+
+        @Override
+        public boolean confirm(ResolvedAction action) {
+            destructiveAnswer.clear();
+            mainHandler.post(() -> promptDestructive(action));
+            try {
+                return destructiveAnswer.take();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
     }
 
     /** Swaps the overlay mic icon and label to match the shared mute state. */
@@ -1041,7 +1211,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void respond(String text, TextView status) {
         // Record Atom's reply in the shared transcript before showing/speaking it.
         conversationRepository.saveAssistantMessage(text);
-        if (status.isAttachedToWindow()) {
+        if (status != null && status.isAttachedToWindow()) {
             status.setText(text);
         }
         if (text == null || text.trim().isEmpty() || !preferences.isTtsEnabled()) {

@@ -5,11 +5,11 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.provider.Settings;
 import android.text.TextUtils;
 
+import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 
@@ -27,6 +27,36 @@ public final class PermissionCoordinator {
         return switch (action.type()) {
             case MAKE_CALL -> Manifest.permission.CALL_PHONE;
             default -> null;
+        };
+    }
+
+    /**
+     * All dangerous runtime permissions an action needs before it runs. MAKE_CALL
+     * also reads contacts to resolve a spoken name to a number, so it requests
+     * both up front.
+     */
+    public static String[] requiredPermissions(ResolvedAction action) {
+        if (action != null && action.type() == ActionType.MAKE_CALL) {
+            return new String[] {
+                    Manifest.permission.CALL_PHONE,
+                    Manifest.permission.READ_CONTACTS
+            };
+        }
+        String single = requiredPermission(action);
+        return single == null ? new String[0] : new String[] { single };
+    }
+
+    /**
+     * True if the action is fulfilled by {@link AtomAccessibilityService} and
+     * therefore needs that service enabled before it can run.
+     */
+    public static boolean requiresAccessibility(ResolvedAction action) {
+        if (action == null) {
+            return false;
+        }
+        return switch (action.type()) {
+            case NAVIGATE, SCROLL, READ_SCREEN, TAP_ELEMENT -> true;
+            default -> false;
         };
     }
 
@@ -72,12 +102,5 @@ public final class PermissionCoordinator {
     /** Intent that opens the system Accessibility settings so the user can enable Atom. */
     public static Intent accessibilitySettingsIntent() {
         return new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-    }
-
-    // FUTURE WORK: builds the MediaProjection consent intent; capture itself is not implemented.
-    public static Intent screenCaptureIntent(Context context) {
-        MediaProjectionManager manager =
-                (MediaProjectionManager) context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        return manager.createScreenCaptureIntent();
     }
 }
