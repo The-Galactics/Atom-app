@@ -15,13 +15,13 @@ import com.atom.app.R;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.application.port.out.PhoneNumberNormalizerPortOut;
+import com.atom.domain.contact.ContactResolution;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 /**
  * Android adapter for {@link ActionExecutorPortOut}: turns a {@link ResolvedAction}
@@ -126,6 +126,9 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
         }
 
         String number = target;
+        // A fuzzy contact match opens the dialer (pre-filled) so the user confirms
+        // the resolved number instead of placing a direct call (2B.5).
+        boolean forceDial = false;
         // A name (not a dialable string) is resolved against the device address
         // book first; numbers and dial codes pass straight through.
         if (!isDialable(target)) {
@@ -134,22 +137,35 @@ public class AndroidActionExecutor implements ActionExecutorPortOut {
             if (!canReadContacts) {
                 return ActionOutcome.failed(appContext.getString(R.string.action_permission_denied));
             }
-            Optional<String> resolved = contactResolver.resolveNumber(target);
-            if (resolved.isEmpty()) {
+            ContactResolution resolution = contactResolver.resolveContact(target);
+            if (resolution.number().isEmpty()) {
+                // NONE or AMBIGUOUS: never guess — ask the user to be more specific.
                 return ActionOutcome.failed(appContext.getString(R.string.contact_not_found));
             }
-            number = resolved.get();
+            number = resolution.number().get();
+            // Only an exact unique match may be dialed directly.
+            forceDial = !resolution.isExact();
         }
 
-        // Requires the CALL_PHONE runtime permission. Without it, fall back to
-        // the dialer (ACTION_DIAL needs no permission) so the order still helps.
+        // ACTION_CALL needs CALL_PHONE; without it — or for a fuzzy match — fall back
+        // to the dialer (ACTION_DIAL needs no permission) so the user confirms first.
         boolean canCall = appContext.checkSelfPermission(android.Manifest.permission.CALL_PHONE)
                 == PackageManager.PERMISSION_GRANTED;
-        String action = canCall ? Intent.ACTION_CALL : Intent.ACTION_DIAL;
+        String action = chooseCallAction(canCall, !forceDial);
         Intent intent = new Intent(action, Uri.parse("tel:" + Uri.encode(number)));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         appContext.startActivity(intent);
         return ActionOutcome.ok(appContext.getString(R.string.action_calling, number));
+    }
+
+    /**
+     * Picks the call intent action: a direct {@link Intent#ACTION_CALL} only when the
+     * app may call AND the contact match is exact; otherwise {@link Intent#ACTION_DIAL}
+     * so the user confirms the number in the dialer (no permission needed) (2B.5).
+     * Pure (returns the inlined String constants) so it is unit-testable.
+     */
+    static String chooseCallAction(boolean canCall, boolean exactMatch) {
+        return (canCall && exactMatch) ? Intent.ACTION_CALL : Intent.ACTION_DIAL;
     }
 
     private static boolean isDialable(String target) {
