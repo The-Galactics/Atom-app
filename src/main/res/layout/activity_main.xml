@@ -112,35 +112,35 @@
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip_timer"
-                style="@style/Widget.Material3.Chip.Assist"
+                style="@style/Widget.Atom.Chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/chip_timer" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip_call"
-                style="@style/Widget.Material3.Chip.Assist"
+                style="@style/Widget.Atom.Chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/chip_call" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip_message"
-                style="@style/Widget.Material3.Chip.Assist"
+                style="@style/Widget.Atom.Chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/chip_message" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip_wifi"
-                style="@style/Widget.Material3.Chip.Assist"
+                style="@style/Widget.Atom.Chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/chip_wifi" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip_flashlight"
-                style="@style/Widget.Material3.Chip.Assist"
+                style="@style/Widget.Atom.Chip"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/chip_flashlight" />
