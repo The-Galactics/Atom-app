@@ -74,11 +74,7 @@
     <string name="settings_bubble_stopped">Burbuja flotante desactivada</string>
 
     <!-- Confirmación de acción -->
-    <string name="action_confirm_title">Confirmar acción</string>
-    <string name="action_confirm_default">¿Quieres que Atom realice esta acción?</string>
-    <string name="action_confirm_yes">Sí</string>
     <string name="action_confirm_no">Cancelar</string>
-    <string name="action_cancelled">Acción cancelada</string>
     <string name="action_permission_denied">Permiso denegado — acción cancelada</string>
     <!-- Progreso del bucle autónomo -->
     <string name="automation_operating">Atom está operando…</string>

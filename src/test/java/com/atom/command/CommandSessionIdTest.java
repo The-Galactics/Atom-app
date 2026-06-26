@@ -35,7 +35,7 @@ class CommandSessionIdTest {
     private static CommandRepository.ConfirmationGate approveAll() {
         return new CommandRepository.ConfirmationGate() {
             @Override public boolean requiresConfirmation(ResolvedAction a) { return false; }
-            @Override public boolean confirm(ResolvedAction a) { return true; }
+            @Override public String ask(String question) { return ""; }
         };
     }
 
@@ -43,9 +43,9 @@ class CommandSessionIdTest {
     void autonomousLoop_usesTheInjectedSharedSessionId() throws InterruptedException {
         ExecuteCommandPortIn useCase = mock(ExecuteCommandPortIn.class);
         // Return a task_complete action so the loop terminates after one step.
-        when(useCase.execute(any(UUID.class), anyString()))
+        when(useCase.execute(any(UUID.class), any(UUID.class), anyString()))
                 .thenReturn(new ResolvedAction(
-                        ActionType.NONE, Map.of(), "done", 1.0f, false, true, 1));
+                        ActionType.NONE, Map.of(), "done", 1.0f, false, true, 1, false));
 
         ActionExecutorPortOut executor = mock(ActionExecutorPortOut.class);
         AuthPortIn authMock = mock(AuthPortIn.class);
@@ -66,8 +66,8 @@ class CommandSessionIdTest {
         assertThat(latch.await(5, TimeUnit.SECONDS)).as("loop terminated").isTrue();
 
         ArgumentCaptor<UUID> idCaptor = ArgumentCaptor.forClass(UUID.class);
-        verify(useCase, atLeastOnce()).execute(idCaptor.capture(), eq("abre spotify"));
-        // The loop must forward the injected shared id, not a self-generated random.
+        verify(useCase, atLeastOnce()).execute(idCaptor.capture(), any(UUID.class), eq("abre spotify"));
+        // The loop must forward the injected shared id as the user id, not a random.
         assertThat(idCaptor.getValue()).isEqualTo(shared);
     }
 }
