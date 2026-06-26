@@ -102,8 +102,11 @@ public class AppContainer {
                 new com.atom.application.usecase.security.AuthUseCase(authGateway, tokenStore, clock);
         this.authUseCase = authUseCaseImpl;
 
-        // Now point the interceptor at the live refresh-aware supplier.
-        tokenSupplierHolder.set(authUseCaseImpl::getValidAccessToken);
+        // Point the interceptor at the cache-only read (US-E3): the call path never
+        // blocks on a refresh. Callers that need a guaranteed-fresh token must invoke
+        // authUseCaseImpl.refreshIfNeeded() off the call path (e.g. before starting
+        // an authenticated flow, or on a background tick).
+        tokenSupplierHolder.set(authUseCaseImpl::getCachedAccessToken);
 
         // Protected interaction adapter over the AUTHED channel.
         this.interactionGrpcAdapter = new InteractionGrpcAdapter(channelProvider.getAuthedChannel());
