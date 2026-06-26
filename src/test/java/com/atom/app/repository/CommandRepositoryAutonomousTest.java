@@ -109,7 +109,8 @@ class CommandRepositoryAutonomousTest {
 
     private CommandRepository repo(CommandRepository.ConfirmationGate gate) {
         // Settle delay 0; poster runs callbacks inline on the loop thread.
-        return new CommandRepository(useCase, executorPort, authUseCase, gate, 0L, 20, Runnable::run);
+        // sessionUserId is a random UUID here — these tests assert behaviour, not the shared id.
+        return new CommandRepository(useCase, executorPort, UUID.randomUUID(), authUseCase, gate, 0L, 20, Runnable::run);
     }
 
     @Test
@@ -212,7 +213,7 @@ class CommandRepositoryAutonomousTest {
 
         RecordingCallback cb = new RecordingCallback();
         // Cap of 3: the loop must terminate after exactly 3 executed steps.
-        new CommandRepository(useCase, executorPort, authUseCase, approveGate(), 0L, 3, Runnable::run)
+        new CommandRepository(useCase, executorPort, UUID.randomUUID(), authUseCase, approveGate(), 0L, 3, Runnable::run)
                 .executeAutonomous("scroll forever", cb);
         cb.await();
 

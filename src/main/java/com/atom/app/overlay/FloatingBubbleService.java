@@ -179,6 +179,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         commandRepository = new CommandRepository(
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor(),
+                app.getAppContainer().getSessionUserId(),
                 app.getAppContainer().getAuthUseCase());
         // Prompt (and pause the loop) when a destructive action is detected mid-loop.
         commandRepository.setConfirmationGate(new DestructiveConfirmationGate());

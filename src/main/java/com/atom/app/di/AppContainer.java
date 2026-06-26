@@ -198,8 +198,18 @@ public class AppContainer {
         return generated;
     }
 
+    /**
+     * The session identity shared by command and chat surfaces (US-D2). Returns a
+     * stable UUID derived from the server-verified user id (US-D1) when present, so
+     * command and chat share one backend session after auth. Falls back to the
+     * device-persisted UUID before the first login.
+     */
     public UUID getSessionUserId() {
-        return sessionUserId;
+        String serverId = authUseCase.getServerUserId();
+        return (serverId == null || serverId.isEmpty())
+                ? sessionUserId
+                : UUID.nameUUIDFromBytes(
+                        serverId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     public UUID getSessionChatId() {

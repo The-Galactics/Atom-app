@@ -29,6 +29,7 @@ public class ChatViewModelFactory implements ViewModelProvider.Factory {
             CommandRepository commandRepository = new CommandRepository(
                     appContainer.getExternalCommandUseCase(),
                     appContainer.getActionExecutor(),
+                    appContainer.getSessionUserId(),
                     appContainer.getAuthUseCase());
             return (T) new ChatViewModel(repository, commandRepository,
                     appContainer.getConversationRepository(),
