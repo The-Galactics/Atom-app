@@ -43,7 +43,7 @@ The visual identity is anchored by the Aether design system, optimized for dark-
 - **Frontend Layer (The App):** **Android Native** developed in **Java 21**. This repository contains only the UI/UX and client-side logic.
 - **API Consumption:** **gRPC** (server-streaming `StreamChat` over `ai.proto`) to reach the Python AI agent. _(Originally Retrofit 2 + OkHttp against the Spring Boot REST API; the chat transport was cut over to gRPC — see ADR-001 §6.)_
 - **UI Framework:** **Material Design 3** with custom XML layouts to achieve the "Aether" aesthetics (Gradients, Glassmorphism, and the Atom Core animation).
-- **Image/Animation Loading:** **Lottie** for the pulsating "Atom Core" animation and **Glide** for image processing.
+- **Animations:** **Hand-drawn custom Android Views** (`AtomCoreView`, Canvas drawing with radial/sweep gradients and `BlurMaskFilter`) for the pulsating "Atom Core" animation, with no external libraries (no Lottie, no Glide). Icons are resolved as vector drawables/mipmaps.
 - **Build Tool:** Gradle (Android-specific configuration).
 - **Landing Page:** A separate, high-conversion entry point developed in **TypeScript** by the TS expert (Hosted independently).
 

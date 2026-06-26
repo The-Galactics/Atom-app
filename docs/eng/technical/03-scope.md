@@ -17,6 +17,6 @@
 ## Technical Restrictions:
 
  1. **Wi-Fi:** Internet connectivity is always required due to the consumption of external API keys.
- 2. **Operating System:** Android 10 or higher for library compatibility.
+ 2. **Operating System:** Android 8.0 Oreo (API 26) or higher for library compatibility.
  3. **Minimum Hardware:** 4GB RAM or higher due to AI power requirements and background processing.
- 4. **Base Language:** Java 21 and Python 3.13.
+ 4. **Base Language:** Java 21 and Python 3.12.

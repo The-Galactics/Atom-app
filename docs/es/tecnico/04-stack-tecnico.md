@@ -15,12 +15,12 @@ Este documento detalla la arquitectura de software, las tecnologías implementad
 ---
 
 ## 2. Frontend y UI (Móvil Nativo)
-* **Plataforma y Lenguaje:** Android SDK (Mínimo Android 10) utilizando Java 21.
+* **Plataforma y Lenguaje:** Android SDK (mínimo Android 8.0 Oreo / API 26, compilado y dirigido a Android 15 / API 35) utilizando Java 21.
   * *Beneficio:* El desarrollo nativo elimina la latencia de los frameworks multiplataforma, brindando acceso directo a los servicios de accesibilidad del sistema operativo y permitiendo un control granular del hardware (micrófono, inyección de eventos táctiles).
-* **UI y Reactividad:** XML con Material Design 3, View Binding y RxJava 3.
-  * *Beneficio:* Implementación de un modo oscuro absoluto (Pure Black `#0A0A0C` optimizado para pantallas OLED) que reduce el consumo de batería y la carga cognitiva. RxJava 3 maneja eficientemente los flujos de voz asíncronos en tiempo real, conectándose con LiveData para transcripciones efímeras.
-* **Tipografía y Animación:** Lottie for Android, Geist Serif (Títulos) y Lora (Cuerpo).
-  * *Beneficio:* Lottie permite animar el "Núcleo/Átomo" de la interfaz con total fluidez (60 fps) mediante archivos JSON ultraligeros, sin penalizar el procesador. La tipografía combina un perfil técnico elegante con alta legibilidad para lecturas continuas.
+* **UI y Reactividad:** Layouts XML con Material Design 3 (Material Components), y los Android Architecture Components ViewModel y LiveData.
+  * *Beneficio:* Implementación de un modo oscuro absoluto (Pure Black `#0A0A0C` optimizado para pantallas OLED) que reduce el consumo de batería y la carga cognitiva. ViewModel y LiveData gestionan el estado de la UI y los flujos de voz asíncronos en tiempo real, exponiendo a la vista transcripciones efímeras de forma reactiva y consciente del ciclo de vida.
+* **Tipografía y Animación:** Vistas de Android personalizadas dibujadas a mano (Canvas), Geist Serif (Títulos) y Lora (Cuerpo).
+  * *Beneficio:* Una Vista personalizada (`AtomCoreView`) anima el "Núcleo/Átomo" de la interfaz con total fluidez (60 fps) mediante dibujo en Canvas y gradientes radiales/sweep, sin penalizar el procesador ni requerir dependencias externas. La tipografía combina un perfil técnico elegante con alta legibilidad para lecturas continuas.
 
 ---
 

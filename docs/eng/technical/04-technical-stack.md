@@ -15,12 +15,12 @@ This document details the software architecture, implemented technologies, and t
 ---
 
 ## 2. Frontend and UI (Native Mobile)
-* **Platform and Language:** Android SDK (Minimum Android 10) using Java 21.
+* **Platform and Language:** Android SDK (minimum Android 8.0 Oreo / API 26, compiled against and targeting Android 15 / API 35) using Java 21.
   * *Benefit:* Native development eliminates the latency of cross-platform frameworks, providing direct access to operating system accessibility services and allowing granular control of hardware (microphone, touch event injection).
-* **UI and Reactivity:** XML with Material Design 3, View Binding, and RxJava 3.
-  * *Benefit:* Implementation of an absolute dark mode (Pure Black `#0A0A0C` optimized for OLED screens) that reduces battery consumption and cognitive load. RxJava 3 efficiently handles real-time asynchronous voice streams, connecting with LiveData for ephemeral transcriptions.
-* **Typography and Animation:** Lottie for Android, Geist Serif (Titles), and Lora (Body).
-  * *Benefit:* Lottie allows animating the interface's "Core/Atom" with total fluidity (60 fps) using ultra-lightweight JSON files without penalizing the processor. The typography combines an elegant technical profile with high legibility for continuous reading.
+* **UI and Reactivity:** XML layouts with Material Design 3 (Material Components), and the ViewModel and LiveData Android Architecture Components.
+  * *Benefit:* Implementation of an absolute dark mode (Pure Black `#0A0A0C` optimized for OLED screens) that reduces battery consumption and cognitive load. ViewModel and LiveData manage UI state and real-time asynchronous voice streams, exposing ephemeral transcriptions to the view reactively and in a lifecycle-aware way.
+* **Typography and Animation:** Hand-drawn custom Android Views (Canvas), Geist Serif (Titles), and Lora (Body).
+  * *Benefit:* A custom View (`AtomCoreView`) animates the interface's "Core/Atom" with total fluidity (60 fps) using Canvas drawing and radial/sweep gradients, without penalizing the processor or requiring external dependencies. The typography combines an elegant technical profile with high legibility for continuous reading.
 
 ---
 

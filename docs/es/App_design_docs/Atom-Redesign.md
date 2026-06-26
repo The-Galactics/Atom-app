@@ -92,7 +92,7 @@ y peso. Los estilos viven en `styles.xml`.
 
 | Drawable | Propósito |
 |---|---|
-| `bg_core_glow` | Halo radial lavanda detrás del núcleo Lottie |
+| `bg_core_glow` | Halo radial lavanda detrás del núcleo Atom |
 | `bg_mic_fab` | Disco de degradado de acento + ripple — el FAB de micrófono |
 | `bg_pill_input` | Fondo de entrada tipo píldora con estado de **foco** de acento |
 | `bg_surface_card` / `bg_surface_raised` | Superficies redondeadas en elevación 1 / 2 |
@@ -111,7 +111,7 @@ Archivo: `src/main/res/layout/activity_main.xml` (IDs sin cambios; el cableado d
 una acción primaria circular rellena flanqueada por controles "fantasma"
 discretos, y una píldora de entrada que sube desde abajo.
 
-**Identidad de Atom conservada:** el "núcleo atómico" Lottie sigue siendo el
+**Identidad de Atom conservada:** el "núcleo atómico" (`AtomCoreView`) sigue siendo el
 protagonista, ahora sobre un halo radial suave (`bg_core_glow`); la línea de
 estado serif ("Escuchando", respuestas) mantiene la voz contemplativa del
 asistente; el lienzo ónix profundo y el acento lavanda permanecen intactos.
@@ -214,7 +214,7 @@ Uso cotidiano (encima de cualquier app)
   `RECORD_AUDIO` + el round-trip `transcribeAudio` (ya en
   `ExternalInteractionPortOut`) es el siguiente paso; la reproducción TTS vía
   `synthesizeSpeech` le sigue.
-- **Núcleo reactivo al estado.** Controlar velocidades/colores Lottie distintos
+- **Núcleo reactivo al estado.** Controlar velocidades/colores distintos del núcleo (`AtomCoreView`)
   para inactivo / escuchando / pensando desde los observers existentes.
 - **Historial de conversaciones** (almacén + pantalla; el botón Historial sigue
   siendo un placeholder).
