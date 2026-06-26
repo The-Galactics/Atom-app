@@ -1156,9 +1156,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
         @Override
         public void onPartialResult(String text) {
-            // Live transcript in the overlay status line as the user speaks.
+            // Live transcript: set directly (no crossfade) so the fast, frequent
+            // partials don't queue janky crossfades. Mirrors MainActivity.onPartialResult.
             if (status.isAttachedToWindow() && text != null && !text.trim().isEmpty()) {
-                StatusCrossfader.swap(status, text);
+                status.animate().cancel();
+                status.setAlpha(1f);
+                status.setText(text);
             }
         }
 
