@@ -107,6 +107,9 @@ public class MainActivity extends AppCompatActivity {
     private float currentEnergy = CoreStatePresenter.energyFor(CoreState.IDLE);
     private float currentGlow = CoreStatePresenter.glowFor(CoreState.IDLE);
 
+    // Reusable Rect for touch bounds checking in dispatchTouchEvent, avoiding per-touch allocations.
+    private final Rect touchBounds = new Rect();
+
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
 
@@ -336,9 +339,8 @@ public class MainActivity extends AppCompatActivity {
         if (ev.getAction() == MotionEvent.ACTION_DOWN
                 && inputBarRoot != null
                 && inputBarRoot.getVisibility() == View.VISIBLE) {
-            Rect bounds = new Rect();
-            inputBarRoot.getGlobalVisibleRect(bounds);
-            if (!bounds.contains((int) ev.getRawX(), (int) ev.getRawY())) {
+            inputBarRoot.getGlobalVisibleRect(touchBounds);
+            if (!touchBounds.contains((int) ev.getRawX(), (int) ev.getRawY())) {
                 hideInputBar();
             }
         }
