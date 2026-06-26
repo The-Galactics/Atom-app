@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.atom.application.port.out.security.AuthGatewayPortOut;
+import com.atom.application.port.out.security.SessionListener;
 import com.atom.application.port.out.security.TokenStore;
 import com.atom.domain.security.AuthException;
 import com.atom.domain.security.TokenPair;
@@ -73,6 +74,35 @@ class AuthUseCaseTest {
 
         assertThat(useCase.getValidAccessToken()).isNull();
         verify(store).clear();
+    }
+
+    @Test
+    void getValidAccessToken_sessionExpired_clearsAndNotifiesListener() {
+        SessionListener listener = mock(SessionListener.class);
+        AuthUseCase uc = new AuthUseCase(gateway, store, () -> now, listener);
+        when(store.getAccessToken()).thenReturn("old");
+        when(store.getRefreshToken()).thenReturn("ref");
+        when(store.getExpiresAtEpochSeconds()).thenReturn(1_030L);
+        when(gateway.refresh("ref"))
+                .thenThrow(new AuthException(AuthException.Reason.SESSION_EXPIRED, "x"));
+
+        assertThat(uc.getValidAccessToken()).isNull();
+        verify(store).clear();
+        verify(listener).onSessionExpired();
+    }
+
+    @Test
+    void getValidAccessToken_networkError_doesNotNotifySessionExpired() {
+        SessionListener listener = mock(SessionListener.class);
+        AuthUseCase uc = new AuthUseCase(gateway, store, () -> now, listener);
+        when(store.getAccessToken()).thenReturn("old");
+        when(store.getRefreshToken()).thenReturn("ref");
+        when(store.getExpiresAtEpochSeconds()).thenReturn(1_030L);
+        when(gateway.refresh("ref"))
+                .thenThrow(new AuthException(AuthException.Reason.NETWORK, "x"));
+
+        assertThat(uc.getValidAccessToken()).isNull();
+        verify(listener, never()).onSessionExpired();
     }
 
     @Test
