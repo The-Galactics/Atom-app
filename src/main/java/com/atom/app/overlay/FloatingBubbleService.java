@@ -175,7 +175,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         chatRepository = new ChatRepository(
                 app.getAppContainer().getExternalMessageUseCase(),
                 app.getAppContainer().getSessionUserId(),
-                app.getAppContainer().getSessionChatId());
+                app.getAppContainer().getSessionChatId(),
+                app.getAppContainer().getAuthUseCase());
         commandRepository = new CommandRepository(
                 app.getAppContainer().getExternalCommandUseCase(),
                 app.getAppContainer().getActionExecutor(),
