@@ -289,7 +289,7 @@ class CommandRepositoryAutonomousTest {
                 .thenReturn(action(ActionType.MAKE_CALL, Map.of("target", "Mom"), false));
 
         RecordingCallback cb = new RecordingCallback();
-        new CommandRepository(useCase, executorPort, CommandRepository.defaultGate(), 0L, 20, Runnable::run)
+        new CommandRepository(useCase, executorPort, UUID.randomUUID(), authUseCase, CommandRepository.defaultGate(), 0L, 20, Runnable::run)
                 .executeAutonomous("llama a mama", cb);
         cb.await();
 
