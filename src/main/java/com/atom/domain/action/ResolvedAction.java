@@ -14,9 +14,14 @@ import java.util.Map;
  * @param parameters           action slots (immutable; empty for {@link ActionType#NONE})
  * @param outMessage           natural-language reply to speak/show the user
  * @param confidence           recognition confidence in [0.0, 1.0]
- * @param requiresConfirmation true ⇒ confirm with the user before executing
+ * @param requiresConfirmation legacy wire-compat flag only — no longer read by the
+ *                             client; superseded by {@code awaitingConfirmation}, which
+ *                             drives the conversational voice confirmation
  * @param taskComplete         true ⇒ the ReAct task is finished; stop looping
  * @param step                 current ReAct step index (telemetry/debug)
+ * @param awaitingConfirmation true ⇒ this NONE turn is a held-action confirmation
+ *                             question; speak it, capture the spoken "sí/no", and
+ *                             resend that as the next command with the same order id
  */
 public record ResolvedAction(
         ActionType type,
@@ -25,7 +30,8 @@ public record ResolvedAction(
         float confidence,
         boolean requiresConfirmation,
         boolean taskComplete,
-        int step) {
+        int step,
+        boolean awaitingConfirmation) {
 
     public ResolvedAction {
         if (type == null) {
@@ -42,13 +48,13 @@ public record ResolvedAction(
     /** Back-compat constructor: defaults the loop fields (taskComplete=false, step=0). */
     public ResolvedAction(ActionType type, Map<String, String> parameters, String outMessage,
                           float confidence, boolean requiresConfirmation) {
-        this(type, parameters, outMessage, confidence, requiresConfirmation, false, 0);
+        this(type, parameters, outMessage, confidence, requiresConfirmation, false, 0, false);
     }
 
     /** A purely conversational result carrying only the reply text. */
     public static ResolvedAction conversation(String outMessage) {
         return new ResolvedAction(ActionType.NONE, Collections.emptyMap(), outMessage, 0.0f, false,
-                true, 0);
+                true, 0, false);
     }
 
     /** True when there is something to execute on the device. */

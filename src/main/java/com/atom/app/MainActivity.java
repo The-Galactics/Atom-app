@@ -88,22 +88,9 @@ public class MainActivity extends AppCompatActivity {
     private EditText inputEditText;
     private ImageButton inputSend;
 
-    // Action awaiting a permission grant; resumed in permissionLauncher's callback.
-    private ResolvedAction awaitingPermission;
-
-    private final ActivityResultLauncher<String> permissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-                ResolvedAction action = awaitingPermission;
-                awaitingPermission = null;
-                if (action == null) {
-                    return;
-                }
-                if (granted) {
-                    viewModel.runAction(action);
-                } else {
-                    toast(getString(R.string.action_permission_denied));
-                }
-            });
+    // True while capturing a spoken confirmation reply, so the transcript is fed to
+    // the loop (submitSpokenConfirmation) instead of being dispatched as a new order.
+    private boolean confirmationCapturing;
 
     private AndroidTextToSpeech tts;
     private AtomPreferences preferences;
@@ -610,6 +597,12 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onResult(String text) {
             notifyWakeDone();
+            // A pending confirmation captures the reply for the loop, not a new order.
+            if (confirmationCapturing) {
+                confirmationCapturing = false;
+                viewModel.submitSpokenConfirmation(text == null ? "" : text);
+                return;
+            }
             // Speech is treated as an ORDER, same as typed input (persist + dispatch).
             dispatchOrder(text);
         }
@@ -618,6 +611,11 @@ public class MainActivity extends AppCompatActivity {
         public void onError(String message) {
             isListening = false;
             notifyWakeDone();
+            if (confirmationCapturing) {
+                confirmationCapturing = false;
+                viewModel.submitSpokenConfirmation("");
+                return;
+            }
             int msg = "unavailable".equals(message)
                     ? R.string.stt_unavailable
                     : R.string.stt_error;
@@ -670,11 +668,20 @@ public class MainActivity extends AppCompatActivity {
         } else {
                 registerReceiver(wakeReceiver, filter);
         }
+        // We can voice + capture a confirmation reply while visible.
+        if (viewModel != null) {
+            viewModel.setConfirmationUiReady(true);
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        // No longer able to voice/capture a confirmation; unblock any waiting loop.
+        if (viewModel != null) {
+            viewModel.setConfirmationUiReady(false);
+        }
+        confirmationCapturing = false;
         try {
             unregisterReceiver(wakeReceiver);
         } catch (IllegalArgumentException ignored) {
@@ -817,13 +824,14 @@ public class MainActivity extends AppCompatActivity {
             statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
         });
 
-        // Sensitive actions require confirmation; one-shot Event avoids re-prompting on recreation.
-        viewModel.getPendingConfirmation().observe(this,
-                e -> confirmAction(e.getContentIfNotHandled()));
-
-        // Destructive action mid-loop: prompt before it runs (loop thread waits for the answer).
-        viewModel.getDestructiveConfirmation().observe(this,
-                e -> confirmDestructive(e.getContentIfNotHandled()));
+        // Held/destructive action mid-loop: speak the question and capture the spoken
+        // "sí/no" hands-free (the loop thread waits for the transcript).
+        viewModel.getVoiceConfirmationRequested().observe(this, e -> {
+            String question = e.getContentIfNotHandled();
+            if (question != null) {
+                askConfirmationByVoice(question);
+            }
+        });
 
         // Accessibility-powered actions need the service enabled first.
         viewModel.getAccessibilityRequired().observe(this,
@@ -855,49 +863,28 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    /** Asks the user to confirm a sensitive action before executing it. */
-    private void confirmAction(ResolvedAction action) {
-        if (action == null) {
+    /**
+     * Speaks a confirmation question out loud, then re-opens the mic to capture the
+     * user's spoken reply and hands it to the loop via {@link ChatViewModel#submitSpokenConfirmation}.
+     * Hands-free: no tap dialog. Falls back to "no answer" when the mic isn't available.
+     */
+    private void askConfirmationByVoice(String question) {
+        fadeSwap(statusText, question);
+        if (preferences.isMicMuted()
+                || checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            // Cannot capture by voice -> signal "couldn't ask" so the loop aborts.
+            viewModel.submitSpokenConfirmation(ChatViewModel.CANT_ASK);
             return;
         }
-        String prompt = action.outMessage().isEmpty()
-                ? getString(R.string.action_confirm_default)
-                : action.outMessage();
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(prompt)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> executeWithPermission(action))
-                .setNegativeButton(R.string.action_confirm_no, null)
-                .show();
-    }
-
-    /** Confirms a destructive action mid-loop; the paused loop resumes or aborts on the answer. */
-    private void confirmDestructive(ResolvedAction action) {
-        if (action == null) {
-            return;
+        confirmationCapturing = true;
+        // Speak the question (local TTS done-callback) THEN open the mic so Atom
+        // doesn't hear its own voice; fall back to a short delay when TTS is off.
+        Runnable openMic = () -> { if (confirmationCapturing) startListening(); };
+        if (tts != null && preferences.isTtsEnabled()) {
+            tts.speak(question, openMic);
+        } else {
+            statusText.postDelayed(openMic, 300L);
         }
-        String prompt = action.outMessage().isEmpty()
-                ? getString(R.string.action_confirm_default)
-                : action.outMessage();
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(prompt)
-                .setCancelable(false)
-                .setPositiveButton(R.string.action_confirm_yes,
-                        (d, w) -> viewModel.resolveDestructiveConfirmation(true))
-                .setNegativeButton(R.string.action_confirm_no,
-                        (d, w) -> viewModel.resolveDestructiveConfirmation(false))
-                .show();
-    }
-
-    /** Run the action, first requesting its runtime permission if one is missing. */
-    private void executeWithPermission(ResolvedAction action) {
-        String permission = PermissionCoordinator.requiredPermission(action);
-        if (permission == null || PermissionCoordinator.isGranted(this, permission)) {
-            viewModel.runAction(action);
-            return;
-        }
-        awaitingPermission = action;
-        permissionLauncher.launch(permission);
     }
 }
