@@ -23,6 +23,12 @@ public interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages ORDER BY timestampMs ASC, id ASC")
     LiveData<List<ChatMessage>> observeAll();
 
+    // Most-recent `limit` messages, returned in ascending display order (oldest→newest)
+    // so the overlay panel renders them top-to-bottom like the full list.
+    @Query("SELECT * FROM (SELECT * FROM chat_messages ORDER BY timestampMs DESC, id DESC LIMIT :limit) "
+            + "ORDER BY timestampMs ASC, id ASC")
+    LiveData<List<ChatMessage>> observeRecent(int limit);
+
     /** Wipes the whole transcript (the History "clear" affordance). */
     @Query("DELETE FROM chat_messages")
     void clear();

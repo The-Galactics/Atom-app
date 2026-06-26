@@ -89,6 +89,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final float HANDLE_IDLE_ALPHA = 0.5f;    // dimmed handle when untouched
     private static final long STATUS_RESET_MS = 4000;       // settle status back to the resting hint
 
+    // The panel is height-capped (overlay_transcript_max_height); a recent-window keeps
+    // the always-on service from retaining/diffing the entire history.
+    private static final int OVERLAY_TRANSCRIPT_LIMIT = 50;
+
     private WindowManager windowManager;
     private LayoutInflater inflater;
 
@@ -190,7 +194,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         preferences.registerChangeListener(muteListener);
         seedBubblePosition(); // restore last resting position on restart
         // Observe transcript for the whole service lifetime; removed in onDestroy.
-        transcriptSource = conversationRepository.observeAll();
+        transcriptSource = conversationRepository.observeRecent(OVERLAY_TRANSCRIPT_LIMIT);
         transcriptSource.observeForever(transcriptObserver);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
