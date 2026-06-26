@@ -167,12 +167,8 @@ public class AtomCoreView extends View {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        // Re-bake the blooms if we were detached (which recycled them) and re-attached at
-        // the same size — onSizeChanged won't fire for an unchanged frame, so without this
-        // the recycled bitmaps would stay null and the core would render blank.
-        if (radius > 0 && nucleusGlowBmp == null) {
-            bakeBlooms();
-        }
+        // Blooms recycled on detach are rebaked lazily by onDraw once we have a size, so a
+        // re-attach at the same size (no onSizeChanged) still renders.
         lastFrameMs = 0;
         scheduleNextFrame();
     }
@@ -269,7 +265,17 @@ public class AtomCoreView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (radius <= 0 || bgGlowShader == null || nucleusGlowBmp == null) {
+        if (radius <= 0 || bgGlowShader == null) {
+            return;
+        }
+        // The blooms are recycled on detach; if the view was re-attached at the same size,
+        // onSizeChanged won't fire to rebake them. Rebake lazily here — we have a real size —
+        // so the core never renders blank. Falls through to a skip only if we somehow still
+        // have no size to bake against.
+        if (nucleusGlowBmp == null && getWidth() > 0 && getHeight() > 0) {
+            bakeBlooms();
+        }
+        if (nucleusGlowBmp == null) {
             return;
         }
 
