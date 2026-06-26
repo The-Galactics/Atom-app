@@ -177,8 +177,8 @@ public class MainActivity extends AppCompatActivity {
         // First-run routing: if onboarding hasn't been completed, hand off to it
         // before inflating the main UI so the user never sees a flash of the home
         // screen. We finish() immediately so back from onboarding leaves the app.
-        AtomPreferences earlyPrefs = new AtomPreferences(this);
-        if (!earlyPrefs.isOnboardingComplete()) {
+        preferences = new AtomPreferences(this);
+        if (!preferences.isOnboardingComplete()) {
             startActivity(new Intent(this, OnboardingActivity.class));
             finish();
             return;
@@ -191,7 +191,6 @@ public class MainActivity extends AppCompatActivity {
         viewModel = new ViewModelProvider(this, new ChatViewModelFactory(appContainer))
                 .get(ChatViewModel.class);
 
-        preferences = new AtomPreferences(this);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
 
         // Initialize UI Components
