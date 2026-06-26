@@ -6,9 +6,9 @@ flowchart TB
 
   end
 
-  Mobile -->|HTTP REST| SecurityController
+  Mobile -->|in-process call| SecurityController
 
-  subgraph Backend["Atom Backend (Spring Boot, Java 21)"]
+  subgraph Backend["Android Client Hexagonal Core (Java 21, manual DI AppContainer, no Spring)"]
 
     direction TB
 
@@ -90,7 +90,7 @@ flowchart TB
 
   Device --> Runtime["Entorno de dispositivo / SO"]
 
-  Entities --> Mongo["MongoDB Atlas"]
+  Entities --> Mongo["MongoDB (Python backend service persistence)"]
 
   classDef pending stroke-dasharray: 5 5;
 

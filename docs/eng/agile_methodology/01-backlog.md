@@ -15,15 +15,15 @@ Story points will be assigned to each US using a measurement based on the Fibona
 | **US-03** | MOBILE | Minimalist Android interface (low cognitive load). | 3 |
 | **US-04** | MOBILE | Floating bubble implementation as a trigger. | 5 |
 | **US-05** | MOBILE | Visual feedback (animation) during listening state. | 3 |
-| **US-06** | AI-PYTHON | Output Adapter configuration for Nvidia APIs. | 2 |
+| **US-06** | AI-PYTHON | Output Adapter configuration for Google Gemini APIs. | 2 |
 | **US-07** | AI-PYTHON | STT Module (Speech-to-Text) for audio transcription. | 5 |
 | **US-08** | AI-PYTHON | TTS Module (Text-to-Speech) for voice responses. | 5 |
 | **US-09** | AI-PYTHON | NLP Processor for natural language interpretation. | 5 |
-| **US-10** | INFRA | Python-Java Bridge (gRPC/REST) for service communication. | 8 |
+| **US-10** | INFRA | Python-Java Bridge (gRPC) for service communication. | 8 |
 | **US-11** | JAVA-CORE | Definition of Domain Entities (User, Intent). | 3 |
 | **US-12** | JAVA-CORE | Implementation of Input/Output Ports (Interfaces). | 1 |
-| **US-13** | JAVA-INFRA | SQL Persistence Adapter (User repository). | 3 |
-| **US-14** | SECURITY | AES-256 encryption logic for sensitive data. | 5 |
+| **US-13** | JAVA-INFRA | MongoDB Persistence Adapter (User repository). | 3 |
+| **US-14** | SECURITY | Password hashing logic (Argon2id) for sensitive data. | 5 |
 | **US-15** | JAVA-CORE | Profile management (Name, Nickname, Personality). | 5 |
 | **US-16** | QA | Domain Unit Testing setup and execution. | 8 |
 

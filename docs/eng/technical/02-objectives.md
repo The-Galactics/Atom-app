@@ -20,13 +20,13 @@ To develop a multi-agent system based on generative AI to create real-time respo
  - [ ] Fast response times.
  - [ ] Intuitive App.
 
-### SQL Database:
+### Database (NoSQL - MongoDB):
 
  - [ ] User registration.
  - [ ] User classification (Paid).
- - [ ] Implement sensitive data encryption (AES-256).
+ - [ ] Implement credential hashing (Argon2id) for sensitive data.
  - [ ] Optimize queries for responses under 100ms (Sprint 1).
- - [ ] Profile table for AI personalization (Name, Nickname, Personality) (Sprint 1).
+ - [ ] Profile collection for AI personalization (Name, Nickname, Personality) (Sprint 1).
  
  ### Vector Database:
 
@@ -38,7 +38,7 @@ To develop a multi-agent system based on generative AI to create real-time respo
 
 ### AI (Artificial Intelligence):
 
- - [ ] Connection with Nvidia APIs (Sprint 1).
+ - [ ] Connection with Google Gemini APIs (Sprint 1).
  - [ ] Natural language interpretation (Sprint 1).
  - [ ] Creation of documentation for method implementation.
  - [ ] Upload documentation or methods to the cloud.

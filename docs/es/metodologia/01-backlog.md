@@ -15,15 +15,15 @@ Los story points seran otorgados a cada HU por medio de una medición basada en 
 | **HU-03** | MOBILE | Interfaz minimalista Android (baja carga cognitiva). | 3 |
 | **HU-04** | MOBILE | Implementación de burbuja flotante como disparador. | 5 |
 | **HU-05** | MOBILE | Feedback visual (animación) durante estado de escucha. | 3 |
-| **HU-06** | IA-PYTHON | Configuración del Adaptador de Salida para APIs de Nvidia. | 2 |
+| **HU-06** | IA-PYTHON | Configuración del Adaptador de Salida para APIs de Google Gemini. | 2 |
 | **HU-07** | IA-PYTHON | Módulo STT (Speech-to-Text) para transcripción de audio. | 5 |
 | **HU-08** | IA-PYTHON | Módulo TTS (Text-to-Speech) para respuestas de voz. | 5 |
 | **HU-09** | IA-PYTHON | Procesador NLP para interpretación de lenguaje natural. | 5 |
-| **HU-10** | INFRA | Bridge Python-Java (gRPC/REST) para comunicación entre servicios. | 8 |
+| **HU-10** | INFRA | Bridge Python-Java (gRPC) para comunicación entre servicios. | 8 |
 | **HU-11** | JAVA-CORE | Definición de Entidades de Dominio (Usuario, Intención). | 3 |
 | **HU-12** | JAVA-CORE | Implementación de Puertos (Interfaces) de entrada/salida. | 1 |
-| **HU-13** | JAVA-INFRA | Adaptador de Persistencia SQL (Repositorio de usuarios). | 3 |
-| **HU-14** | SEGURIDAD | Lógica de cifrado AES-256 para datos sensibles. | 5 |
+| **HU-13** | JAVA-INFRA | Adaptador de Persistencia MongoDB (Repositorio de usuarios). | 3 |
+| **HU-14** | SEGURIDAD | Lógica de hashing de contraseñas (Argon2id) para datos sensibles. | 5 |
 | **HU-15** | JAVA-CORE | Gestión de perfiles (Nombre, Apodo, Personalidad). | 5 |
 | **HU-16** | QA | Setup y ejecución de Pruebas Unitarias de Dominio. | 8 |
 
