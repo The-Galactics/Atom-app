@@ -21,6 +21,9 @@ import java.util.stream.StreamSupport;
 
 public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
 
+    private static final int COMMAND_DEADLINE_SECONDS = 30;
+    private static final int TRANSCRIBE_DEADLINE_SECONDS = 30;
+
     private final Channel channel;
     private AtomAgentServiceGrpc.AtomAgentServiceBlockingStub blockingStub;
 
@@ -41,7 +44,9 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
                 .addAllScreenElements(captureScreenElements())
                 .build();
 
-        CommandResponse response = this.blockingStub.executeCommand(request);
+        CommandResponse response = this.blockingStub
+                .withDeadlineAfter(COMMAND_DEADLINE_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                .executeCommand(request);
 
         // Map the transport response into the domain projection here, so the
         // domain/application layers never touch JSON or protobuf types.
@@ -140,7 +145,9 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
                 .setBeamSize(beamSize)
                 .build();
 
-        TranscribeResponse response = this.blockingStub.transcribe(request);
+        TranscribeResponse response = this.blockingStub
+                .withDeadlineAfter(TRANSCRIBE_DEADLINE_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+                .transcribe(request);
         return response.getText();
 
     }

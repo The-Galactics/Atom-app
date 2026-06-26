@@ -7,6 +7,7 @@ import android.util.Log;
 import androidx.annotation.VisibleForTesting;
 
 import com.atom.application.port.in.ExecuteCommandPortIn;
+import com.atom.application.port.in.security.AuthPortIn;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.DestructiveActionPolicy;
@@ -36,6 +37,8 @@ public class CommandRepository {
 
     private final ExecuteCommandPortIn executeCommandUseCase;
     private final ActionExecutorPortOut actionExecutor;
+    private final UUID sessionUserId;   // injected; shared with ChatRepository (US-D2)
+    private final AuthPortIn authUseCase;
     private final ExecutorService executor;
     private final MainThreadPoster mainPoster;
 
@@ -44,12 +47,12 @@ public class CommandRepository {
     private final long settleDelayMs;
     private final int stepCap;
 
-    // Per-session id satisfies the use-case contract (no app-side auth yet).
-    private final UUID sessionUserId = UUID.randomUUID();
-
     public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
-                             ActionExecutorPortOut actionExecutor) {
-        this(executeCommandUseCase, actionExecutor, defaultGate(),
+                             ActionExecutorPortOut actionExecutor,
+                             UUID sessionUserId,
+                             AuthPortIn authUseCase) {
+        this(executeCommandUseCase, actionExecutor, sessionUserId, authUseCase,
+                new DestructiveActionGate(new DestructiveActionPolicy()),
                 DEFAULT_SETTLE_DELAY_MS, DEFAULT_STEP_CAP,
                 new HandlerPoster());
     }
@@ -57,21 +60,27 @@ public class CommandRepository {
     /** Test/extension overload: inject the gate, settle delay (0 in tests), and step cap. */
     public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
                              ActionExecutorPortOut actionExecutor,
+                             UUID sessionUserId,
+                             AuthPortIn authUseCase,
                              ConfirmationGate confirmationGate,
                              long settleDelayMs, int stepCap) {
-        this(executeCommandUseCase, actionExecutor, confirmationGate,
+        this(executeCommandUseCase, actionExecutor, sessionUserId, authUseCase, confirmationGate,
                 settleDelayMs, stepCap, new HandlerPoster());
     }
 
     /** Full overload: also inject the main-thread poster so tests can run it synchronously. */
     @VisibleForTesting
-    CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
-                      ActionExecutorPortOut actionExecutor,
-                      ConfirmationGate confirmationGate,
-                      long settleDelayMs, int stepCap,
-                      MainThreadPoster mainPoster) {
+    public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
+                             ActionExecutorPortOut actionExecutor,
+                             UUID sessionUserId,
+                             AuthPortIn authUseCase,
+                             ConfirmationGate confirmationGate,
+                             long settleDelayMs, int stepCap,
+                             MainThreadPoster mainPoster) {
         this.executeCommandUseCase = executeCommandUseCase;
         this.actionExecutor = actionExecutor;
+        this.sessionUserId = sessionUserId;
+        this.authUseCase = authUseCase;
         this.confirmationGate = confirmationGate;
         this.settleDelayMs = settleDelayMs;
         this.stepCap = stepCap;
@@ -126,6 +135,13 @@ public class CommandRepository {
     public void executeAutonomous(String order, final AutomationCallback callback) {
         executor.execute(() -> {
             try {
+                // Refresh-ahead OFF the call path (US-E3): the gRPC interceptor is now
+                // cache-only, so prime a fresh token here (on the background executor)
+                // before the first protected RPC. A refresh failure surfaces through the
+                // shared catch below as a normal aborted outcome.
+                if (authUseCase != null) {
+                    authUseCase.refreshIfNeeded();
+                }
                 for (int step = 1; step <= stepCap; step++) {
                     ResolvedAction action = executeCommandUseCase.execute(sessionUserId, order);
                     Log.i(TAG, "step " + step + " resolved: type=" + action.type()
@@ -242,7 +258,7 @@ public class CommandRepository {
     }
 
     /** Posts a Runnable to the main thread. Abstracted so tests run it synchronously. */
-    interface MainThreadPoster {
+    public interface MainThreadPoster {
         void post(Runnable r);
     }
 

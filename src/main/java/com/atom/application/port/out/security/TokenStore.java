@@ -23,4 +23,10 @@ public interface TokenStore {
 
     /** Clears the stored tokens (logout). */
     void clear();
+
+    /** Persists the server-verified user id. */
+    void saveUserId(String userId);
+
+    /** The server-verified user id from the last successful auth, or {@code null} pre-auth. */
+    String getUserId();
 }

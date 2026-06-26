@@ -84,7 +84,7 @@ public class AppContainer {
         this.tokenStore = new EncryptedTokenStore(context);
 
         // Deferred token supplier: the interceptor is built before AuthUseCase exists,
-        // so it reads through a holder we point at AuthUseCase::getValidAccessToken below.
+        // so it reads through a holder we point at AuthUseCase::getCachedAccessToken below.
         java.util.concurrent.atomic.AtomicReference<java.util.function.Supplier<String>> tokenSupplierHolder =
                 new java.util.concurrent.atomic.AtomicReference<>(() -> null);
 
@@ -109,8 +109,11 @@ public class AppContainer {
                         authGateway, tokenStore, clock, sessionListener);
         this.authUseCase = authUseCaseImpl;
 
-        // Now point the interceptor at the live refresh-aware supplier.
-        tokenSupplierHolder.set(authUseCaseImpl::getValidAccessToken);
+        // Point the interceptor at the cache-only read (US-E3): the call path never
+        // blocks on a refresh. Callers that need a guaranteed-fresh token must invoke
+        // authUseCaseImpl.refreshIfNeeded() off the call path (e.g. before starting
+        // an authenticated flow, or on a background tick).
+        tokenSupplierHolder.set(authUseCaseImpl::getCachedAccessToken);
 
         // Protected interaction adapter over the AUTHED channel.
         this.interactionGrpcAdapter = new InteractionGrpcAdapter(channelProvider.getAuthedChannel());
@@ -202,8 +205,18 @@ public class AppContainer {
         return generated;
     }
 
+    /**
+     * The session identity shared by command and chat surfaces (US-D2). Returns a
+     * stable UUID derived from the server-verified user id (US-D1) when present, so
+     * command and chat share one backend session after auth. Falls back to the
+     * device-persisted UUID before the first login.
+     */
     public UUID getSessionUserId() {
-        return sessionUserId;
+        String serverId = authUseCase.getServerUserId();
+        return (serverId == null || serverId.isEmpty())
+                ? sessionUserId
+                : UUID.nameUUIDFromBytes(
+                        serverId.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     public UUID getSessionChatId() {
