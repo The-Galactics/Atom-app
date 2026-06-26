@@ -21,20 +21,53 @@ public class EncryptedTokenStore implements TokenStore {
 
     private final SharedPreferences prefs;
 
+    /** Builds the encrypted prefs for the given attempt (0 = first, 1 = post-wipe retry). */
+    public interface PrefsFactory {
+        Object create(int attempt) throws Exception;
+    }
+
+    /** Opens prefs; on first-attempt failure, runs {@code wipe} and retries once. */
+    public static Object openWithRecovery(PrefsFactory factory, Runnable wipe) {
+        try {
+            return factory.create(0);
+        } catch (Exception first) {
+            // Master key invalidated (key reset / restore-to-new-device). Wipe the
+            // corrupt prefs + key alias and rebuild so the user re-logs in instead
+            // of being permanently crash-looped on launch.
+            wipe.run();
+            try {
+                return factory.create(1);
+            } catch (Exception second) {
+                throw new IllegalStateException(
+                        "Failed to initialize encrypted token store after recovery", second);
+            }
+        }
+    }
+
     public EncryptedTokenStore(Context context) {
         Context app = context.getApplicationContext();
+        this.prefs = (SharedPreferences) openWithRecovery(
+                (attempt) -> {
+                    MasterKey masterKey = new MasterKey.Builder(app)
+                            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                            .build();
+                    return EncryptedSharedPreferences.create(
+                            app, FILE, masterKey,
+                            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
+                },
+                () -> wipeCorruptStore(app));
+    }
+
+    /** Deletes the encrypted prefs file and the Keystore master-key alias. */
+    private static void wipeCorruptStore(Context app) {
+        app.deleteSharedPreferences(FILE);
         try {
-            MasterKey masterKey = new MasterKey.Builder(app)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build();
-            this.prefs = EncryptedSharedPreferences.create(
-                    app,
-                    FILE,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM);
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to initialize encrypted token store", e);
+            java.security.KeyStore ks = java.security.KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            ks.deleteEntry("_androidx_security_master_key_");
+        } catch (Exception ignored) {
+            // Best-effort: deleting the prefs file alone usually suffices.
         }
     }
 
