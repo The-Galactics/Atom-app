@@ -38,6 +38,7 @@ import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
 import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
+import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
@@ -729,17 +730,7 @@ public class MainActivity extends AppCompatActivity {
      * Replaces the previous abrupt {@code setText} swaps so state changes read smoothly.
      */
     private void fadeSwap(TextView view, CharSequence text) {
-        if (view == null) {
-            return;
-        }
-        view.animate()
-                .alpha(0f)
-                .setDuration(TEXT_FADE_OUT_MS)
-                .withEndAction(() -> {
-                    view.setText(text);
-                    view.animate().alpha(1f).setDuration(TEXT_FADE_IN_MS).start();
-                })
-                .start();
+        StatusCrossfader.swap(view, text);
     }
 
     /**
