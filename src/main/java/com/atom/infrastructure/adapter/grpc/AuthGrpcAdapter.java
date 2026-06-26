@@ -24,7 +24,9 @@ public class AuthGrpcAdapter implements AuthGatewayPortOut {
     @Override
     public TokenPair register(String email, String password, String displayName) {
         try {
-            return toPair(stub.register(RegisterRequest.newBuilder()
+            return toPair(stub
+                    .withDeadlineAfter(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .register(RegisterRequest.newBuilder()
                     .setEmail(email).setPassword(password)
                     .setDisplayName(displayName == null ? "" : displayName)
                     .build()));
@@ -36,7 +38,9 @@ public class AuthGrpcAdapter implements AuthGatewayPortOut {
     @Override
     public TokenPair login(String email, String password) {
         try {
-            return toPair(stub.login(LoginRequest.newBuilder()
+            return toPair(stub
+                    .withDeadlineAfter(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .login(LoginRequest.newBuilder()
                     .setEmail(email).setPassword(password).build()));
         } catch (StatusRuntimeException e) {
             throw translate(e, false);
@@ -46,7 +50,9 @@ public class AuthGrpcAdapter implements AuthGatewayPortOut {
     @Override
     public TokenPair authenticateWithGoogle(String idToken) {
         try {
-            return toPair(stub.authenticateWithGoogle(GoogleAuthRequest.newBuilder()
+            return toPair(stub
+                    .withDeadlineAfter(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .authenticateWithGoogle(GoogleAuthRequest.newBuilder()
                     .setIdToken(idToken).build()));
         } catch (StatusRuntimeException e) {
             throw translate(e, false);
@@ -56,7 +62,9 @@ public class AuthGrpcAdapter implements AuthGatewayPortOut {
     @Override
     public TokenPair refresh(String refreshToken) {
         try {
-            return toPair(stub.refreshToken(RefreshRequest.newBuilder()
+            return toPair(stub
+                    .withDeadlineAfter(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .refreshToken(RefreshRequest.newBuilder()
                     .setRefreshToken(refreshToken).build()));
         } catch (StatusRuntimeException e) {
             throw translate(e, true);

@@ -34,6 +34,8 @@ class InteractionGrpcAdapterTest {
         List<MessageResponse> streamChatResults;
         // Captured so tests can assert what the adapter put on the request.
         CommandRequest lastCommandRequest;
+        // Captured so tests can assert a deadline was set on the call.
+        io.grpc.Deadline lastDeadline;
 
         /**
          * Simulates the synchronous executeCommand unary RPC method.
@@ -42,6 +44,7 @@ class InteractionGrpcAdapterTest {
         @Override
         public void executeCommand(CommandRequest request, StreamObserver<CommandResponse> responseObserver) {
             lastCommandRequest = request;
+            lastDeadline = io.grpc.Context.current().getDeadline();
             if (commandResponseResult != null) {
                 responseObserver.onNext(commandResponseResult);
                 responseObserver.onCompleted();
@@ -231,5 +234,17 @@ class InteractionGrpcAdapterTest {
         assertEquals(2, collectedTokens.size());
         assertEquals("Hello", collectedTokens.get(0));
         assertEquals(", bro!", collectedTokens.get(1));
+    }
+
+    @Test
+    void executeCommand_setsADeadlineOnTheCall() {
+        fakeService.commandResponseResult = CommandResponse.newBuilder()
+                .setActionType("NONE").setTaskComplete(true).build();
+
+        adapter.commandResponse(UUID.randomUUID(), "hola");
+
+        // The fake captures the call's Context deadline; a deadline must be present.
+        assertNotNull(fakeService.lastDeadline,
+                "executeCommand must call withDeadlineAfter(...)");
     }
 }
