@@ -18,6 +18,7 @@ import android.content.pm.PackageManager;
 import com.atom.app.R;
 import com.atom.application.port.out.ContactResolverPortOut;
 import com.atom.application.port.out.PhoneNumberNormalizerPortOut;
+import com.atom.domain.contact.ContactResolution;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
@@ -114,7 +115,7 @@ class AndroidActionExecutorTest {
     @Test
     void makeCall_resolvesContactName_whenTargetIsNotNumeric() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        when(resolver.resolveNumber("Mom")).thenReturn(Optional.of("+15551234567"));
+        when(resolver.resolveContact("Mom")).thenReturn(ContactResolution.exact("+15551234567"));
         when(context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS))
                 .thenReturn(PackageManager.PERMISSION_GRANTED);
         AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
@@ -123,14 +124,14 @@ class AndroidActionExecutorTest {
                 ActionType.MAKE_CALL, Map.of("target", "Mom"), "", 1.0f, false);
         ActionOutcome outcome = executor.execute(action);
 
-        verify(resolver).resolveNumber("Mom");
+        verify(resolver).resolveContact("Mom");
         assertThat(outcome.success()).isTrue();
     }
 
     @Test
     void makeCall_returnsContactNotFound_whenResolutionMisses() {
         ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
-        when(resolver.resolveNumber("Nobody")).thenReturn(Optional.empty());
+        when(resolver.resolveContact("Nobody")).thenReturn(ContactResolution.none());
         when(context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS))
                 .thenReturn(PackageManager.PERMISSION_GRANTED);
         when(context.getString(R.string.contact_not_found)).thenReturn("not found");
@@ -142,6 +143,21 @@ class AndroidActionExecutorTest {
 
         assertThat(outcome.success()).isFalse();
         assertThat(outcome.message()).isEqualTo("not found");
+    }
+
+    @Test
+    void makeCall_ambiguousContact_isRejected() {
+        ContactResolverPortOut resolver = mock(ContactResolverPortOut.class);
+        when(resolver.resolveContact("An")).thenReturn(ContactResolution.ambiguous());
+        when(context.checkSelfPermission(android.Manifest.permission.READ_CONTACTS))
+                .thenReturn(PackageManager.PERMISSION_GRANTED);
+        when(context.getString(R.string.contact_not_found)).thenReturn("not found");
+        AndroidActionExecutor executor = new AndroidActionExecutor(context, resolver, normalizer);
+
+        ActionOutcome outcome = executor.execute(new ResolvedAction(
+                ActionType.MAKE_CALL, Map.of("target", "An"), "", 1.0f, false));
+
+        assertThat(outcome.success()).isFalse();
     }
 
     @Test
