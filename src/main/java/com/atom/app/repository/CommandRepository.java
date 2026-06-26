@@ -103,8 +103,8 @@ public class CommandRepository {
                 // loop. Uses a throwaway session id so it doesn't pollute the backend's ReAct
                 // history (a shared id would offset the loop's steps and trip a premature
                 // task_complete).
-                UUID preflightSessionId = UUID.randomUUID();
-                ResolvedAction action = executeCommandUseCase.execute(preflightSessionId, order);
+                UUID preflightOrderId = UUID.randomUUID();
+                ResolvedAction action = executeCommandUseCase.execute(sessionUserId, preflightOrderId, order);
                 post(() -> callback.onResolved(action));
             } catch (Exception e) {
                 Log.e(TAG, "recognize failed for order=\"" + order + "\"", e);
@@ -142,16 +142,50 @@ public class CommandRepository {
                 if (authUseCase != null) {
                     authUseCase.refreshIfNeeded();
                 }
+                // One order id scopes this whole task (all turns share the backend's
+                // ReAct trace, incl. the confirmation question and the spoken reply).
+                final UUID orderId = UUID.randomUUID();
+                // Command for the NEXT turn: normally the original order; for the single
+                // turn right after a confirmation question it is the user's spoken reply.
+                String nextCommand = order;
                 for (int step = 1; step <= stepCap; step++) {
-                    ResolvedAction action = executeCommandUseCase.execute(sessionUserId, order);
+                    String command = nextCommand;
+                    nextCommand = order;  // reset; only the awaiting branch overrides it
+                    ResolvedAction action = executeCommandUseCase.execute(sessionUserId, orderId, command);
                     Log.i(TAG, "step " + step + " resolved: type=" + action.type()
                             + " params=" + action.parameters()
-                            + " taskComplete=" + action.taskComplete());
+                            + " taskComplete=" + action.taskComplete()
+                            + " awaiting=" + action.awaitingConfirmation());
 
+                    // 1) Backend is HOLDING a sensitive action and asking out loud.
+                    //    Speak the question, capture the spoken reply, and resend it as the
+                    //    next command with the SAME order id; the backend interprets sí/no.
+                    if (action.awaitingConfirmation()) {
+                        String reply = confirmationGate.ask(action.outMessage());
+                        // null = couldn't ask at all (no mic/surface/observer) -> abort now,
+                        // no re-ask. "" = asked but heard nothing -> re-ask exactly once.
+                        if (reply == null) {
+                            post(() -> callback.onAborted("Cancelo por falta de confirmación."));
+                            return;
+                        }
+                        if (reply.isBlank()) {
+                            reply = confirmationGate.ask("No te oí. " + action.outMessage());
+                        }
+                        if (reply == null || reply.isBlank()) {
+                            post(() -> callback.onAborted("Cancelo por falta de confirmación."));
+                            return;
+                        }
+                        nextCommand = reply;
+                        continue;  // no device action ran; don't settle
+                    }
+
+                    // 2) Executable action.
                     if (action.isExecutable()) {
+                        // Local safety net for destructive actions the backend doesn't hold
+                        // by default (e.g. a TAP_ELEMENT on "eliminar"/"pagar"): confirm by voice.
                         if (confirmationGate.requiresConfirmation(action)
-                                && !confirmationGate.confirm(action)) {
-                            Log.i(TAG, "step " + step + " declined at confirmation gate");
+                                && !isAffirmative(confirmationGate.ask(localConfirmQuestion(action)))) {
+                            Log.i(TAG, "step " + step + " declined at local confirmation gate");
                             post(() -> callback.onAborted(action.outMessage()));
                             return;
                         }
@@ -167,7 +201,14 @@ public class CommandRepository {
                         }
                     }
 
+                    // 3) Completion / conversational.
                     if (action.taskComplete()) {
+                        post(() -> callback.onComplete(action.outMessage()));
+                        return;
+                    }
+                    if (!action.isExecutable()) {
+                        // NONE, not complete, not awaiting: a conversational reply. Speak it and
+                        // stop — do NOT silently re-send the original order (the legacy bug).
                         post(() -> callback.onComplete(action.outMessage()));
                         return;
                     }
@@ -223,14 +264,49 @@ public class CommandRepository {
      * unit-testable (tests stub it).
      */
     public interface ConfirmationGate {
+        /** Local safety-net check (destructive TAP_ELEMENT keywords the backend doesn't hold). */
         boolean requiresConfirmation(ResolvedAction action);
-        /** Called on the background thread; return true to proceed, false to abort. */
-        boolean confirm(ResolvedAction action);
+        /**
+         * Speak {@code question} out loud, re-open the mic, and return the user's spoken
+         * reply (the verbatim transcript). Called on the background loop thread; blocks
+         * until the user answers or a timeout elapses. Returns null/blank when there was
+         * no answer (timeout) or no UI to ask with.
+         */
+        String ask(String question);
+    }
+
+    // Affirmative replies for the LOCAL safety-net (the backend interprets the
+    // awaiting-confirmation reply itself). Matched as a whole first token so
+    // "silencio"/"siempre"/"sin" do NOT count as "sí".
+    private static final java.util.Set<String> AFFIRMATIVE_TOKENS = java.util.Set.of(
+            "sí", "si", "claro", "dale", "vale", "ok", "okay", "oka", "correcto",
+            "confirmo", "hazlo", "adelante", "yes", "yeah", "yep", "sure");
+
+    private static boolean isAffirmative(String reply) {
+        if (reply == null) {
+            return false;
+        }
+        String norm = reply.trim().toLowerCase(java.util.Locale.ROOT);
+        if (norm.isEmpty()) {
+            return false;
+        }
+        // Compare the first spoken token, stripped of surrounding punctuation.
+        String first = norm.split("\\s+")[0].replaceAll("[^a-záéíóúñ]", "");
+        return AFFIRMATIVE_TOKENS.contains(first);
+    }
+
+    private static String localConfirmQuestion(ResolvedAction action) {
+        String text = action.param("text");
+        if (text != null && !text.isBlank()) {
+            return "¿Confirmas que pulse '" + text + "'?";
+        }
+        return "¿Confirmas esta acción?";
     }
 
     /** Default gate: detects via {@link DestructiveActionPolicy} and, with no UI to
-     *  prompt, FAILS CLOSED — a sensitive action is denied rather than run hands-free.
-     *  Surfaces that can prompt (the overlay) swap in their own confirming gate. */
+     *  prompt, FAILS CLOSED — {@link #ask} returns null so the loop aborts rather than
+     *  run a sensitive action hands-free. Surfaces that can prompt (the overlay) swap
+     *  in their own voice gate. */
     private static final class DestructiveActionGate implements ConfirmationGate {
         private final DestructiveActionPolicy policy;
 
@@ -244,10 +320,9 @@ public class CommandRepository {
         }
 
         @Override
-        public boolean confirm(ResolvedAction action) {
-            // confirm() is only reached for actions that need confirmation; with no
-            // interactive UI here, deny (the loop aborts) instead of auto-approving.
-            return false;
+        public String ask(String question) {
+            // No interactive UI here: no answer => the loop aborts (fail closed).
+            return null;
         }
     }
 

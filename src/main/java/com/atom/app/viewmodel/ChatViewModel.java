@@ -13,6 +13,7 @@ import com.atom.domain.action.ResolvedAction;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 public class ChatViewModel extends ViewModel {
@@ -31,19 +32,23 @@ public class ChatViewModel extends ViewModel {
     private MutableLiveData<String> chatResponse = new MutableLiveData<>();
     private MutableLiveData<Boolean> isLoading = new MutableLiveData<>();
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
-    // Sensitive actions awaiting confirmation; one-shot Event avoids re-firing on recreation.
-    private MutableLiveData<Event<ResolvedAction>> pendingConfirmation = new MutableLiveData<>();
     // Emitted when an action needs the accessibility service but it is disabled.
     private MutableLiveData<Event<ResolvedAction>> accessibilityRequired = new MutableLiveData<>();
     // True while the loop runs; the UI freezes input and shows progress until it ends.
     private MutableLiveData<Boolean> automationActive = new MutableLiveData<>(false);
-    // A destructive action detected mid-loop, awaiting the user's confirm/decline.
-    private MutableLiveData<Event<ResolvedAction>> destructiveConfirmation = new MutableLiveData<>();
-    // The order currently being recognized, so a confirmed sensitive first action
-    // can resume the autonomous loop with the original utterance.
-    private String lastOrder;
-    // Hands the user's confirm/decline back to the blocked loop thread (capacity 1).
-    private final BlockingQueue<Boolean> destructiveAnswer = new ArrayBlockingQueue<>(1);
+    // A spoken confirmation question to voice + capture; one-shot Event. The Activity
+    // speaks it, re-opens the mic, and feeds the transcript via submitSpokenConfirmation.
+    private MutableLiveData<Event<String>> voiceConfirmationRequested = new MutableLiveData<>();
+    // Hands the spoken reply back to the blocked loop thread (capacity 1).
+    private final BlockingQueue<String> spokenConfirmation = new ArrayBlockingQueue<>(1);
+    // How long the loop waits for the spoken reply before treating it as no answer.
+    private static final long CONFIRM_TIMEOUT_SECONDS = 12L;
+    // Sentinel the Activity submits when it CANNOT capture (mic muted / not granted);
+    // ask() maps it to null so the loop aborts immediately instead of re-asking.
+    public static final String CANT_ASK = " __atom_cant_ask__";
+    // True only while an Activity is started and observing the confirmation event, so
+    // ask() can abort (null) immediately when there's no UI to voice the question.
+    private volatile boolean confirmationUiReady;
 
     public ChatViewModel(ChatRepository repository, CommandRepository commandRepository,
                          ConversationRepository conversationRepository,
@@ -52,18 +57,17 @@ public class ChatViewModel extends ViewModel {
         this.commandRepository = commandRepository;
         this.conversationRepository = conversationRepository;
         this.accessibilityEnabled = accessibilityEnabled;
-        // Wire a prompting gate so a destructive TAP_ELEMENT detected mid-loop pauses
-        // the chain and surfaces the confirmation UI (resume on confirm, abort on decline).
-        commandRepository.setConfirmationGate(new DestructiveConfirmationGate());
+        // The backend holds sensitive actions and asks out loud mid-loop; this gate
+        // speaks the question and captures the spoken "sí/no" (hands-free).
+        commandRepository.setConfirmationGate(new VoiceConfirmationGate());
     }
 
     public LiveData<String> getChatResponse() { return chatResponse; }
     public LiveData<Boolean> getIsLoading() { return isLoading; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
-    public LiveData<Event<ResolvedAction>> getPendingConfirmation() { return pendingConfirmation; }
     public LiveData<Event<ResolvedAction>> getAccessibilityRequired() { return accessibilityRequired; }
     public LiveData<Boolean> getAutomationActive() { return automationActive; }
-    public LiveData<Event<ResolvedAction>> getDestructiveConfirmation() { return destructiveConfirmation; }
+    public LiveData<Event<String>> getVoiceConfirmationRequested() { return voiceConfirmationRequested; }
 
     /** Free-form conversational message (token-streamed via StreamChat). */
     public void sendMessage(String prompt) {
@@ -94,7 +98,6 @@ public class ChatViewModel extends ViewModel {
         // Record the user turn here, at the single entry point for typed and spoken
         // orders, so it persists exactly once regardless of how the order resolves.
         conversationRepository.saveUserMessage(order);
-        this.lastOrder = order;
         isLoading.setValue(true);
         commandRepository.recognize(order, new CommandRepository.CommandCallback() {
             @Override
@@ -113,11 +116,9 @@ public class ChatViewModel extends ViewModel {
                     accessibilityRequired.setValue(new Event<>(action));
                     return;
                 }
-                if (action.requiresConfirmation()) {
-                    pendingConfirmation.setValue(new Event<>(action));
-                } else {
-                    runAutonomous(order);
-                }
+                // Sensitive actions are no longer pre-confirmed by a tap dialog: the
+                // backend holds them and asks out loud mid-loop (voice gate).
+                runAutonomous(order);
             }
 
             @Override
@@ -159,23 +160,30 @@ public class ChatViewModel extends ViewModel {
     }
 
     /**
-     * Resume after the user confirmed a sensitive first action (or granted its
-     * runtime permission): drive the autonomous loop with the original order.
+     * The Activity captured the user's spoken reply to a confirmation question: hand
+     * the transcript to the blocked loop thread so it resumes (resends it as the next
+     * command). An empty string means "no answer" (the loop re-asks or aborts).
      */
-    public void runAction(ResolvedAction action) {
-        runAutonomous(lastOrder != null ? lastOrder : action.outMessage());
+    public void submitSpokenConfirmation(String transcript) {
+        spokenConfirmation.offer(transcript == null ? "" : transcript);
+    }
+
+    /** The Activity tells the ViewModel whether it can currently voice + capture a reply. */
+    public void setConfirmationUiReady(boolean ready) {
+        this.confirmationUiReady = ready;
+        if (!ready) {
+            // Unblock a loop waiting on a reply we can no longer capture.
+            spokenConfirmation.offer(CANT_ASK);
+        }
     }
 
     /**
-     * The user answered the mid-loop destructive prompt: hand the decision to the
-     * blocked loop thread so it resumes (confirm) or aborts (decline).
+     * Voice gate: for a held/destructive action the loop calls {@link #ask}, which asks
+     * the Activity (via {@link #voiceConfirmationRequested}) to speak the question and
+     * re-open the mic, then blocks on a bounded poll for the spoken reply. The timeout
+     * guarantees no deadlock if no Activity is observing (returns null ⇒ loop aborts).
      */
-    public void resolveDestructiveConfirmation(boolean confirmed) {
-        destructiveAnswer.offer(confirmed);
-    }
-
-    /** Prompting gate: detects via {@link DestructiveActionPolicy}, then blocks the loop thread until the user answers. */
-    private final class DestructiveConfirmationGate implements CommandRepository.ConfirmationGate {
+    private final class VoiceConfirmationGate implements CommandRepository.ConfirmationGate {
         private final DestructiveActionPolicy policy = new DestructiveActionPolicy();
 
         @Override
@@ -184,14 +192,24 @@ public class ChatViewModel extends ViewModel {
         }
 
         @Override
-        public boolean confirm(ResolvedAction action) {
-            destructiveAnswer.clear();
-            destructiveConfirmation.postValue(new Event<>(action));
+        public String ask(String question) {
+            if (!confirmationUiReady) {
+                return null;  // no started Activity to voice the question -> abort, no re-ask
+            }
+            spokenConfirmation.clear();
+            voiceConfirmationRequested.postValue(new Event<>(question));
             try {
-                return destructiveAnswer.take();
+                String reply = spokenConfirmation.poll(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (reply == null) {
+                    return "";            // asked, heard nothing in time
+                }
+                if (CANT_ASK.equals(reply)) {
+                    return null;          // Activity couldn't capture (mute/no-perm/stopped)
+                }
+                return reply;
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                return false; // interrupted -> treat as declined, abort the chain
+                return null;
             }
         }
     }
