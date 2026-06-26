@@ -20,7 +20,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/space_m"
         android:gravity="center"
-        android:textAppearance="@style/TextAppearance.Atom.Caption" />
+        android:textAppearance="@style/TextAppearance.Atom.Body" />
 
     <EditText
         android:id="@+id/onboarding_page_input"
@@ -28,7 +28,7 @@
         android:layout_width="match_parent"
         android:layout_height="@dimen/input_bar_height"
         android:layout_marginTop="@dimen/space_l"
-        android:background="@drawable/bg_surface_card"
+        android:background="@drawable/bg_card_input"
         android:inputType="textPersonName"
         android:paddingHorizontal="@dimen/space_m"
         android:visibility="gone" />
