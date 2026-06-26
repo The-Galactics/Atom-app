@@ -4,6 +4,7 @@ import java.util.function.LongSupplier;
 
 import com.atom.application.port.in.security.AuthPortIn;
 import com.atom.application.port.out.security.AuthGatewayPortOut;
+import com.atom.application.port.out.security.SessionListener;
 import com.atom.application.port.out.security.TokenStore;
 import com.atom.domain.security.AuthException;
 import com.atom.domain.security.TokenPair;
@@ -15,12 +16,19 @@ public class AuthUseCase implements AuthPortIn {
     private final AuthGatewayPortOut gateway;
     private final TokenStore tokenStore;
     private final LongSupplier clockEpochSeconds;
+    private final SessionListener sessionListener;
 
     public AuthUseCase(AuthGatewayPortOut gateway, TokenStore tokenStore,
                        LongSupplier clockEpochSeconds) {
+        this(gateway, tokenStore, clockEpochSeconds, SessionListener.NONE);
+    }
+
+    public AuthUseCase(AuthGatewayPortOut gateway, TokenStore tokenStore,
+                       LongSupplier clockEpochSeconds, SessionListener sessionListener) {
         this.gateway = gateway;
         this.tokenStore = tokenStore;
         this.clockEpochSeconds = clockEpochSeconds;
+        this.sessionListener = sessionListener;
     }
 
     @Override
@@ -84,6 +92,11 @@ public class AuthUseCase implements AuthPortIn {
             return refreshed.getAccessToken();
         } catch (AuthException e) {
             tokenStore.clear();
+            // The session is gone server-side (UNAUTHENTICATED): signal the UI to
+            // redirect to Login now, not only on the next launch (US-10.3).
+            if (e.getReason() == AuthException.Reason.SESSION_EXPIRED) {
+                sessionListener.onSessionExpired();
+            }
             return null; // refresh rejected -> re-login
         }
     }

@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.Application;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -12,9 +14,13 @@ import androidx.core.os.LocaleListCompat;
 
 import com.atom.app.di.AppContainer;
 import com.atom.app.settings.AtomPreferences;
+import com.atom.application.port.out.security.SessionListener;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 
-public class AtomApp extends Application implements Application.ActivityLifecycleCallbacks {
+import java.lang.ref.WeakReference;
+
+public class AtomApp extends Application
+        implements Application.ActivityLifecycleCallbacks, SessionListener {
 
     public interface ForegroundListener {
         void onAppForeground();
@@ -23,6 +29,11 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
     }
 
     private AppContainer appContainer;
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    // The currently resumed Activity, used to redirect to Login on session expiry.
+    @Nullable
+    private WeakReference<Activity> currentActivity;
 
     private int startedActivities = 0;
     private boolean foreground = false;
@@ -130,6 +141,7 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
 
     @Override
     public void onActivityResumed(@NonNull Activity activity) {
+        currentActivity = new WeakReference<>(activity);
         // At onResume the app is truly foreground, so a microphone FGS is allowed.
         if (!wakeAttempted) {
             wakeAttempted = true;
@@ -147,5 +159,30 @@ public class AtomApp extends Application implements Application.ActivityLifecycl
 
     @Override
     public void onActivityDestroyed(@NonNull Activity activity) {
+        if (currentActivity != null && currentActivity.get() == activity) {
+            currentActivity = null;
+        }
+    }
+
+    // --- SessionListener (US-10.3) ------------------------------------------
+
+    /**
+     * Called from the auth layer (a background gRPC thread) when a token refresh
+     * is rejected as UNAUTHENTICATED. Credentials are already wiped by then; here
+     * we send the user to Login immediately, clearing the back stack so the
+     * expired session is not reachable via Back.
+     */
+    @Override
+    public void onSessionExpired() {
+        mainHandler.post(() -> {
+            Activity activity = currentActivity != null ? currentActivity.get() : null;
+            Intent intent = new Intent(this, LoginActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (activity != null) {
+                activity.startActivity(intent);
+            } else {
+                startActivity(intent);
+            }
+        });
     }
 }
