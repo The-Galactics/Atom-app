@@ -155,6 +155,25 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private final android.os.Handler mainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
 
+    // Drag coalescing: a touch stream emits ACTION_MOVE faster than the display refreshes,
+    // so a per-event updateViewLayout does redundant relayouts. Instead we mutate the
+    // params synchronously and schedule a single Choreographer-aligned flush per frame, so
+    // the window manager is told the new position at most once per vsync (Epic 3.1).
+    private boolean bubbleLayoutScheduled;
+    private final Runnable bubbleLayoutFlush = () -> {
+        bubbleLayoutScheduled = false;
+        if (bubbleView != null && bubbleView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(bubbleView, bubbleParams);
+        }
+    };
+    private boolean handleLayoutScheduled;
+    private final Runnable handleLayoutFlush = () -> {
+        handleLayoutScheduled = false;
+        if (handleView != null && handleView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(handleView, handleParams);
+        }
+    };
+
     // Keeps the panel mic icon in sync when mute is toggled from the main screen.
     private final SharedPreferences.OnSharedPreferenceChangeListener muteListener =
             (sp, key) -> {
@@ -463,6 +482,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     // The handle drags around the screen like the bubble; a tap (no drag) restores it.
+    /** Schedules at most one bubble relayout per frame; coalesces a burst of ACTION_MOVEs. */
+    private void scheduleBubbleLayout() {
+        if (bubbleLayoutScheduled || bubbleView == null) {
+            return;
+        }
+        bubbleLayoutScheduled = true;
+        bubbleView.postOnAnimation(bubbleLayoutFlush);
+    }
+
+    /** Schedules at most one handle relayout per frame; coalesces a burst of ACTION_MOVEs. */
+    private void scheduleHandleLayout() {
+        if (handleLayoutScheduled || handleView == null) {
+            return;
+        }
+        handleLayoutScheduled = true;
+        handleView.postOnAnimation(handleLayoutFlush);
+    }
+
     private final class HandleTouchListener implements View.OnTouchListener {
         private int initialX, initialY;
         private float touchX, touchY;
@@ -489,7 +526,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     }
                     handleParams.x = initialX + dx;
                     handleParams.y = initialY + dy;
-                    windowManager.updateViewLayout(handleView, handleParams);
+                    scheduleHandleLayout();
                     return true;
                 case MotionEvent.ACTION_UP:
                     if (dragging) {
@@ -666,7 +703,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     }
                     bubbleParams.x = initialX + dx;
                     bubbleParams.y = initialY + dy;
-                    windowManager.updateViewLayout(bubbleView, bubbleParams);
+                    scheduleBubbleLayout();
                     if (dragging) {
                         updateDismissHighlight();
                     }
