@@ -38,6 +38,8 @@ import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
 import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
+import com.atom.app.ui.motion.CoreState;
+import com.atom.app.ui.motion.CoreStatePresenter;
 import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.app.viewmodel.ChatViewModel;
@@ -47,18 +49,6 @@ import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class MainActivity extends AppCompatActivity {
-
-    // Atom core energy (0 = calm idle, 1 = fully engaged) and glow strength per app state.
-    private static final float CORE_ENERGY_IDLE = 0.0f;       // calm ambient motion
-    private static final float CORE_ENERGY_THINKING = 0.6f;   // working on the request
-    private static final float CORE_ENERGY_LISTENING = 1.0f;  // actively capturing speech
-    private static final float CORE_GLOW_IDLE = 0.35f;       // dim resting glow
-    private static final float CORE_GLOW_ACTIVE = 0.7f;      // brighter while engaged
-    private static final long CORE_GLOW_ANIM_MS = 280;       // glow alpha crossfade
-
-    // Status text crossfade timing.
-    private static final long TEXT_FADE_OUT_MS = 120;
-    private static final long TEXT_FADE_IN_MS = 160;
 
     // Input bar slide-in/out timing and the fallback travel before first layout.
     private static final long INPUT_BAR_ANIM_MS = 200;
@@ -114,8 +104,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean isListening;
 
     // Last applied core state, kept so it can be restored across configuration changes.
-    private float currentEnergy = CORE_ENERGY_IDLE;
-    private float currentGlow = CORE_GLOW_IDLE;
+    private float currentEnergy = CoreStatePresenter.energyFor(CoreState.IDLE);
+    private float currentGlow = CoreStatePresenter.glowFor(CoreState.IDLE);
 
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
@@ -219,10 +209,10 @@ public class MainActivity extends AppCompatActivity {
 
         // Start the atom core in its calm idle state (dim glow, low energy).
         if (coreGlow != null) {
-            coreGlow.setAlpha(CORE_GLOW_IDLE);
+            coreGlow.setAlpha(CoreStatePresenter.glowFor(CoreState.IDLE));
         }
         if (atomCore != null) {
-            atomCore.setEnergy(CORE_ENERGY_IDLE);
+            atomCore.setEnergy(CoreStatePresenter.energyFor(CoreState.IDLE));
         }
 
         setupObservers();
@@ -308,8 +298,8 @@ public class MainActivity extends AppCompatActivity {
         }
         statusText.setText(state.getString(KEY_STATUS, getString(R.string.status_idle)));
         subStatusText.setText(state.getString(KEY_SUB_STATUS, getString(R.string.sub_status_tap_mic)));
-        applyCoreState(state.getFloat(KEY_ENERGY, CORE_ENERGY_IDLE),
-                state.getFloat(KEY_GLOW, CORE_GLOW_IDLE));
+        applyCoreState(state.getFloat(KEY_ENERGY, CoreStatePresenter.energyFor(CoreState.IDLE)),
+                state.getFloat(KEY_GLOW, CoreStatePresenter.glowFor(CoreState.IDLE)));
     }
 
     private void setupInputBar() {
@@ -515,7 +505,7 @@ public class MainActivity extends AppCompatActivity {
         }
         isListening = false;
         micAnimations.stopMicPulse(btnMic);
-        applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
+        applyCoreState(CoreState.IDLE);
         fadeSwap(statusText, getString(R.string.status_idle));
     }
 
@@ -562,7 +552,7 @@ public class MainActivity extends AppCompatActivity {
         fadeSwap(statusText, getString(R.string.status_listening));
         fadeSwap(subStatusText, getString(R.string.sub_status_listening));
         // Drive the atom core brighter/faster and start the listening mic pulse.
-        applyCoreState(CORE_ENERGY_LISTENING, CORE_GLOW_ACTIVE);
+        applyCoreState(CoreState.LISTENING);
         micAnimations.startMicPulse(btnMic);
         // The always-on wake word holds the mic; ask it to release first, then give
         // it a moment to free the AudioRecord before we start capturing.
@@ -584,7 +574,7 @@ public class MainActivity extends AppCompatActivity {
         public void onReadyForSpeech() {
             fadeSwap(statusText, getString(R.string.status_listening));
             fadeSwap(subStatusText, getString(R.string.sub_status_listening));
-            applyCoreState(CORE_ENERGY_LISTENING, CORE_GLOW_ACTIVE);
+            applyCoreState(CoreState.LISTENING);
         }
 
         @Override
@@ -594,7 +584,7 @@ public class MainActivity extends AppCompatActivity {
             fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
             // Speech captured: settle the mic pulse and ease the core to thinking.
             micAnimations.stopMicPulse(btnMic);
-            applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
+            applyCoreState(CoreState.THINKING);
         }
 
         @Override
@@ -625,7 +615,7 @@ public class MainActivity extends AppCompatActivity {
             fadeSwap(statusText, getString(R.string.status_idle));
             // Recognition failed: stop the pulse and return the core to its calm idle.
             micAnimations.stopMicPulse(btnMic);
-            applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
+            applyCoreState(CoreState.IDLE);
             toast(getString(msg));
             // Offer a subtle, on-brand retry: the sub-status becomes a tappable
             // "Tap to try again" that re-runs the listen path. Cleared on the next
@@ -733,12 +723,12 @@ public class MainActivity extends AppCompatActivity {
         StatusCrossfader.swap(view, text);
     }
 
-    /**
-     * Drives the atom core's energy level and the surrounding glow alpha to reflect
-     * the current app state (idle / listening / thinking). The core eases its own
-     * energy internally and the glow alpha is animated, so transitions between states
-     * feel continuous rather than stepped.
-     */
+    /** Drives the core to a semantic UI state via the shared CoreStatePresenter. */
+    private void applyCoreState(CoreState state) {
+        applyCoreState(CoreStatePresenter.energyFor(state), CoreStatePresenter.glowFor(state));
+    }
+
+    /** Low-level energy/glow apply; also used by the saved-state restore path. */
     private void applyCoreState(float energy, float glowAlpha) {
         currentEnergy = energy;
         currentGlow = glowAlpha;
@@ -746,7 +736,7 @@ public class MainActivity extends AppCompatActivity {
             atomCore.setEnergy(energy);
         }
         if (coreGlow != null) {
-            coreGlow.animate().alpha(glowAlpha).setDuration(CORE_GLOW_ANIM_MS).start();
+            coreGlow.animate().alpha(glowAlpha).setDuration(CoreStatePresenter.CORE_GLOW_ANIM_MS).start();
         }
     }
 
@@ -781,7 +771,7 @@ public class MainActivity extends AppCompatActivity {
             fadeSwap(statusText, response);
             fadeSwap(subStatusText, getString(R.string.sub_status_responded));
             // Reply landed: ease the core back to its calm idle with a settle pulse.
-            applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
+            applyCoreState(CoreState.RESPONDED);
             // Speak the assistant reply aloud when enabled in Settings.
             if (preferences.isTtsEnabled()) {
                 tts.speak(response);
@@ -793,7 +783,7 @@ public class MainActivity extends AppCompatActivity {
             if (isLoading) {
                 fadeSwap(statusText, getString(R.string.status_thinking));
                 fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
-                applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
+                applyCoreState(CoreState.THINKING);
             }
         });
 
@@ -802,7 +792,7 @@ public class MainActivity extends AppCompatActivity {
             fadeSwap(statusText, getString(R.string.status_error));
             fadeSwap(subStatusText,
                     error != null ? error.toUpperCase(java.util.Locale.getDefault()) : getString(R.string.status_error));
-            applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
+            applyCoreState(CoreState.ERROR);
             // Don't leave the error on screen: ease back to idle after a short delay.
             statusText.removeCallbacks(errorRecoverRunnable);
             statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
@@ -827,7 +817,7 @@ public class MainActivity extends AppCompatActivity {
             if (operating) {
                 fadeSwap(statusText, getString(R.string.automation_operating));
                 fadeSwap(subStatusText, getString(R.string.automation_operating));
-                applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
+                applyCoreState(CoreState.OPERATING);
             }
         });
     }
