@@ -1,8 +1,5 @@
 package com.atom.app.ui.main;
 
-import android.widget.Toast;
-
-import androidx.activity.result.ActivityResultLauncher;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -12,8 +9,12 @@ import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.domain.action.ResolvedAction;
 
 /**
- * Wires the ViewModel's LiveData to the Activity's UI via a Host interface, and owns
- * the confirmation/permission dialogs that used to live in MainActivity.
+ * Wires the ViewModel's LiveData to the Activity's UI via a Host interface.
+ *
+ * <p>Sensitive/destructive actions are no longer pre-confirmed by a tap dialog: the
+ * backend holds them and asks out loud mid-loop (the voice gate). This binder forwards
+ * that spoken-confirmation request to the Host, which speaks the question and re-opens
+ * the mic ({@link Host#onVoiceConfirmationRequested}).
  *
  * <p>Constructing this object does not start observation — call {@link #bind()} once
  * the Activity's views and ViewModel are ready (i.e. after {@code setContentView}).
@@ -32,23 +33,19 @@ public final class MainViewModelBinder {
         void setInputEnabled(boolean enabled);
         /** Render the automation-operating state (fadeSwap × 2, core OPERATING). */
         void showOperating();
+        /** Held/destructive action mid-loop: speak the question and capture the spoken reply. */
+        void onVoiceConfirmationRequested(String question);
     }
 
     private final AppCompatActivity activity;
     private final ChatViewModel viewModel;
-    private final ActivityResultLauncher<String> permissionLauncher;
     private final Host host;
-
-    // Action awaiting a permission grant; resumed in onPermissionResult.
-    private ResolvedAction awaitingPermission;
 
     public MainViewModelBinder(AppCompatActivity activity,
                                ChatViewModel viewModel,
-                               ActivityResultLauncher<String> permissionLauncher,
                                Host host) {
         this.activity = activity;
         this.viewModel = viewModel;
-        this.permissionLauncher = permissionLauncher;
         this.host = host;
     }
 
@@ -70,13 +67,15 @@ public final class MainViewModelBinder {
         // When something goes wrong
         viewModel.getErrorMessage().observe(activity, error -> host.showError(error));
 
-        // Sensitive actions require confirmation; one-shot Event avoids re-prompting on recreation.
-        viewModel.getPendingConfirmation().observe(activity,
-                e -> confirmAction(e.getContentIfNotHandled()));
-
-        // Destructive action mid-loop: prompt before it runs (loop thread waits for the answer).
-        viewModel.getDestructiveConfirmation().observe(activity,
-                e -> confirmDestructive(e.getContentIfNotHandled()));
+        // Held/destructive action mid-loop: speak the question and capture the spoken
+        // "sí/no" hands-free (the loop thread waits for the transcript). One-shot Event
+        // avoids re-asking on recreation.
+        viewModel.getVoiceConfirmationRequested().observe(activity, e -> {
+            String question = e.getContentIfNotHandled();
+            if (question != null) {
+                host.onVoiceConfirmationRequested(question);
+            }
+        });
 
         // Accessibility-powered actions need the service enabled first.
         viewModel.getAccessibilityRequired().observe(activity,
@@ -92,25 +91,6 @@ public final class MainViewModelBinder {
         });
     }
 
-    /**
-     * Called by MainActivity's {@code permissionLauncher} callback with the grant result.
-     * Resumes the awaiting action if granted, or shows a denied toast if not.
-     */
-    public void onPermissionResult(boolean granted) {
-        ResolvedAction action = awaitingPermission;
-        awaitingPermission = null;
-        if (action == null) {
-            return;
-        }
-        if (granted) {
-            viewModel.runAction(action);
-        } else {
-            Toast.makeText(activity,
-                    activity.getString(R.string.action_permission_denied),
-                    Toast.LENGTH_SHORT).show();
-        }
-    }
-
     /** Prompts the user to enable Atom's accessibility service, then opens Settings. */
     private void promptEnableAccessibility(ResolvedAction action) {
         if (action == null) {
@@ -124,51 +104,5 @@ public final class MainViewModelBinder {
                                 PermissionCoordinator.accessibilitySettingsIntent()))
                 .setNegativeButton(R.string.action_confirm_no, null)
                 .show();
-    }
-
-    /** Asks the user to confirm a sensitive action before executing it. */
-    private void confirmAction(ResolvedAction action) {
-        if (action == null) {
-            return;
-        }
-        String prompt = action.outMessage().isEmpty()
-                ? activity.getString(R.string.action_confirm_default)
-                : action.outMessage();
-        new AlertDialog.Builder(activity)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(prompt)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> executeWithPermission(action))
-                .setNegativeButton(R.string.action_confirm_no, null)
-                .show();
-    }
-
-    /** Confirms a destructive action mid-loop; the paused loop resumes or aborts on the answer. */
-    private void confirmDestructive(ResolvedAction action) {
-        if (action == null) {
-            return;
-        }
-        String prompt = action.outMessage().isEmpty()
-                ? activity.getString(R.string.action_confirm_default)
-                : action.outMessage();
-        new AlertDialog.Builder(activity)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(prompt)
-                .setCancelable(false)
-                .setPositiveButton(R.string.action_confirm_yes,
-                        (d, w) -> viewModel.resolveDestructiveConfirmation(true))
-                .setNegativeButton(R.string.action_confirm_no,
-                        (d, w) -> viewModel.resolveDestructiveConfirmation(false))
-                .show();
-    }
-
-    /** Runs the action, first requesting its runtime permission if one is missing. */
-    private void executeWithPermission(ResolvedAction action) {
-        String permission = PermissionCoordinator.requiredPermission(action);
-        if (permission == null || PermissionCoordinator.isGranted(activity, permission)) {
-            viewModel.runAction(action);
-            return;
-        }
-        awaitingPermission = action;
-        permissionLauncher.launch(permission);
     }
 }

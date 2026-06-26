@@ -36,12 +36,13 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
     }
 
     @Override
-    public ResolvedAction commandResponse(UUID userId, String command) {
+    public ResolvedAction commandResponse(UUID userId, UUID orderId, String command) {
 
         CommandRequest request = CommandRequest.newBuilder()
                 .setUserId(userId.toString())
                 .setCommand(command)
                 .addAllScreenElements(captureScreenElements())
+                .setOrderId(orderId == null ? "" : orderId.toString())
                 .build();
 
         CommandResponse response = this.blockingStub
@@ -57,7 +58,8 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
                 response.getConfidence(),
                 response.getRequiresConfirmation(),
                 response.getTaskComplete(),
-                response.getStep());
+                response.getStep(),
+                response.getAwaitingConfirmation());
 
     }
 

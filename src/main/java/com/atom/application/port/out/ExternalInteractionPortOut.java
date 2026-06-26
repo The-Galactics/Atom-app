@@ -8,7 +8,9 @@ import java.util.stream.Stream;
 public interface ExternalInteractionPortOut {
 
     //Interpret a user order via python and return the resolved action to execute.
-    ResolvedAction commandResponse (UUID userId, String command);
+    // orderId scopes one ReAct task/order across all its turns; empty/null falls
+    // back to the user identity on the backend.
+    ResolvedAction commandResponse (UUID userId, UUID orderId, String command);
 
     //Get the message response of python to display token per token to the user.
     Stream<String> messageResponse (UUID userId, UUID chatId, String message);

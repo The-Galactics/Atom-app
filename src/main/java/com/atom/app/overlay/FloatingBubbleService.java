@@ -5,7 +5,6 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -70,6 +69,7 @@ import com.atom.infrastructure.adapter.wake.WakeWordService;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 public class FloatingBubbleService extends Service implements AtomApp.ForegroundListener {
 
@@ -142,8 +142,15 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private AtomApp app;
     private boolean overlayEnabled; // set between START and STOP
 
-    // Hands the user's confirm/decline back to the blocked loop thread (capacity 1).
-    private final BlockingQueue<Boolean> destructiveAnswer = new ArrayBlockingQueue<>(1);
+    // How long the loop waits for the spoken "sí/no" before treating it as no answer.
+    private static final long CONFIRM_TIMEOUT_SECONDS = 12L;
+    // Sentinel queued when we COULD NOT ask at all (no mic/surface, or torn down) —
+    // distinct from an empty transcript (we asked but heard nothing). ask() maps this
+    // to null so the loop aborts immediately instead of re-asking.
+    private static final String CANT_ASK = "\u0000__atom_cant_ask__";
+    // When non-null, the next STT transcript is a confirmation reply and is handed to
+    // this queue (unblocking the loop thread) instead of starting a new order.
+    private volatile BlockingQueue<String> confirmationSink;
     // Runs callbacks on the main thread; the loop runs on a background executor.
     private final android.os.Handler mainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
@@ -187,8 +194,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 app.getAppContainer().getActionExecutor(),
                 app.getAppContainer().getSessionUserId(),
                 app.getAppContainer().getAuthUseCase());
-        // Prompt (and pause the loop) when a destructive action is detected mid-loop.
-        commandRepository.setConfirmationGate(new DestructiveConfirmationGate());
+        // Ask the user OUT LOUD (and pause the loop) for held/destructive actions.
+        commandRepository.setConfirmationGate(new VoiceConfirmationGate());
         preferences = new AtomPreferences(this);
         conversationRepository = new ConversationRepository(this);
         preferences.registerChangeListener(muteListener);
@@ -394,6 +401,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     // Tucks the overlay away to a small arrow tab pinned to the screen edge, so it
     // stops covering other apps without disappearing. Tapping the tab brings it back.
     private void hideToHandle() {
+        // Tearing down the listening surface: unblock any loop waiting on a reply.
+        failConfirmationCapture();
         int[] screen = getScreenSize();
         if (bubbleView != null) {
             int bubbleWidth = bubbleSpan(bubbleView.getWidth());
@@ -897,11 +906,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     promptEnableAccessibility(status);
                     return;
                 }
-                if (action.requiresConfirmation()) {
-                    confirmAndRun(prompt, action, status);
-                } else {
-                    runAutonomous(prompt, status);
-                }
+                // Sensitive actions are no longer gated by a tap dialog: the backend
+                // holds them and asks out loud mid-loop (handled by the voice gate).
+                runAutonomous(prompt, status);
             }
 
             @Override
@@ -974,79 +981,51 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     /**
-     * Sensitive actions (call, message) are confirmed first. Shown as an overlay
-     * dialog because a Service has no Activity window; relies on the same
-     * SYSTEM_ALERT_WINDOW permission the bubble already requires.
+     * Speaks a confirmation question out loud, then re-opens the mic to capture the
+     * user's spoken reply (hands-free). Called on the main thread; the loop thread is
+     * blocked on {@link #confirmationSink} meanwhile and resumes/aborts on the answer.
      */
-    private void confirmAndRun(String order, ResolvedAction action, TextView status) {
-        String message = action.outMessage().isEmpty()
-                ? getString(R.string.action_confirm_default)
-                : action.outMessage();
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(message)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> runAutonomous(order, status))
-                .setNegativeButton(R.string.action_confirm_no, (d, w) -> {
-                    if (status.isAttachedToWindow()) {
-                        StatusCrossfader.swap(status, getString(R.string.action_cancelled));
-                        scheduleStatusReset(status);
-                    }
-                })
-                .create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    : WindowManager.LayoutParams.TYPE_PHONE);
+    private void askConfirmationByVoice(String question, BlockingQueue<String> sink) {
+        // Voice confirmation is impossible without the mic — we CANNOT ask (-> abort).
+        if (preferences.isMicMuted()
+                || checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            sink.offer(CANT_ASK);
+            confirmationSink = null;
+            return;
         }
-        dialog.show();
-        hardenAgainstTapjacking(dialog);
-    }
-
-    /**
-     * Anti-tapjacking (2B.4): discard touches that pass through another window
-     * overlaying our confirmation, so a malicious overlay cannot force the "Yes".
-     * Buttons exist only after {@link AlertDialog#show()}, so call this after it.
-     */
-    private static void hardenAgainstTapjacking(AlertDialog dialog) {
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().getDecorView().setFilterTouchesWhenObscured(true);
+        // Make sure a panel is up so we have a status line + mic to listen with.
+        if (panelView == null) {
+            if (!app.isAppInForeground() && bubbleView == null && handleView == null) {
+                showBubble();
+            }
+            expandPanel();
         }
-        android.widget.Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
-        if (positive != null) {
-            positive.setFilterTouchesWhenObscured(true);
+        TextView status = panelView != null ? panelView.findViewById(R.id.overlay_status) : null;
+        View mic = panelView != null ? panelView.findViewById(R.id.overlay_mic) : null;
+        if (status == null || mic == null) {
+            sink.offer(CANT_ASK);  // no surface to capture from -> cannot ask
+            confirmationSink = null;
+            return;
         }
-        android.widget.Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
-        if (negative != null) {
-            negative.setFilterTouchesWhenObscured(true);
+        status.setText(question);
+        conversationRepository.saveAssistantMessage(question);
+        // Speak via the LOCAL TTS so we get a reliable done-callback and open the mic
+        // only AFTER the question is spoken (so Atom doesn't hear its own voice).
+        Runnable openMic = () -> startVoiceCapture(status, mic);
+        if (tts != null && preferences.isTtsEnabled()) {
+            tts.speak(question, openMic);
+        } else {
+            mainHandler.postDelayed(openMic, 300L);
         }
     }
 
     /**
-     * Shows the destructive-action confirmation as an overlay dialog. Called on the
-     * main thread; the loop thread is blocked meanwhile and resumes/aborts on the answer.
+     * Voice gate: for a held/destructive action the loop calls {@link #ask}, which
+     * speaks the question and captures the spoken "sí/no". Blocks the loop thread on a
+     * bounded poll (never indefinitely) so a torn-down panel can't deadlock the loop.
      */
-    private void promptDestructive(ResolvedAction action) {
-        String message = action.outMessage().isEmpty()
-                ? getString(R.string.action_confirm_default)
-                : action.outMessage();
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.action_confirm_title)
-                .setMessage(message)
-                .setCancelable(false)
-                .setPositiveButton(R.string.action_confirm_yes, (d, w) -> destructiveAnswer.offer(true))
-                .setNegativeButton(R.string.action_confirm_no, (d, w) -> destructiveAnswer.offer(false))
-                .create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    : WindowManager.LayoutParams.TYPE_PHONE);
-        }
-        dialog.show();
-        hardenAgainstTapjacking(dialog);
-    }
-
-    /** Prompting gate: shows the overlay confirmation and blocks the loop thread until the user answers. */
-    private final class DestructiveConfirmationGate implements CommandRepository.ConfirmationGate {
+    private final class VoiceConfirmationGate implements CommandRepository.ConfirmationGate {
         private final DestructiveActionPolicy policy = new DestructiveActionPolicy();
 
         @Override
@@ -1055,14 +1034,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
 
         @Override
-        public boolean confirm(ResolvedAction action) {
-            destructiveAnswer.clear();
-            mainHandler.post(() -> promptDestructive(action));
+        public String ask(String question) {
+            BlockingQueue<String> sink = new ArrayBlockingQueue<>(1);
+            confirmationSink = sink;
+            mainHandler.post(() -> askConfirmationByVoice(question, sink));
             try {
-                return destructiveAnswer.take();
+                String reply = sink.poll(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                if (reply == null) {
+                    return "";          // poll timeout: we asked, heard nothing in time
+                }
+                if (CANT_ASK.equals(reply)) {
+                    return null;        // could not ask at all -> caller aborts (no re-ask)
+                }
+                return reply;           // transcript ("" only if STT returned empty)
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                return false;
+                return null;
+            } finally {
+                confirmationSink = null;
             }
         }
     }
@@ -1083,11 +1072,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         // Respect the app-wide mute: a muted mic can't dictate from the bubble either.
         if (preferences.isMicMuted()) {
             StatusCrossfader.swap(status, getString(R.string.mic_muted_hint));
+            failConfirmationCapture();
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             StatusCrossfader.swap(status, getString(R.string.overlay_mic_denied));
+            failConfirmationCapture();
             return;
         }
         // Silence any reply still being spoken before capturing the next one.
@@ -1131,6 +1122,19 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         TextView status = panelView.findViewById(R.id.overlay_status);
         View mic = panelView.findViewById(R.id.overlay_mic);
         startVoiceCapture(status, mic);
+    }
+
+    /**
+     * Unblocks a loop thread waiting on a confirmation when we can no longer capture
+     * (surface torn down, mic unavailable). Signals "couldn't ask" so the loop aborts
+     * immediately rather than waiting out the poll timeout.
+     */
+    private void failConfirmationCapture() {
+        BlockingQueue<String> sink = confirmationSink;
+        if (sink != null) {
+            confirmationSink = null;
+            sink.offer(CANT_ASK);
+        }
     }
 
     /**
@@ -1181,6 +1185,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         public void onResult(String text) {
             micAnimations.stopMicPulse(mic);
             notifyWakeWordListenDone();
+            // A pending confirmation captures the reply for the loop, not a new order.
+            BlockingQueue<String> sink = confirmationSink;
+            if (sink != null) {
+                confirmationSink = null;
+                sink.offer(text == null ? "" : text);
+                return;
+            }
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
                     StatusCrossfader.swap(status, getString(R.string.overlay_voice_error));
@@ -1195,6 +1206,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         public void onError(String message) {
             micAnimations.stopMicPulse(mic);
             notifyWakeWordListenDone();
+            BlockingQueue<String> sink = confirmationSink;
+            if (sink != null) {
+                confirmationSink = null;
+                sink.offer("");
+                return;
+            }
             if (!status.isAttachedToWindow()) {
                 return;
             }
@@ -1206,6 +1223,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     private void destroyRecognizer() {
+        // The recognizer is going away: don't leave a confirmation waiter blocked.
+        failConfirmationCapture();
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
             speechRecognizer = null;
@@ -1465,6 +1484,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     @Override
     public void onDestroy() {
+        // Unblock the loop thread if it's waiting on a spoken confirmation.
+        failConfirmationCapture();
         if (app != null) {
             app.clearForegroundListener(this);
         }

@@ -64,11 +64,9 @@ public class MainActivity extends AppCompatActivity {
     private MainInputBarComponent inputBar;
     private MainViewModelBinder binder;
 
-    // Routes permission results to the binder once it is initialized in onCreate.
-    private final ActivityResultLauncher<String> permissionLauncher =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-                if (binder != null) binder.onPermissionResult(granted);
-            });
+    // True while capturing a spoken confirmation reply, so the transcript is fed to
+    // the loop (submitSpokenConfirmation) instead of being dispatched as a new order.
+    private boolean confirmationCapturing;
 
     private AndroidTextToSpeech tts;
     private AtomPreferences preferences;
@@ -173,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
             atomCore.setEnergy(CoreStatePresenter.energyFor(CoreState.IDLE));
         }
 
-        binder = new MainViewModelBinder(this, viewModel, permissionLauncher,
+        binder = new MainViewModelBinder(this, viewModel,
                 new MainViewModelBinder.Host() {
                     @Override
                     public void showResponse(String response) {
@@ -214,6 +212,11 @@ public class MainActivity extends AppCompatActivity {
                         fadeSwap(statusText, getString(R.string.automation_operating));
                         fadeSwap(subStatusText, getString(R.string.automation_operating));
                         applyCoreState(CoreState.OPERATING);
+                    }
+
+                    @Override
+                    public void onVoiceConfirmationRequested(String question) {
+                        askConfirmationByVoice(question);
                     }
                 });
         binder.bind();
@@ -271,11 +274,23 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onFinalTranscript(String text) {
+                        // A pending confirmation captures the reply for the loop, not a new order.
+                        if (confirmationCapturing) {
+                            confirmationCapturing = false;
+                            viewModel.submitSpokenConfirmation(text == null ? "" : text);
+                            return;
+                        }
                         dispatchOrder(text);
                     }
 
                     @Override
                     public void onRecognitionError(String message) {
+                        // A failed confirmation capture submits "no answer" so the loop resumes/aborts.
+                        if (confirmationCapturing) {
+                            confirmationCapturing = false;
+                            viewModel.submitSpokenConfirmation("");
+                            return;
+                        }
                         int msg = "unavailable".equals(message)
                                 ? R.string.stt_unavailable
                                 : R.string.stt_error;
@@ -288,6 +303,14 @@ public class MainActivity extends AppCompatActivity {
 
                     @Override
                     public void onListeningCancelled() {
+                        // Cancel during a pending confirmation: unblock the waiting loop now
+                        // and abort the held action (never run a destructive action without an
+                        // explicit spoken answer). Without this, the loop would block until the
+                        // timeout and a following mic tap would be misread as the sí/no reply.
+                        if (confirmationCapturing) {
+                            confirmationCapturing = false;
+                            viewModel.submitSpokenConfirmation(ChatViewModel.CANT_ASK);
+                        }
                         micAnimations.stopMicPulse(btnMic);
                         applyCoreState(CoreState.IDLE);
                         fadeSwap(statusText, getString(R.string.status_idle));
@@ -498,11 +521,20 @@ public class MainActivity extends AppCompatActivity {
         } else {
                 registerReceiver(wakeReceiver, filter);
         }
+        // We can voice + capture a confirmation reply while visible.
+        if (viewModel != null) {
+            viewModel.setConfirmationUiReady(true);
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        // No longer able to voice/capture a confirmation; unblock any waiting loop.
+        if (viewModel != null) {
+            viewModel.setConfirmationUiReady(false);
+        }
+        confirmationCapturing = false;
         try {
             unregisterReceiver(wakeReceiver);
         } catch (IllegalArgumentException ignored) {
@@ -550,6 +582,31 @@ public class MainActivity extends AppCompatActivity {
 
     private void toast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * Speaks a confirmation question out loud, then re-opens the mic to capture the
+     * user's spoken reply and hands it to the loop via {@link ChatViewModel#submitSpokenConfirmation}.
+     * Hands-free: no tap dialog. Signals "couldn't ask" when the mic isn't available.
+     */
+    private void askConfirmationByVoice(String question) {
+        fadeSwap(statusText, question);
+        if (preferences.isMicMuted()
+                || checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            // Cannot capture by voice -> signal "couldn't ask" so the loop aborts.
+            viewModel.submitSpokenConfirmation(ChatViewModel.CANT_ASK);
+            return;
+        }
+        confirmationCapturing = true;
+        // Speak the question (local TTS done-callback) THEN open the mic so Atom
+        // doesn't hear its own voice; fall back to a short delay when TTS is off.
+        Runnable openMic = () -> { if (confirmationCapturing) recognition.start(); };
+        if (tts != null && preferences.isTtsEnabled()) {
+            tts.speak(question, openMic);
+        } else {
+            statusText.postDelayed(openMic, 300L);
+        }
     }
 
     /** Crossfades a status TextView to new text via fade-out, swap, fade-in. */

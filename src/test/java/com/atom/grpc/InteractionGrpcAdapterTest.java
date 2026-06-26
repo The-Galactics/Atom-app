@@ -114,7 +114,7 @@ class InteractionGrpcAdapterTest {
                 .build();
 
         // WHEN
-        ResolvedAction result = adapter.commandResponse(userId, command);
+        ResolvedAction result = adapter.commandResponse(userId, java.util.UUID.randomUUID(), command);
 
         // THEN it maps to a non-executable (NONE) action carrying the reply.
         assertNotNull(result);
@@ -139,7 +139,7 @@ class InteractionGrpcAdapterTest {
                 .build();
 
         // WHEN
-        ResolvedAction result = adapter.commandResponse(userId, "llama a mamá");
+        ResolvedAction result = adapter.commandResponse(userId, java.util.UUID.randomUUID(), "llama a mamá");
 
         // THEN
         assertEquals(ActionType.MAKE_CALL, result.type());
@@ -161,7 +161,7 @@ class InteractionGrpcAdapterTest {
                 .build();
 
         // WHEN
-        ResolvedAction result = adapter.commandResponse(userId, "abre youtube");
+        ResolvedAction result = adapter.commandResponse(userId, java.util.UUID.randomUUID(), "abre youtube");
 
         // THEN the loop fields are projected into the domain action.
         assertEquals(ActionType.OPEN_APP, result.type());
@@ -182,7 +182,7 @@ class InteractionGrpcAdapterTest {
                 .build();
 
         // WHEN
-        ResolvedAction result = adapter.commandResponse(userId, "abre youtube");
+        ResolvedAction result = adapter.commandResponse(userId, java.util.UUID.randomUUID(), "abre youtube");
 
         // THEN
         assertTrue(result.taskComplete());
@@ -201,7 +201,7 @@ class InteractionGrpcAdapterTest {
                 .build();
 
         // WHEN
-        adapter.commandResponse(userId, "abre youtube");
+        adapter.commandResponse(userId, java.util.UUID.randomUUID(), "abre youtube");
 
         // THEN the request carries the user id and command, and the screen_elements
         // field is always populated (empty here: no accessibility service in the JVM).
@@ -241,7 +241,7 @@ class InteractionGrpcAdapterTest {
         fakeService.commandResponseResult = CommandResponse.newBuilder()
                 .setActionType("NONE").setTaskComplete(true).build();
 
-        adapter.commandResponse(UUID.randomUUID(), "hola");
+        adapter.commandResponse(UUID.randomUUID(), UUID.randomUUID(), "hola");
 
         // The fake captures the call's Context deadline; a deadline must be present.
         assertNotNull(fakeService.lastDeadline,

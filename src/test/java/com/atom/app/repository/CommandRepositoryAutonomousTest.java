@@ -56,7 +56,12 @@ class CommandRepositoryAutonomousTest {
     }
 
     private static ResolvedAction action(ActionType type, Map<String, String> params, boolean done) {
-        return new ResolvedAction(type, params, done ? "Listo" : "", 1.0f, false, done, 0);
+        return new ResolvedAction(type, params, done ? "Listo" : "", 1.0f, false, done, 0, false);
+    }
+
+    /** A held sensitive action: NONE + awaiting_confirmation, carrying the spoken question. */
+    private static ResolvedAction awaiting(String question) {
+        return new ResolvedAction(ActionType.NONE, Map.of(), question, 1.0f, false, false, 0, true);
     }
 
     /** Captures the terminal callback so assertions can read it after awaiting. */
@@ -92,18 +97,11 @@ class CommandRepositoryAutonomousTest {
         }
     }
 
-    /** Synchronous gate that always approves (no destructive action exercised here). */
+    /** Gate that never flags a local confirmation (no destructive action exercised here). */
     private static CommandRepository.ConfirmationGate approveGate() {
         return new CommandRepository.ConfirmationGate() {
-            @Override
-            public boolean requiresConfirmation(ResolvedAction action) {
-                return false;
-            }
-
-            @Override
-            public boolean confirm(ResolvedAction action) {
-                return true;
-            }
+            @Override public boolean requiresConfirmation(ResolvedAction action) { return false; }
+            @Override public String ask(String question) { return ""; }
         };
     }
 
@@ -116,24 +114,22 @@ class CommandRepositoryAutonomousTest {
     @Test
     @DisplayName("Refreshes the token off the call path before the first command RPC")
     void refreshesTokenBeforeFirstCommandRpc() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.NONE, true));
 
         RecordingCallback cb = new RecordingCallback();
         repo(approveGate()).executeAutonomous("hola", cb);
         cb.await();
 
-        // The refresh-ahead must happen on the loop thread BEFORE the first protected RPC,
-        // so the interceptor (now cache-only) reads a fresh token.
         InOrder inOrder = inOrder(authUseCase, useCase);
         inOrder.verify(authUseCase).refreshIfNeeded();
-        inOrder.verify(useCase).execute(any(UUID.class), any());
+        inOrder.verify(useCase).execute(any(), any(), any());
     }
 
     @Test
     @DisplayName("Chains multiple steps and halts when task_complete becomes true")
     void chainsUntilComplete() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), eq("abre youtube")))
+        when(useCase.execute(any(), any(), eq("abre youtube")))
                 .thenReturn(action(ActionType.OPEN_APP, false))
                 .thenReturn(action(ActionType.TAP_ELEMENT, Map.of("text", "Search"), false))
                 .thenReturn(action(ActionType.NONE, true));
@@ -145,7 +141,6 @@ class CommandRepositoryAutonomousTest {
 
         assertThat(cb.completed).isTrue();
         assertThat(cb.completedMessage).isEqualTo("Listo");
-        // Two executable actions ran; the terminal NONE/complete step did not execute.
         verify(executorPort, times(2)).execute(any());
         assertThat(cb.startedSteps).containsExactly(1, 2);
     }
@@ -153,9 +148,7 @@ class CommandRepositoryAutonomousTest {
     @Test
     @DisplayName("Runs the full open->tap->type->tap chain, executing every step")
     void runsFullTypeTextChain() throws InterruptedException {
-        // Models "Entra a YouTube y busca un video...": open the app, tap search,
-        // type the query (submit), then tap the result; the final step is complete.
-        when(useCase.execute(any(UUID.class), eq("busca rubius pokemon")))
+        when(useCase.execute(any(), any(), eq("busca rubius pokemon")))
                 .thenReturn(action(ActionType.OPEN_APP, Map.of("app_name", "YouTube"), false))
                 .thenReturn(action(ActionType.TAP_ELEMENT, Map.of("text", "search"), false))
                 .thenReturn(action(ActionType.TYPE_TEXT,
@@ -168,8 +161,6 @@ class CommandRepositoryAutonomousTest {
         cb.await();
 
         assertThat(cb.completed).isTrue();
-        // All four steps are executable; the last carries task_complete, so it
-        // both executes and terminates the loop -> four executor invocations.
         verify(executorPort, times(4)).execute(any());
         assertThat(cb.startedSteps).containsExactly(1, 2, 3, 4);
     }
@@ -177,7 +168,7 @@ class CommandRepositoryAutonomousTest {
     @Test
     @DisplayName("Halts immediately when the first response is already complete")
     void haltsOnImmediateComplete() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.NONE, true));
 
         RecordingCallback cb = new RecordingCallback();
@@ -191,7 +182,7 @@ class CommandRepositoryAutonomousTest {
     @Test
     @DisplayName("Aborts the chain on an action failure")
     void abortsOnActionFailure() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.OPEN_APP, false));
         when(executorPort.execute(any())).thenReturn(ActionOutcome.failed("no such app"));
 
@@ -207,12 +198,11 @@ class CommandRepositoryAutonomousTest {
     @Test
     @DisplayName("Honors the step cap when task_complete never arrives")
     void honorsStepCap() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.SCROLL, Map.of("direction", "down"), false));
         when(executorPort.execute(any())).thenReturn(ActionOutcome.ok("scrolled"));
 
         RecordingCallback cb = new RecordingCallback();
-        // Cap of 3: the loop must terminate after exactly 3 executed steps.
         new CommandRepository(useCase, executorPort, UUID.randomUUID(), authUseCase, approveGate(), 0L, 3, Runnable::run)
                 .executeAutonomous("scroll forever", cb);
         cb.await();
@@ -222,58 +212,118 @@ class CommandRepositoryAutonomousTest {
     }
 
     @Test
-    @DisplayName("Triggers the confirmation gate on a destructive action; decline aborts")
-    void triggersGateAndAbortsOnDecline() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
-                .thenReturn(action(ActionType.TAP_ELEMENT, Map.of("text", "Eliminar"), false));
+    @DisplayName("Held sensitive action: speaks the question, resends the spoken 'sí' with the same order id, then executes")
+    void heldActionConfirmedByVoiceExecutes() throws InterruptedException {
+        // Turn 1 holds (awaiting); after the spoken reply the backend emits the action; then complete.
+        when(useCase.execute(any(), any(), eq("llama a mamá")))
+                .thenReturn(awaiting("¿Confirmas que llame a mamá?"));
+        // The confirmed call is the final action (task_complete), so the loop ends here.
+        when(useCase.execute(any(), any(), eq("sí")))
+                .thenReturn(action(ActionType.MAKE_CALL, Map.of("target", "mamá"), true));
+        when(executorPort.execute(any())).thenReturn(ActionOutcome.ok("calling"));
 
-        final List<ResolvedAction> prompted = new CopyOnWriteArrayList<>();
-        CommandRepository.ConfirmationGate decliningGate = new CommandRepository.ConfirmationGate() {
-            @Override
-            public boolean requiresConfirmation(ResolvedAction action) {
-                return action.type() == ActionType.TAP_ELEMENT;
-            }
-
-            @Override
-            public boolean confirm(ResolvedAction action) {
-                prompted.add(action);
-                return false; // user declines -> abort
-            }
+        final List<String> askedQuestions = new CopyOnWriteArrayList<>();
+        CommandRepository.ConfirmationGate voiceYes = new CommandRepository.ConfirmationGate() {
+            @Override public boolean requiresConfirmation(ResolvedAction action) { return false; }
+            @Override public String ask(String question) { askedQuestions.add(question); return "sí"; }
         };
 
         RecordingCallback cb = new RecordingCallback();
-        repo(decliningGate).executeAutonomous("borra la foto", cb);
+        repo(voiceYes).executeAutonomous("llama a mamá", cb);
         cb.await();
 
-        assertThat(prompted).hasSize(1);
+        assertThat(askedQuestions).containsExactly("¿Confirmas que llame a mamá?");
+        assertThat(cb.completed).isTrue();
+        verify(executorPort, times(1)).execute(any());
+
+        // The held question, the spoken reply, and the follow-up turns all share ONE order id.
+        ArgumentCaptor<UUID> ids = ArgumentCaptor.forClass(UUID.class);
+        verify(useCase, atLeastOnce()).execute(any(), ids.capture(), any());
+        assertThat(ids.getAllValues()).allMatch(id -> id.equals(ids.getAllValues().get(0)));
+    }
+
+    @Test
+    @DisplayName("Asked but heard nothing ('') re-asks exactly once, then aborts")
+    void heldActionBlankReplyReAsksOnceThenAborts() throws InterruptedException {
+        when(useCase.execute(any(), any(), any()))
+                .thenReturn(awaiting("¿Confirmas?"));
+
+        final java.util.concurrent.atomic.AtomicInteger asks = new java.util.concurrent.atomic.AtomicInteger();
+        CommandRepository.ConfirmationGate blank = new CommandRepository.ConfirmationGate() {
+            @Override public boolean requiresConfirmation(ResolvedAction action) { return false; }
+            @Override public String ask(String question) { asks.incrementAndGet(); return ""; }
+        };
+
+        RecordingCallback cb = new RecordingCallback();
+        repo(blank).executeAutonomous("llama a mamá", cb);
+        cb.await();
+
         assertThat(cb.aborted).isTrue();
-        // Declined before running: the action executor is never reached.
+        assertThat(asks.get()).isEqualTo(2);  // asked, then one re-ask, then give up
         verify(executorPort, never()).execute(any());
     }
 
     @Test
-    @DisplayName("Confirmed destructive action proceeds and runs")
-    void confirmedDestructiveProceeds() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
+    @DisplayName("Cannot ask at all (null) aborts immediately WITHOUT re-asking")
+    void heldActionCannotAskAbortsImmediately() throws InterruptedException {
+        when(useCase.execute(any(), any(), any()))
+                .thenReturn(awaiting("¿Confirmas?"));
+
+        final java.util.concurrent.atomic.AtomicInteger asks = new java.util.concurrent.atomic.AtomicInteger();
+        CommandRepository.ConfirmationGate cantAsk = new CommandRepository.ConfirmationGate() {
+            @Override public boolean requiresConfirmation(ResolvedAction action) { return false; }
+            @Override public String ask(String question) { asks.incrementAndGet(); return null; }
+        };
+
+        RecordingCallback cb = new RecordingCallback();
+        repo(cantAsk).executeAutonomous("llama a mamá", cb);
+        cb.await();
+
+        assertThat(cb.aborted).isTrue();
+        assertThat(asks.get()).isEqualTo(1);  // no re-ask when we couldn't ask at all
+        verify(executorPort, never()).execute(any());
+    }
+
+    @Test
+    @DisplayName("Local destructive net: a 'no' spoken reply aborts before executing")
+    void localDestructiveDeclinedByVoiceAborts() throws InterruptedException {
+        when(useCase.execute(any(), any(), any()))
+                .thenReturn(action(ActionType.TAP_ELEMENT, Map.of("text", "Eliminar"), false));
+
+        final List<String> asked = new CopyOnWriteArrayList<>();
+        CommandRepository.ConfirmationGate decline = new CommandRepository.ConfirmationGate() {
+            @Override public boolean requiresConfirmation(ResolvedAction action) {
+                return action.type() == ActionType.TAP_ELEMENT;
+            }
+            @Override public String ask(String question) { asked.add(question); return "no"; }
+        };
+
+        RecordingCallback cb = new RecordingCallback();
+        repo(decline).executeAutonomous("borra la foto", cb);
+        cb.await();
+
+        assertThat(asked).hasSize(1);
+        assertThat(cb.aborted).isTrue();
+        verify(executorPort, never()).execute(any());
+    }
+
+    @Test
+    @DisplayName("Local destructive net: a 'sí' spoken reply proceeds and runs")
+    void localDestructiveConfirmedByVoiceProceeds() throws InterruptedException {
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.TAP_ELEMENT, Map.of("text", "Eliminar"), false))
                 .thenReturn(action(ActionType.NONE, true));
         when(executorPort.execute(any())).thenReturn(ActionOutcome.ok("tapped"));
 
-        CommandRepository.ConfirmationGate approvingDestructive =
-                new CommandRepository.ConfirmationGate() {
-                    @Override
-                    public boolean requiresConfirmation(ResolvedAction action) {
-                        return action.type() == ActionType.TAP_ELEMENT;
-                    }
-
-                    @Override
-                    public boolean confirm(ResolvedAction action) {
-                        return true;
-                    }
-                };
+        CommandRepository.ConfirmationGate approve = new CommandRepository.ConfirmationGate() {
+            @Override public boolean requiresConfirmation(ResolvedAction action) {
+                return action.type() == ActionType.TAP_ELEMENT;
+            }
+            @Override public String ask(String question) { return "sí, dale"; }
+        };
 
         RecordingCallback cb = new RecordingCallback();
-        repo(approvingDestructive).executeAutonomous("borra la foto", cb);
+        repo(approve).executeAutonomous("borra la foto", cb);
         cb.await();
 
         assertThat(cb.completed).isTrue();
@@ -281,16 +331,16 @@ class CommandRepositoryAutonomousTest {
     }
 
     @Test
-    @DisplayName("Default gate is fail-closed: a sensitive action with no UI gate is denied, not run")
-    void defaultGateFailsClosedOnSensitiveAction() throws InterruptedException {
-        // Any surface that installs no prompting gate falls back to this default; it
-        // must DENY sensitive actions (the loop aborts), never auto-approve them (2B.1).
-        when(useCase.execute(any(UUID.class), any()))
-                .thenReturn(action(ActionType.MAKE_CALL, Map.of("target", "Mom"), false));
+    @DisplayName("Default gate is fail-closed: a local destructive action with no UI gate is denied, not run")
+    void defaultGateFailsClosedOnDestructiveAction() throws InterruptedException {
+        // The default gate's ask() returns null (no UI) -> not affirmative -> abort.
+        when(useCase.execute(any(), any(), any()))
+                .thenReturn(action(ActionType.TAP_ELEMENT, Map.of("text", "Pagar"), false));
 
         RecordingCallback cb = new RecordingCallback();
-        new CommandRepository(useCase, executorPort, UUID.randomUUID(), authUseCase, CommandRepository.defaultGate(), 0L, 20, Runnable::run)
-                .executeAutonomous("llama a mama", cb);
+        new CommandRepository(useCase, executorPort, UUID.randomUUID(), authUseCase,
+                CommandRepository.defaultGate(), 0L, 20, Runnable::run)
+                .executeAutonomous("paga la factura", cb);
         cb.await();
 
         assertThat(cb.aborted).isTrue();
@@ -321,11 +371,9 @@ class CommandRepositoryAutonomousTest {
     }
 
     @Test
-    @DisplayName("recognize pre-flight uses a fresh session id, not the loop's persistent one")
-    void preflightSessionIdIsolatedFromLoop() throws InterruptedException {
-        // Same repository instance: the routing pre-flight (#recognize) must not share the
-        // backend ReAct session with the autonomous loop, or it pollutes step history.
-        when(useCase.execute(any(UUID.class), any()))
+    @DisplayName("recognize pre-flight uses a fresh order id, distinct from the loop's order id")
+    void preflightOrderIdIsolatedFromLoop() throws InterruptedException {
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.NONE, true));
         when(executorPort.execute(any())).thenReturn(ActionOutcome.ok("done"));
 
@@ -339,23 +387,26 @@ class CommandRepositoryAutonomousTest {
         repo.executeAutonomous("abre youtube", cb);
         cb.await();
 
-        ArgumentCaptor<UUID> ids = ArgumentCaptor.forClass(UUID.class);
-        verify(useCase, atLeastOnce()).execute(ids.capture(), any());
+        // Capture the order id (2nd arg) of each execute call.
+        ArgumentCaptor<UUID> orderIds = ArgumentCaptor.forClass(UUID.class);
+        verify(useCase, atLeastOnce()).execute(any(), orderIds.capture(), any());
 
-        UUID preflightId = ids.getAllValues().get(0); // first call is the recognize pre-flight
-        UUID loopId = ids.getAllValues().get(1);      // second call is the loop's first step
+        UUID preflightId = orderIds.getAllValues().get(0); // recognize pre-flight
+        UUID loopId = orderIds.getAllValues().get(1);       // loop's first step
         assertThat(preflightId).isNotNull();
         assertThat(loopId).isNotNull();
         assertThat(preflightId).isNotEqualTo(loopId);
     }
 
     @Test
-    @DisplayName("Two autonomous runs on the same instance reuse the persistent session id")
-    void autonomousRunsSharePersistentSessionId() throws InterruptedException {
-        when(useCase.execute(any(UUID.class), any()))
+    @DisplayName("user id is the injected shared session id across runs; each run gets a fresh order id")
+    void sharedUserIdButPerRunOrderId() throws InterruptedException {
+        when(useCase.execute(any(), any(), any()))
                 .thenReturn(action(ActionType.NONE, true));
 
-        CommandRepository repo = repo(approveGate());
+        UUID shared = UUID.randomUUID();
+        CommandRepository repo = new CommandRepository(
+                useCase, executorPort, shared, authUseCase, approveGate(), 0L, 20, Runnable::run);
 
         RecordingCallback first = new RecordingCallback();
         repo.executeAutonomous("orden uno", first);
@@ -365,9 +416,13 @@ class CommandRepositoryAutonomousTest {
         repo.executeAutonomous("orden dos", second);
         second.await();
 
-        ArgumentCaptor<UUID> ids = ArgumentCaptor.forClass(UUID.class);
-        verify(useCase, times(2)).execute(ids.capture(), any());
+        ArgumentCaptor<UUID> userIds = ArgumentCaptor.forClass(UUID.class);
+        ArgumentCaptor<UUID> orderIds = ArgumentCaptor.forClass(UUID.class);
+        verify(useCase, times(2)).execute(userIds.capture(), orderIds.capture(), any());
 
-        assertThat(ids.getAllValues().get(0)).isEqualTo(ids.getAllValues().get(1));
+        // Same user id both runs; the two order ids differ (one per run).
+        assertThat(userIds.getAllValues().get(0)).isEqualTo(shared);
+        assertThat(userIds.getAllValues().get(1)).isEqualTo(shared);
+        assertThat(orderIds.getAllValues().get(0)).isNotEqualTo(orderIds.getAllValues().get(1));
     }
 }
