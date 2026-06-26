@@ -9,7 +9,6 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.graphics.Rect;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -17,15 +16,10 @@ import android.provider.Settings;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
@@ -36,8 +30,8 @@ import com.atom.app.di.AppContainer;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
-import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
+import com.atom.app.ui.main.MainInputBarComponent;
 import com.atom.app.ui.motion.CoreState;
 import com.atom.app.ui.motion.CoreStatePresenter;
 import com.atom.app.ui.motion.StatusCrossfader;
@@ -49,10 +43,6 @@ import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class MainActivity extends AppCompatActivity {
-
-    // Input bar slide-in/out timing and the fallback travel before first layout.
-    private static final long INPUT_BAR_ANIM_MS = 200;
-    private static final float INPUT_BAR_FALLBACK_SLIDE_DP = 64f;
 
     // Delay before an error message fades back to the idle resting state.
     private static final long ERROR_AUTO_RECOVER_MS = 4000;
@@ -75,9 +65,7 @@ public class MainActivity extends AppCompatActivity {
     // Shared mic feedback (press-settle + breathing pulse) reused from the overlay.
     private final MicAnimations micAnimations = new MicAnimations();
 
-    private LinearLayout inputBarRoot;
-    private EditText inputEditText;
-    private ImageButton inputSend;
+    private MainInputBarComponent inputBar;
 
     // Action awaiting a permission grant; resumed in permissionLauncher's callback.
     private ResolvedAction awaitingPermission;
@@ -107,19 +95,8 @@ public class MainActivity extends AppCompatActivity {
     private float currentEnergy = CoreStatePresenter.energyFor(CoreState.IDLE);
     private float currentGlow = CoreStatePresenter.glowFor(CoreState.IDLE);
 
-    // Reusable Rect for touch bounds checking in dispatchTouchEvent, avoiding per-touch allocations.
-    private final Rect touchBounds = new Rect();
-
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
-
-    // Back press collapses the input bar instead of leaving the screen; only enabled while it's open.
-    private final OnBackPressedCallback backCallback = new OnBackPressedCallback(false) {
-        @Override
-        public void handleOnBackPressed() {
-            hideInputBar();
-        }
-    };
 
     // Wake word fired while the app is open: capture with the in-app mic.
     private final BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
@@ -205,10 +182,6 @@ public class MainActivity extends AppCompatActivity {
         subStatusText = findViewById(R.id.sub_status_text);
         wordmark = findViewById(R.id.wordmark);
 
-        inputBarRoot = findViewById(R.id.input_bar_root);
-        inputEditText = findViewById(R.id.input_edit_text);
-        inputSend = findViewById(R.id.input_send);
-
         // Start the atom core in its calm idle state (dim glow, low energy).
         if (coreGlow != null) {
             coreGlow.setAlpha(CoreStatePresenter.glowFor(CoreState.IDLE));
@@ -218,7 +191,17 @@ public class MainActivity extends AppCompatActivity {
         }
 
         setupObservers();
-        setupInputBar();
+        inputBar = new MainInputBarComponent(this, new MainInputBarComponent.Host() {
+            @Override
+            public void onSubmitText(String t) {
+                if (tts != null) tts.stop();
+                dispatchOrder(t);
+            }
+            @Override
+            public void toast(String m) {
+                MainActivity.this.toast(m);
+            }
+        });
 
         requestCallPermissionsIfNeeded();
 
@@ -238,9 +221,6 @@ public class MainActivity extends AppCompatActivity {
         // Bring back the status line and core state after a configuration change.
         restoreUiState(savedInstanceState);
 
-        // Back collapses the input bar (when open) instead of leaving the screen.
-        getOnBackPressedDispatcher().addCallback(this, backCallback);
-
         // Track mute changes made elsewhere (e.g. the floating bubble).
         preferences.registerChangeListener(muteListener);
 
@@ -250,7 +230,7 @@ public class MainActivity extends AppCompatActivity {
         btnHistory.setOnClickListener(v ->
                 startActivity(new Intent(MainActivity.this, HistoryActivity.class)));
 
-        btnKeyboard.setOnClickListener(v -> toggleInputBar());
+        btnKeyboard.setOnClickListener(v -> inputBar.toggle());
 
         btnVolume.setOnClickListener(v -> showVolumeSlider());
 
@@ -265,22 +245,21 @@ public class MainActivity extends AppCompatActivity {
      */
     private void setupQuickActions() {
         findViewById(R.id.chip_timer).setOnClickListener(v ->
-                prefillInput(getString(R.string.chip_phrase_timer)));
+                inputBar.prefill(getString(R.string.chip_phrase_timer)));
         findViewById(R.id.chip_call).setOnClickListener(v ->
-                prefillInput(getString(R.string.chip_phrase_call)));
+                inputBar.prefill(getString(R.string.chip_phrase_call)));
         findViewById(R.id.chip_message).setOnClickListener(v ->
-                prefillInput(getString(R.string.chip_phrase_message)));
+                inputBar.prefill(getString(R.string.chip_phrase_message)));
         findViewById(R.id.chip_wifi).setOnClickListener(v ->
                 dispatchOrder(getString(R.string.chip_phrase_wifi)));
         findViewById(R.id.chip_flashlight).setOnClickListener(v ->
                 dispatchOrder(getString(R.string.chip_phrase_flashlight)));
     }
 
-    /** Opens the input bar pre-filled with a starter phrase, caret at the end. */
-    private void prefillInput(String starter) {
-        showInputBar();
-        inputEditText.setText(starter);
-        inputEditText.setSelection(inputEditText.getText().length());
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (inputBar != null) inputBar.dismissIfTouchOutside(ev);
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override
@@ -302,132 +281,6 @@ public class MainActivity extends AppCompatActivity {
         subStatusText.setText(state.getString(KEY_SUB_STATUS, getString(R.string.sub_status_tap_mic)));
         applyCoreState(state.getFloat(KEY_ENERGY, CoreStatePresenter.energyFor(CoreState.IDLE)),
                 state.getFloat(KEY_GLOW, CoreStatePresenter.glowFor(CoreState.IDLE)));
-    }
-
-    private void setupInputBar() {
-        // Accent focus border: activate the pill background's focused state.
-        inputEditText.setOnFocusChangeListener((v, hasFocus) ->
-                inputBarRoot.setActivated(hasFocus));
-
-        // Send via the trailing accent disc.
-        inputSend.setOnClickListener(v -> sendFromInputBar());
-
-        // Keep send disabled/dimmed until there's non-whitespace text.
-        InputBarUtils.setSendEnabled(inputSend, false);
-        inputEditText.addTextChangedListener(InputBarUtils.enableSendOnText(inputSend));
-
-        // IME "Send" action mirrors the send button.
-        inputEditText.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEND) {
-                sendFromInputBar();
-                return true;
-            }
-            return false;
-        });
-    }
-
-    /**
-     * Dismisses the input bar when the user taps anywhere outside of it. We check on the
-     * initial ACTION_DOWN: if the bar is visible and the touch lands outside its on-screen
-     * bounds, hide it (which clears focus + hides the keyboard + collapses the bar). We then
-     * still pass the event to super so the tap that fell outside (mic, keyboard, volume, etc.)
-     * is delivered normally rather than being swallowed.
-     */
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (ev.getAction() == MotionEvent.ACTION_DOWN
-                && inputBarRoot != null
-                && inputBarRoot.getVisibility() == View.VISIBLE) {
-            inputBarRoot.getGlobalVisibleRect(touchBounds);
-            if (!touchBounds.contains((int) ev.getRawX(), (int) ev.getRawY())) {
-                hideInputBar();
-            }
-        }
-        return super.dispatchTouchEvent(ev);
-    }
-
-    /** Shows or hides the input bar, managing focus and the soft keyboard. */
-    private void toggleInputBar() {
-        if (inputBarRoot.getVisibility() == View.VISIBLE) {
-            hideInputBar();
-        } else {
-            showInputBar();
-        }
-    }
-
-    private void showInputBar() {
-        // Slide up + fade in instead of popping into place.
-        inputBarRoot.setVisibility(View.VISIBLE);
-        inputBarRoot.setAlpha(0f);
-        inputBarRoot.setTranslationY(inputBarSlideDistance());
-        inputBarRoot.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(INPUT_BAR_ANIM_MS)
-                .start();
-        backCallback.setEnabled(true);
-        inputEditText.requestFocus();
-        // Post the IME show to the next frame so the adjustResize layout pass (which lifts the
-        // bar above the keyboard) settles independently of the slide-in, avoiding a first-open
-        // double-move where the resting position shifts mid-animation.
-        inputEditText.post(() -> {
-            InputMethodManager imm =
-                    (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                imm.showSoftInput(inputEditText, InputMethodManager.SHOW_IMPLICIT);
-            }
-        });
-    }
-
-    private void hideInputBar() {
-        InputMethodManager imm =
-                (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.hideSoftInputFromWindow(inputEditText.getWindowToken(), 0);
-        }
-        inputEditText.clearFocus();
-        backCallback.setEnabled(false);
-        // Slide down + fade out, then actually collapse the view and reset it so the
-        // next show() starts from a clean resting transform.
-        inputBarRoot.animate()
-                .translationY(inputBarSlideDistance())
-                .alpha(0f)
-                .setDuration(INPUT_BAR_ANIM_MS)
-                .withEndAction(() -> {
-                    inputBarRoot.setVisibility(View.GONE);
-                    inputBarRoot.setTranslationY(0f);
-                    inputBarRoot.setAlpha(1f);
-                })
-                .start();
-    }
-
-    /** Vertical travel for the input-bar slide; its measured height, or a fallback. */
-    private float inputBarSlideDistance() {
-        int height = inputBarRoot.getHeight();
-        if (height > 0) {
-            return height;
-        }
-        // First show happens before the bar has ever been laid out (height 0).
-        return INPUT_BAR_FALLBACK_SLIDE_DP * getResources().getDisplayMetrics().density;
-    }
-
-    /** Validates and dispatches the typed message, then collapses the bar. */
-    private void sendFromInputBar() {
-        String text = inputEditText.getText().toString().trim();
-        if (text.isEmpty()) {
-            toast(getString(R.string.input_empty));
-            return;
-        }
-        inputSend.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-        // Silence any reply still being spoken so it doesn't talk over the next turn.
-        if (tts != null) {
-            tts.stop();
-        }
-        // Typed input is treated as an ORDER: the backend decides whether it is
-        // an executable action or a plain conversational reply.
-        dispatchOrder(text);
-        inputEditText.setText("");
-        hideInputBar();
     }
 
     /**
@@ -814,7 +667,7 @@ public class MainActivity extends AppCompatActivity {
         // While the loop runs, freeze input and show the operating indicator.
         viewModel.getAutomationActive().observe(this, active -> {
             boolean operating = Boolean.TRUE.equals(active);
-            inputEditText.setEnabled(!operating);
+            inputBar.setInputEnabled(!operating);
             if (operating) {
                 fadeSwap(statusText, getString(R.string.automation_operating));
                 fadeSwap(subStatusText, getString(R.string.automation_operating));
