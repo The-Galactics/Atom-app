@@ -6,6 +6,7 @@ import android.util.Log;
 
 import com.atom.app.model.ResponseModel;
 import com.atom.application.port.in.StreamChatPortIn;
+import com.atom.application.port.in.security.AuthPortIn;
 
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +19,7 @@ public class ChatRepository {
     private static final String TAG = "AtomChat";
 
     private final StreamChatPortIn streamChatUseCase;
+    private final AuthPortIn authUseCase;
     private final ExecutorService executor;
     private final Handler mainHandler;
 
@@ -26,8 +28,10 @@ public class ChatRepository {
     private final UUID sessionUserId;
     private final UUID sessionChatId;
 
-    public ChatRepository(StreamChatPortIn streamChatUseCase, UUID sessionUserId, UUID sessionChatId) {
+    public ChatRepository(StreamChatPortIn streamChatUseCase, UUID sessionUserId, UUID sessionChatId,
+                          AuthPortIn authUseCase) {
         this.streamChatUseCase = streamChatUseCase;
+        this.authUseCase = authUseCase;
         this.sessionUserId = sessionUserId;
         this.sessionChatId = sessionChatId;
         this.executor = Executors.newSingleThreadExecutor();
@@ -37,6 +41,11 @@ public class ChatRepository {
     public void askAtom(String prompt, final ChatCallback callback) {
         executor.execute(() -> {
             try {
+                // Refresh-ahead off the call path (US-E3 chat follow-up): the gRPC
+                // interceptor is cache-only, so prime a fresh token here (on the
+                // background executor) before the protected chat RPC. Mirrors the same
+                // pattern used in CommandRepository#executeAutonomous.
+                authUseCase.refreshIfNeeded();
                 String text;
                 try (Stream<String> tokens =
                              streamChatUseCase.messageChat(sessionUserId, sessionChatId, prompt)) {
