@@ -37,6 +37,7 @@ public class CommandRepository {
 
     private final ExecuteCommandPortIn executeCommandUseCase;
     private final ActionExecutorPortOut actionExecutor;
+    private final UUID sessionUserId;   // injected; shared with ChatRepository (US-D2)
     private final AuthPortIn authUseCase;
     private final ExecutorService executor;
     private final MainThreadPoster mainPoster;
@@ -46,13 +47,11 @@ public class CommandRepository {
     private final long settleDelayMs;
     private final int stepCap;
 
-    // Per-session id satisfies the use-case contract (no app-side auth yet).
-    private final UUID sessionUserId = UUID.randomUUID();
-
     public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
                              ActionExecutorPortOut actionExecutor,
+                             UUID sessionUserId,
                              AuthPortIn authUseCase) {
-        this(executeCommandUseCase, actionExecutor, authUseCase,
+        this(executeCommandUseCase, actionExecutor, sessionUserId, authUseCase,
                 new DestructiveActionGate(new DestructiveActionPolicy()),
                 DEFAULT_SETTLE_DELAY_MS, DEFAULT_STEP_CAP,
                 new HandlerPoster());
@@ -61,23 +60,26 @@ public class CommandRepository {
     /** Test/extension overload: inject the gate, settle delay (0 in tests), and step cap. */
     public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
                              ActionExecutorPortOut actionExecutor,
+                             UUID sessionUserId,
                              AuthPortIn authUseCase,
                              ConfirmationGate confirmationGate,
                              long settleDelayMs, int stepCap) {
-        this(executeCommandUseCase, actionExecutor, authUseCase, confirmationGate,
+        this(executeCommandUseCase, actionExecutor, sessionUserId, authUseCase, confirmationGate,
                 settleDelayMs, stepCap, new HandlerPoster());
     }
 
     /** Full overload: also inject the main-thread poster so tests can run it synchronously. */
     @VisibleForTesting
-    CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
-                      ActionExecutorPortOut actionExecutor,
-                      AuthPortIn authUseCase,
-                      ConfirmationGate confirmationGate,
-                      long settleDelayMs, int stepCap,
-                      MainThreadPoster mainPoster) {
+    public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
+                             ActionExecutorPortOut actionExecutor,
+                             UUID sessionUserId,
+                             AuthPortIn authUseCase,
+                             ConfirmationGate confirmationGate,
+                             long settleDelayMs, int stepCap,
+                             MainThreadPoster mainPoster) {
         this.executeCommandUseCase = executeCommandUseCase;
         this.actionExecutor = actionExecutor;
+        this.sessionUserId = sessionUserId;
         this.authUseCase = authUseCase;
         this.confirmationGate = confirmationGate;
         this.settleDelayMs = settleDelayMs;
@@ -246,7 +248,7 @@ public class CommandRepository {
     }
 
     /** Posts a Runnable to the main thread. Abstracted so tests run it synchronously. */
-    interface MainThreadPoster {
+    public interface MainThreadPoster {
         void post(Runnable r);
     }
 

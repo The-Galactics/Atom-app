@@ -22,4 +22,7 @@ public interface AuthPortIn {
      *  before starting an authenticated flow so the (cache-only) interceptor reads a fresh
      *  token. Returns the valid access token, or {@code null} when re-login is required. */
     String refreshIfNeeded();
+
+    /** The server-verified user id from the last successful auth, or {@code null} pre-auth. */
+    String getServerUserId();
 }

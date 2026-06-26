@@ -98,6 +98,7 @@ public class AuthUseCase implements AuthPortIn {
     }
 
     /** The server-verified user id from the last successful auth, or null pre-auth. */
+    @Override
     public String getServerUserId() {
         return tokenStore.getUserId();
     }
