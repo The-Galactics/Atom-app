@@ -127,6 +127,9 @@
     <string name="settings_perm_fix">Fix</string>
     <string name="settings_perm_granted">Granted</string>
     <string name="settings_perm_not_granted">Not granted</string>
+    <string name="cd_fix_overlay">Fix overlay permission</string>
+    <string name="cd_fix_accessibility">Fix accessibility permission</string>
+    <string name="cd_fix_microphone">Fix microphone permission</string>
 
     <!-- Wake word settings -->
     <string name="settings_wake_word">Wake word</string>

@@ -110,7 +110,8 @@
                 <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/switch_tts"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/settings_tts_toggle" />
             </LinearLayout>
 
             <TextView
@@ -126,7 +127,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_s"
                 android:background="@drawable/bg_surface_card"
-                android:padding="@dimen/space_s" />
+                android:padding="@dimen/space_s"
+                android:contentDescription="@string/settings_tts_voice" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_preview_voice"
@@ -159,7 +161,8 @@
                     android:max="100"
                     android:progressDrawable="@drawable/volume_track"
                     android:thumb="@drawable/volume_thumb"
-                    android:splitTrack="false" />
+                    android:splitTrack="false"
+                    android:contentDescription="@string/settings_tts_speed" />
 
                 <TextView
                     android:id="@+id/tv_speed_value"
@@ -219,7 +222,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minWidth="0dp"
-                        android:text="@string/settings_perm_fix" />
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_overlay" />
                 </LinearLayout>
 
                 <!-- Accessibility row -->
@@ -256,7 +260,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minWidth="0dp"
-                        android:text="@string/settings_perm_fix" />
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_accessibility" />
                 </LinearLayout>
 
                 <!-- Microphone row -->
@@ -293,7 +298,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minWidth="0dp"
-                        android:text="@string/settings_perm_fix" />
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_microphone" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -329,7 +335,8 @@
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_wake_enable"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/settings_wake_enable" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -350,7 +357,8 @@
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_wake_screen_on"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/settings_wake_screen_on" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -368,7 +376,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_m"
                 android:background="@drawable/bg_surface_card"
-                android:padding="@dimen/space_s" />
+                android:padding="@dimen/space_s"
+                android:contentDescription="@string/settings_language" />
 
             <TextView
                 android:layout_width="wrap_content"
