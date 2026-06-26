@@ -19,8 +19,10 @@ public final class SpeechRecognitionCoordinator {
 
     /** UI callbacks driven by recognition lifecycle events. */
     public interface Host {
-        /** Called when listening begins (both at start() and when recognizer is ready). */
+        /** Called when listening begins (at start()); triggers full UI setup including mic pulse. */
         void onListeningStarted();
+        /** Called when the recognizer is ready for speech (onReadyForSpeech); updates status text only. */
+        void onListeningReady();
         /** Called when end-of-speech is detected; UI should move to thinking state. */
         void onThinking();
         /** Live (non-final) transcript while the user is still speaking. */
@@ -35,6 +37,8 @@ public final class SpeechRecognitionCoordinator {
 
     // Let the wake word release the mic before the manual recognizer grabs it.
     private static final long MIC_HANDOFF_DELAY_MS = 350;
+
+    private final Handler handoffHandler = new Handler(Looper.getMainLooper());
 
     private final AppCompatActivity activity;
     private final AtomPreferences preferences;
@@ -71,7 +75,7 @@ public final class SpeechRecognitionCoordinator {
         if (preferences.isWakeWordEnabled()) {
             activity.sendBroadcast(new Intent(WakeWordService.ACTION_WAKE_PAUSE)
                     .setPackage(activity.getPackageName()));
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            handoffHandler.postDelayed(() -> {
                 if (isListening && speechRecognizer != null) {
                     speechRecognizer.startListening();
                 }
@@ -86,6 +90,7 @@ public final class SpeechRecognitionCoordinator {
      * clears the flag, and notifies the host to reset the UI.
      */
     public void cancel() {
+        handoffHandler.removeCallbacksAndMessages(null);
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
             speechRecognizer = null;
@@ -96,6 +101,7 @@ public final class SpeechRecognitionCoordinator {
 
     /** Cleans up the recognizer on Activity destroy; safe to call when not listening. */
     public void destroy() {
+        handoffHandler.removeCallbacksAndMessages(null);
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
             speechRecognizer = null;
@@ -112,7 +118,7 @@ public final class SpeechRecognitionCoordinator {
     private final class SttListener implements AndroidSpeechRecognizer.Listener {
         @Override
         public void onReadyForSpeech() {
-            host.onListeningStarted();
+            host.onListeningReady();
         }
 
         @Override

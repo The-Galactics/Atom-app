@@ -213,6 +213,13 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     @Override
+                    public void onListeningReady() {
+                        fadeSwap(statusText, getString(R.string.status_listening));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_listening));
+                        applyCoreState(CoreState.LISTENING);
+                    }
+
+                    @Override
                     public void onThinking() {
                         fadeSwap(statusText, getString(R.string.status_thinking));
                         fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
