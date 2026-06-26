@@ -28,7 +28,8 @@ public class ChatViewModelFactory implements ViewModelProvider.Factory {
                             appContainer.getSessionChatId());
             CommandRepository commandRepository = new CommandRepository(
                     appContainer.getExternalCommandUseCase(),
-                    appContainer.getActionExecutor());
+                    appContainer.getActionExecutor(),
+                    appContainer.getAuthUseCase());
             return (T) new ChatViewModel(repository, commandRepository,
                     appContainer.getConversationRepository(),
                     appContainer::isAccessibilityEnabled);

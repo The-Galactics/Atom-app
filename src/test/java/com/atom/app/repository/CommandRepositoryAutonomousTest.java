@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -11,8 +12,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import com.atom.application.port.in.ExecuteCommandPortIn;
+import com.atom.application.port.in.security.AuthPortIn;
 import com.atom.application.port.out.ActionExecutorPortOut;
 import com.atom.domain.action.ActionOutcome;
 import com.atom.domain.action.ActionType;
@@ -39,11 +42,13 @@ class CommandRepositoryAutonomousTest {
 
     private ExecuteCommandPortIn useCase;
     private ActionExecutorPortOut executorPort;
+    private AuthPortIn authUseCase;
 
     @BeforeEach
     void setUp() {
         useCase = mock(ExecuteCommandPortIn.class);
         executorPort = mock(ActionExecutorPortOut.class);
+        authUseCase = mock(AuthPortIn.class);
     }
 
     private static ResolvedAction action(ActionType type, boolean taskComplete) {
@@ -104,7 +109,24 @@ class CommandRepositoryAutonomousTest {
 
     private CommandRepository repo(CommandRepository.ConfirmationGate gate) {
         // Settle delay 0; poster runs callbacks inline on the loop thread.
-        return new CommandRepository(useCase, executorPort, gate, 0L, 20, Runnable::run);
+        return new CommandRepository(useCase, executorPort, authUseCase, gate, 0L, 20, Runnable::run);
+    }
+
+    @Test
+    @DisplayName("Refreshes the token off the call path before the first command RPC")
+    void refreshesTokenBeforeFirstCommandRpc() throws InterruptedException {
+        when(useCase.execute(any(UUID.class), any()))
+                .thenReturn(action(ActionType.NONE, true));
+
+        RecordingCallback cb = new RecordingCallback();
+        repo(approveGate()).executeAutonomous("hola", cb);
+        cb.await();
+
+        // The refresh-ahead must happen on the loop thread BEFORE the first protected RPC,
+        // so the interceptor (now cache-only) reads a fresh token.
+        InOrder inOrder = inOrder(authUseCase, useCase);
+        inOrder.verify(authUseCase).refreshIfNeeded();
+        inOrder.verify(useCase).execute(any(UUID.class), any());
     }
 
     @Test
@@ -190,7 +212,7 @@ class CommandRepositoryAutonomousTest {
 
         RecordingCallback cb = new RecordingCallback();
         // Cap of 3: the loop must terminate after exactly 3 executed steps.
-        new CommandRepository(useCase, executorPort, approveGate(), 0L, 3, Runnable::run)
+        new CommandRepository(useCase, executorPort, authUseCase, approveGate(), 0L, 3, Runnable::run)
                 .executeAutonomous("scroll forever", cb);
         cb.await();
 
