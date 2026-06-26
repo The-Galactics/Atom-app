@@ -314,10 +314,10 @@ public class MainActivity extends AppCompatActivity {
         preferences.registerChangeListener(muteListener);
 
         btnSettings.setOnClickListener(v ->
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
+                com.atom.app.ui.NavTransitions.start(this, SettingsActivity.class));
 
         btnHistory.setOnClickListener(v ->
-                startActivity(new Intent(MainActivity.this, HistoryActivity.class)));
+                com.atom.app.ui.NavTransitions.start(this, HistoryActivity.class));
 
         btnKeyboard.setOnClickListener(v -> inputBar.toggle());
 

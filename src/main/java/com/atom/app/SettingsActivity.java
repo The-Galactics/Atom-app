@@ -521,6 +521,12 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     @Override
+    public void finish() {
+        super.finish();
+        com.atom.app.ui.NavTransitions.apply(this);
+    }
+
+    @Override
     protected void onDestroy() {
         if (voicePickerTts != null) {
             voicePickerTts.stop();
