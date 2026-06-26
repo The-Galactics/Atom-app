@@ -61,6 +61,7 @@ public class AuthUseCase implements AuthPortIn {
     /** Refreshes the access token when it is missing or within the margin. Safe to
      *  call off the call path (app start, a background tick, just before a batch of
      *  calls). Returns the valid access token, or null if there's no session. */
+    @Override
     public synchronized String refreshIfNeeded() {
         return getValidAccessToken();  // existing blocking logic, now OFF the hot path
     }

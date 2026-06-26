@@ -84,7 +84,7 @@ public class AppContainer {
         this.tokenStore = new EncryptedTokenStore(context);
 
         // Deferred token supplier: the interceptor is built before AuthUseCase exists,
-        // so it reads through a holder we point at AuthUseCase::getValidAccessToken below.
+        // so it reads through a holder we point at AuthUseCase::getCachedAccessToken below.
         java.util.concurrent.atomic.AtomicReference<java.util.function.Supplier<String>> tokenSupplierHolder =
                 new java.util.concurrent.atomic.AtomicReference<>(() -> null);
 

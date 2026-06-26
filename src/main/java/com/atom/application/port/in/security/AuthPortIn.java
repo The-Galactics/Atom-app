@@ -17,4 +17,9 @@ public interface AuthPortIn {
 
     /** A non-expired access token, refreshing if needed; {@code null} when re-login is required. */
     String getValidAccessToken();
+
+    /** Refreshes the access token off the call path when missing or near-expiry. Call this
+     *  before starting an authenticated flow so the (cache-only) interceptor reads a fresh
+     *  token. Returns the valid access token, or {@code null} when re-login is required. */
+    String refreshIfNeeded();
 }
