@@ -50,10 +50,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_STATUS = "status_text";
     private static final String KEY_SUB_STATUS = "sub_status_text";
     private static final String KEY_ENERGY = "core_energy";
-    private static final String KEY_GLOW = "core_glow";
 
     private AtomCoreView atomCore;
-    private View coreGlow;
     private ImageButton btnMic, btnSettings, btnHistory, btnKeyboard, btnVolume;
     private TextView statusText, subStatusText, wordmark;
     private ChatViewModel viewModel;
@@ -72,9 +70,8 @@ public class MainActivity extends AppCompatActivity {
     private AtomPreferences preferences;
     private SpeechRecognitionCoordinator recognition;
 
-    // Last applied core state, kept so it can be restored across configuration changes.
+    // Last applied core energy, kept so it can be restored across configuration changes.
     private float currentEnergy = CoreStatePresenter.energyFor(CoreState.IDLE);
-    private float currentGlow = CoreStatePresenter.glowFor(CoreState.IDLE);
 
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
@@ -153,7 +150,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Initialize UI Components
         atomCore = findViewById(R.id.atom_core_animation);
-        coreGlow = findViewById(R.id.core_glow);
         btnMic = findViewById(R.id.btn_mic);
         btnSettings = findViewById(R.id.btn_settings);
         btnHistory = findViewById(R.id.btn_history);
@@ -163,10 +159,7 @@ public class MainActivity extends AppCompatActivity {
         subStatusText = findViewById(R.id.sub_status_text);
         wordmark = findViewById(R.id.wordmark);
 
-        // Start the atom core in its calm idle state (dim glow, low energy).
-        if (coreGlow != null) {
-            coreGlow.setAlpha(CoreStatePresenter.glowFor(CoreState.IDLE));
-        }
+        // Start the atom core in its calm idle state (low energy); AtomCoreView owns the glow.
         if (atomCore != null) {
             atomCore.setEnergy(CoreStatePresenter.energyFor(CoreState.IDLE));
         }
@@ -381,7 +374,6 @@ public class MainActivity extends AppCompatActivity {
         outState.putString(KEY_STATUS, statusText.getText().toString());
         outState.putString(KEY_SUB_STATUS, subStatusText.getText().toString());
         outState.putFloat(KEY_ENERGY, currentEnergy);
-        outState.putFloat(KEY_GLOW, currentGlow);
     }
 
     /** Restores the status line and core state saved before a configuration change. */
@@ -391,8 +383,7 @@ public class MainActivity extends AppCompatActivity {
         }
         statusText.setText(state.getString(KEY_STATUS, getString(R.string.status_idle)));
         subStatusText.setText(state.getString(KEY_SUB_STATUS, getString(R.string.sub_status_tap_mic)));
-        applyCoreState(state.getFloat(KEY_ENERGY, CoreStatePresenter.energyFor(CoreState.IDLE)),
-                state.getFloat(KEY_GLOW, CoreStatePresenter.glowFor(CoreState.IDLE)));
+        applyCoreState(state.getFloat(KEY_ENERGY, CoreStatePresenter.energyFor(CoreState.IDLE)));
     }
 
     /** Shared dispatch point for keyboard, chip, and voice order paths. */
@@ -616,18 +607,15 @@ public class MainActivity extends AppCompatActivity {
 
     /** Drives the core to a semantic UI state via the shared CoreStatePresenter. */
     private void applyCoreState(CoreState state) {
-        applyCoreState(CoreStatePresenter.energyFor(state), CoreStatePresenter.glowFor(state));
+        applyCoreState(CoreStatePresenter.energyFor(state));
     }
 
-    /** Low-level energy/glow apply; also used by the saved-state restore path. */
-    private void applyCoreState(float energy, float glowAlpha) {
+    /** Low-level energy apply; also used by the saved-state restore path. AtomCoreView's
+     *  own breathing glow brightens with energy, so there is no separate glow View to drive. */
+    private void applyCoreState(float energy) {
         currentEnergy = energy;
-        currentGlow = glowAlpha;
         if (atomCore != null) {
             atomCore.setEnergy(energy);
-        }
-        if (coreGlow != null) {
-            coreGlow.animate().alpha(glowAlpha).setDuration(CoreStatePresenter.CORE_GLOW_ANIM_MS).start();
         }
     }
 
