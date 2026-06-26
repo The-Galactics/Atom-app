@@ -2,6 +2,8 @@ package com.atom.infrastructure.adapter.grpc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -11,13 +13,21 @@ import com.atom.domain.security.TokenPair;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.TimeUnit;
 
 class AuthGrpcAdapterTest {
 
     private final AtomAgentServiceGrpc.AtomAgentServiceBlockingStub stub =
             mock(AtomAgentServiceGrpc.AtomAgentServiceBlockingStub.class);
     private final AuthGrpcAdapter adapter = new AuthGrpcAdapter(stub, () -> 1_000L);
+
+    @BeforeEach
+    void stubDeadline() {
+        when(stub.withDeadlineAfter(anyLong(), any(TimeUnit.class))).thenReturn(stub);
+    }
 
     @Test
     void login_mapsAuthResponseToTokenPair() {
