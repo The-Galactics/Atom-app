@@ -990,6 +990,26 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     : WindowManager.LayoutParams.TYPE_PHONE);
         }
         dialog.show();
+        hardenAgainstTapjacking(dialog);
+    }
+
+    /**
+     * Anti-tapjacking (2B.4): discard touches that pass through another window
+     * overlaying our confirmation, so a malicious overlay cannot force the "Yes".
+     * Buttons exist only after {@link AlertDialog#show()}, so call this after it.
+     */
+    private static void hardenAgainstTapjacking(AlertDialog dialog) {
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().getDecorView().setFilterTouchesWhenObscured(true);
+        }
+        android.widget.Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (positive != null) {
+            positive.setFilterTouchesWhenObscured(true);
+        }
+        android.widget.Button negative = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+        if (negative != null) {
+            negative.setFilterTouchesWhenObscured(true);
+        }
     }
 
     /**
@@ -1013,6 +1033,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     : WindowManager.LayoutParams.TYPE_PHONE);
         }
         dialog.show();
+        hardenAgainstTapjacking(dialog);
     }
 
     /** Prompting gate: shows the overlay confirmation and blocks the loop thread until the user answers. */

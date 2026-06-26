@@ -49,8 +49,7 @@ public class CommandRepository {
 
     public CommandRepository(ExecuteCommandPortIn executeCommandUseCase,
                              ActionExecutorPortOut actionExecutor) {
-        this(executeCommandUseCase, actionExecutor,
-                new DestructiveActionGate(new DestructiveActionPolicy()),
+        this(executeCommandUseCase, actionExecutor, defaultGate(),
                 DEFAULT_SETTLE_DELAY_MS, DEFAULT_STEP_CAP,
                 new HandlerPoster());
     }
@@ -213,7 +212,9 @@ public class CommandRepository {
         boolean confirm(ResolvedAction action);
     }
 
-    /** Default gate: detects via {@link DestructiveActionPolicy} and auto-approves (UI supplies its own). */
+    /** Default gate: detects via {@link DestructiveActionPolicy} and, with no UI to
+     *  prompt, FAILS CLOSED — a sensitive action is denied rather than run hands-free.
+     *  Surfaces that can prompt (the overlay) swap in their own confirming gate. */
     private static final class DestructiveActionGate implements ConfirmationGate {
         private final DestructiveActionPolicy policy;
 
@@ -228,8 +229,16 @@ public class CommandRepository {
 
         @Override
         public boolean confirm(ResolvedAction action) {
-            return true;
+            // confirm() is only reached for actions that need confirmation; with no
+            // interactive UI here, deny (the loop aborts) instead of auto-approving.
+            return false;
         }
+    }
+
+    /** The fail-closed default gate (used when no UI gate is injected). */
+    @VisibleForTesting
+    static ConfirmationGate defaultGate() {
+        return new DestructiveActionGate(new DestructiveActionPolicy());
     }
 
     /** Posts a Runnable to the main thread. Abstracted so tests run it synchronously. */
