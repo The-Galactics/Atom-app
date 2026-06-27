@@ -34,4 +34,44 @@ class CoreStatePresenterTest {
         assertThat(CoreStatePresenter.TEXT_FADE_OUT_MS).isEqualTo(120L);
         assertThat(CoreStatePresenter.TEXT_FADE_IN_MS).isEqualTo(160L);
     }
+
+    @Test
+    void thinkingGathersInwardInLavender() {
+        CoreStyle s = CoreStatePresenter.styleFor(CoreState.THINKING);
+        assertThat(s.energy).isEqualTo(0.6f);
+        assertThat(s.hueShift).isEqualTo(0.0f);
+        assertThat(s.motion).isEqualTo(MotionProfile.GATHER);
+        assertThat(s.oneShot).isEqualTo(Transient.NONE);
+    }
+
+    @Test
+    void operatingScansInTeal() {
+        CoreStyle s = CoreStatePresenter.styleFor(CoreState.OPERATING);
+        assertThat(s.energy).isEqualTo(0.6f);
+        assertThat(s.hueShift).isEqualTo(1.0f);
+        assertThat(s.motion).isEqualTo(MotionProfile.SCAN);
+    }
+
+    @Test
+    void respondedBloomsAndErrorShudders() {
+        assertThat(CoreStatePresenter.styleFor(CoreState.RESPONDED).oneShot).isEqualTo(Transient.BLOOM);
+        assertThat(CoreStatePresenter.styleFor(CoreState.ERROR).oneShot).isEqualTo(Transient.SHUDDER);
+    }
+
+    @Test
+    void idleAndListeningKeepTheirEnergyAndAreLavender() {
+        assertThat(CoreStatePresenter.styleFor(CoreState.IDLE).energy).isEqualTo(0.0f);
+        assertThat(CoreStatePresenter.styleFor(CoreState.IDLE).motion).isEqualTo(MotionProfile.BREATHE);
+        assertThat(CoreStatePresenter.styleFor(CoreState.LISTENING).energy).isEqualTo(1.0f);
+        assertThat(CoreStatePresenter.styleFor(CoreState.LISTENING).motion).isEqualTo(MotionProfile.PULSE);
+        assertThat(CoreStatePresenter.styleFor(CoreState.LISTENING).hueShift).isEqualTo(0.0f);
+    }
+
+    @Test
+    void energyForStillMatchesStyleForEnergy() {
+        for (CoreState state : CoreState.values()) {
+            assertThat(CoreStatePresenter.energyFor(state))
+                    .isEqualTo(CoreStatePresenter.styleFor(state).energy);
+        }
+    }
 }
