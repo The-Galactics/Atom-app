@@ -38,7 +38,7 @@ public final class AtomWindowSession implements WindowSession {
             if (root != null) {
                 CharSequence p = root.getPackageName();
                 pkg = p == null ? "" : p.toString();
-                root.recycle(); // transient: only needed for the package name here
+                safeRecycle(root); // transient: only needed for the package name here
             }
             out.add(new WindowSnapshot(w.getId(), w.getType(), w.getLayer(),
                     w.isFocused(), w.isActive(), pkg, r.left, r.top, r.right, r.bottom));
@@ -75,33 +75,41 @@ public final class AtomWindowSession implements WindowSession {
         }
         stack.push(new Frame(root, 0, 0));
         Rect r = new Rect();
-        while (!stack.isEmpty() && out.size() < MAX_NODES) {
-            Frame f = stack.pop();
-            AccessibilityNodeInfo node = f.node;
-            boolean isRoot = node == root;
-            try {
-                NodeSnapshot snap = toSnapshot(node, f.depth, f.siblingIndex, r);
-                if (snap != null && !adapter.isPhantom(snap)) {
-                    out.add(snap);
-                }
-                int count = node.getChildCount();
-                for (int i = count - 1; i >= 0; i--) {
-                    AccessibilityNodeInfo child = node.getChild(i);
-                    if (child != null) {
-                        stack.push(new Frame(child, f.depth + 1, i));
+        try {
+            while (!stack.isEmpty() && out.size() < MAX_NODES) {
+                Frame f = stack.pop();
+                AccessibilityNodeInfo node = f.node;
+                boolean isRoot = node == root;
+                try {
+                    NodeSnapshot snap = toSnapshot(node, f.depth, f.siblingIndex, r);
+                    if (snap != null && !adapter.isPhantom(snap)) {
+                        out.add(snap);
+                    }
+                    int count = node.getChildCount();
+                    for (int i = count - 1; i >= 0; i--) {
+                        AccessibilityNodeInfo child = node.getChild(i);
+                        if (child != null) {
+                            stack.push(new Frame(child, f.depth + 1, i));
+                        }
+                    }
+                } catch (RuntimeException staleNode) {
+                    // A node can go stale mid-walk (common on HyperOS transitions).
+                    // Skip it and keep walking the rest of the tree instead of
+                    // aborting the whole attempt; the node is recycled in finally.
+                } finally {
+                    if (!isRoot) {
+                        safeRecycle(node); // children obtained via getChild()
                     }
                 }
-            } finally {
-                if (!isRoot) {
-                    safeRecycle(node); // children obtained via getChild()
-                }
             }
-        }
-        // Drain remaining stack without descending further (MAX_NODES hit).
-        while (!stack.isEmpty()) {
-            AccessibilityNodeInfo node = stack.pop().node;
-            if (node != root) {
-                safeRecycle(node);
+        } finally {
+            // Always drain pushed-but-unpopped children (MAX_NODES hit OR an
+            // exception escaped the loop) so no native child node leaks.
+            while (!stack.isEmpty()) {
+                AccessibilityNodeInfo node = stack.pop().node;
+                if (node != root) {
+                    safeRecycle(node);
+                }
             }
         }
         return out;
