@@ -61,7 +61,7 @@ public final class NodeSnapshot {
         private String text = "";
         private String role = "";
         private boolean clickable, focusable, editable, scrollable, visibleToUser;
-        private String viewId = null;
+        private String viewId = "";
         private String packageName = "";
         private int boundsL, boundsT, boundsR, boundsB;
         private int depth, siblingIndex;
@@ -73,7 +73,7 @@ public final class NodeSnapshot {
         public Builder editable(boolean v) { this.editable = v; return this; }
         public Builder scrollable(boolean v) { this.scrollable = v; return this; }
         public Builder visibleToUser(boolean v) { this.visibleToUser = v; return this; }
-        public Builder viewId(String v) { this.viewId = v; return this; }
+        public Builder viewId(String v) { this.viewId = v == null ? "" : v; return this; }
         public Builder packageName(String v) { this.packageName = v == null ? "" : v; return this; }
         public Builder bounds(int l, int t, int r, int b) {
             this.boundsL = l; this.boundsT = t; this.boundsR = r; this.boundsB = b; return this;

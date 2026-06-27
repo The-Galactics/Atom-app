@@ -22,4 +22,10 @@ class NodeSnapshotTest {
         NodeSnapshot n = NodeSnapshot.builder().bounds(10, 10, 10, 10).build();
         assertThat(n.area()).isEqualTo(0);
     }
+
+    @Test
+    void invertedBoundsHaveZeroArea() {
+        NodeSnapshot n = NodeSnapshot.builder().bounds(50, 0, 10, 40).build();
+        assertThat(n.area()).isEqualTo(0);
+    }
 }
