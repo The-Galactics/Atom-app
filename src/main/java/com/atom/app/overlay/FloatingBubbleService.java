@@ -933,7 +933,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         commandRepository.recognize(prompt, new CommandRepository.CommandCallback() {
             @Override
             public void onResolved(ResolvedAction action) {
-                if (!action.isExecutable()) {
+                // A held action (NONE turn with awaitingConfirmation) is still an order:
+                // it must enter the autonomous loop so the voice gate speaks the question
+                // and captures the spoken sí/no. Only true non-executable turns go to chat.
+                if (!action.isExecutable() && !action.awaitingConfirmation()) {
                     askAtom(prompt, status, null);
                     return;
                 }
