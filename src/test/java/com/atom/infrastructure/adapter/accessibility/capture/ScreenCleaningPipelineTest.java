@@ -43,4 +43,17 @@ class ScreenCleaningPipelineTest {
         List<ScreenNode> out = pipeline.clean(raw, new TestAdapter());
         assertThat(out).hasSize(1);
     }
+
+    @Test
+    void keepsSiblingRowsThatShareAViewId() {
+        java.util.List<NodeSnapshot> raw = java.util.List.of(
+                NodeSnapshot.builder().viewId("com.app:id/row").role("TextView").text("first")
+                        .bounds(0, 0, 100, 40).siblingIndex(0).build(),
+                NodeSnapshot.builder().viewId("com.app:id/row").role("TextView").text("second")
+                        .bounds(0, 40, 100, 80).siblingIndex(1).build());
+        java.util.List<ScreenNode> out = pipeline.clean(raw,
+                new com.atom.infrastructure.adapter.accessibility.oem.DefaultOemAdapter());
+        assertThat(out).hasSize(2);
+        assertThat(out).extracting(s -> s.text).containsExactly("first", "second");
+    }
 }

@@ -8,13 +8,17 @@ final class StableId {
     }
 
     static long of(NodeSnapshot n) {
+        long h = 1125899906842597L; // FNV-ish seed
         String viewId = n.viewId();
         if (viewId != null && !viewId.isEmpty()) {
-            return mix(viewId.hashCode());
+            // viewId is reused across sibling rows (RecyclerView/ListView), so it
+            // is NOT unique on its own — always mix in position so distinct
+            // on-screen nodes get distinct ids and only true duplicates collapse.
+            h = h * 31 + viewId.hashCode();
+        } else {
+            h = h * 31 + n.role().hashCode();
+            h = h * 31 + n.text().hashCode();
         }
-        long h = 1125899906842597L; // FNV-ish seed
-        h = h * 31 + n.role().hashCode();
-        h = h * 31 + n.text().hashCode();
         h = h * 31 + n.boundsL();
         h = h * 31 + n.boundsT();
         h = h * 31 + n.boundsR();

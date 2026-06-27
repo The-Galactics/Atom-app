@@ -52,4 +52,13 @@ class DefaultOemAdapterTest {
                 .bounds(0, 0, 10, 10).siblingIndex(1).build();
         assertThat(adapter.synthesizeStableId(a)).isEqualTo(adapter.synthesizeStableId(b));
     }
+
+    @Test
+    void stableIdDistinguishesSiblingsSharingAViewId() {
+        NodeSnapshot row1 = NodeSnapshot.builder().viewId("com.app:id/title")
+                .role("TextView").text("A").bounds(0, 0, 100, 40).siblingIndex(0).build();
+        NodeSnapshot row2 = NodeSnapshot.builder().viewId("com.app:id/title")
+                .role("TextView").text("B").bounds(0, 40, 100, 80).siblingIndex(1).build();
+        assertThat(adapter.synthesizeStableId(row1)).isNotEqualTo(adapter.synthesizeStableId(row2));
+    }
 }

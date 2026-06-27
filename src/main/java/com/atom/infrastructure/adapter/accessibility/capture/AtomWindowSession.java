@@ -69,10 +69,11 @@ public final class AtomWindowSession implements WindowSession {
         // Iterative DFS; recycle ONLY children obtained via getChild(). Root is owned
         // by rootsToRecycle / close(), never recycled here.
         Deque<Frame> stack = new ArrayDeque<>();
-        boolean rootAlreadyTracked = rootsToRecycle.contains(root);
-        if (!rootAlreadyTracked) {
-            rootsToRecycle.add(root);
-        }
+        // Always track this root: getRoot() returns a fresh AccessibilityNodeInfo
+        // each call and equals() is value-based, so a contains() guard would
+        // wrongly skip this distinct instance and leak it. safeRecycle() in
+        // close() swallows any double-recycle ISE, so tracking it is safe.
+        rootsToRecycle.add(root);
         stack.push(new Frame(root, 0, 0));
         Rect r = new Rect();
         try {

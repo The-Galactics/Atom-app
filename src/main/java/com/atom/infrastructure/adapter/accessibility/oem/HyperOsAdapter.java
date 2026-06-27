@@ -70,6 +70,6 @@ public class HyperOsAdapter implements OemCompatibilityAdapter {
 
     @Override
     public long synthesizeStableId(NodeSnapshot node) {
-        return StableId.of(node); // refined in 7.4
+        return StableId.of(node);
     }
 }
