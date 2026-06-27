@@ -36,7 +36,23 @@ public class HyperOsAdapter implements OemCompatibilityAdapter {
 
     @Override
     public WindowSnapshot selectActiveWindow(List<WindowSnapshot> windows) {
-        return null; // implemented in 7.2
+        WindowSnapshot best = null;
+        for (WindowSnapshot w : windows) {
+            if (w.type() != WindowSnapshot.TYPE_APPLICATION) {
+                continue;
+            }
+            if (OVERLAY_PACKAGES.contains(w.packageName())) {
+                continue;
+            }
+            boolean preferred = w.active() || w.focused();
+            if (!preferred) {
+                continue;
+            }
+            if (best == null || w.area() > best.area()) {
+                best = w; // split-screen tiebreak: largest active app window
+            }
+        }
+        return best;
     }
 
     @Override

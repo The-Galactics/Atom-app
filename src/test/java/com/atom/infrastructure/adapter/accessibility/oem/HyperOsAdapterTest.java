@@ -34,4 +34,22 @@ class HyperOsAdapterTest {
         CaptureProbe p = new CaptureProbe(true, false, true, 5, 5, 500L);
         assertThat(adapter.isTreeReady(p)).isFalse();
     }
+
+    @Test
+    void skipsMiuiOverlayAndPicksAppWindow() {
+        WindowSnapshot overlay = new WindowSnapshot(1, WindowSnapshot.TYPE_APPLICATION, 9,
+                true, true, "com.android.systemui", 0, 0, 100, 100);
+        WindowSnapshot app = new WindowSnapshot(2, WindowSnapshot.TYPE_APPLICATION, 1,
+                true, true, "com.whatsapp", 0, 0, 100, 300);
+        assertThat(adapter.selectActiveWindow(List.of(overlay, app)).windowId()).isEqualTo(2);
+    }
+
+    @Test
+    void prefersLargestActiveAppWindowInSplitScreen() {
+        WindowSnapshot small = new WindowSnapshot(1, WindowSnapshot.TYPE_APPLICATION, 1,
+                true, true, "com.app.a", 0, 0, 100, 100);   // area 10_000
+        WindowSnapshot large = new WindowSnapshot(2, WindowSnapshot.TYPE_APPLICATION, 1,
+                true, true, "com.app.b", 0, 0, 100, 300);   // area 30_000
+        assertThat(adapter.selectActiveWindow(List.of(small, large)).windowId()).isEqualTo(2);
+    }
 }
