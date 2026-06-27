@@ -80,4 +80,29 @@ class HyperOsAdapterTest {
                 .bounds(0, 0, 80, 40).visibleToUser(true).packageName("com.whatsapp").build();
         assertThat(adapter.isPhantom(n)).isFalse();
     }
+
+    @Test
+    void stableIdSurvivesStrippedViewId() {
+        NodeSnapshot withId = NodeSnapshot.builder().viewId("com.app:id/send")
+                .role("Button").text("Send").bounds(0, 0, 80, 40).siblingIndex(2).build();
+        NodeSnapshot stripped = NodeSnapshot.builder().viewId(null)
+                .role("Button").text("Send").bounds(0, 0, 80, 40).siblingIndex(2).build();
+        // stripped id is stable across re-captures of the same stripped node
+        NodeSnapshot strippedAgain = NodeSnapshot.builder().viewId("")
+                .role("Button").text("Send").bounds(0, 0, 80, 40).siblingIndex(2).build();
+        assertThat(adapter.synthesizeStableId(stripped))
+                .isEqualTo(adapter.synthesizeStableId(strippedAgain));
+        // and a node that DID keep its id is identified differently
+        assertThat(adapter.synthesizeStableId(withId))
+                .isNotEqualTo(adapter.synthesizeStableId(stripped));
+    }
+
+    @Test
+    void differentSiblingIndexYieldsDifferentStrippedId() {
+        NodeSnapshot a = NodeSnapshot.builder().role("Button").text("OK")
+                .bounds(0, 0, 10, 10).siblingIndex(0).build();
+        NodeSnapshot b = NodeSnapshot.builder().role("Button").text("OK")
+                .bounds(0, 0, 10, 10).siblingIndex(1).build();
+        assertThat(adapter.synthesizeStableId(a)).isNotEqualTo(adapter.synthesizeStableId(b));
+    }
 }
