@@ -122,6 +122,9 @@
     <string name="settings_perm_fix">Arreglar</string>
     <string name="settings_perm_granted">Concedido</string>
     <string name="settings_perm_not_granted">No concedido</string>
+    <string name="cd_fix_overlay">Corregir permiso de superposición</string>
+    <string name="cd_fix_accessibility">Corregir permiso de accesibilidad</string>
+    <string name="cd_fix_microphone">Corregir permiso de micrófono</string>
 
     <!-- Ajustes de la palabra de activación -->
     <string name="settings_wake_word">Palabra de activación</string>
@@ -200,4 +203,17 @@
     <string name="mic_permission_open_settings">Abrir ajustes</string>
     <string name="stt_unavailable">El reconocimiento de voz no está disponible en este dispositivo</string>
     <string name="stt_error">Lo siento, no te entendí</string>
+
+    <!-- Auth / login screen -->
+    <string name="auth_login_title">Iniciar sesión</string>
+    <string name="auth_register_title">Crear cuenta</string>
+    <string name="auth_email_hint">Email</string>
+    <string name="auth_password_hint">Contraseña</string>
+    <string name="auth_login_button">Entrar</string>
+    <string name="auth_register_button">Registrarme</string>
+    <string name="auth_switch_to_register">¿No tienes cuenta? Regístrate</string>
+    <string name="auth_switch_to_login">¿Ya tienes cuenta? Inicia sesión</string>
+    <string name="auth_google_button">Continuar con Google</string>
+    <string name="auth_logout">Cerrar sesión</string>
+    <string name="auth_fields_required">Completa todos los campos.</string>
 </resources>

@@ -232,7 +232,7 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
         chip.setText(granted ? R.string.settings_perm_granted : R.string.settings_perm_not_granted);
-        chip.setTextColor(getColor(granted ? R.color.accent : R.color.on_surface_label));
+        chip.setTextColor(getColor(granted ? R.color.accent : R.color.status_error));
     }
 
     // --- Wake word section ---------------------------------------------------
@@ -396,53 +396,57 @@ public class SettingsActivity extends AppCompatActivity {
         if (status != TextToSpeech.SUCCESS) {
             return;
         }
-        final List<String> labels = new ArrayList<>();
-        voiceNames.clear();
-        labels.add(getString(R.string.settings_tts_voice_auto));
-        voiceNames.add("");
+        new Thread(() -> {
+            final List<String> labels = new ArrayList<>();
+            final List<String> names = new ArrayList<>();
+            labels.add(getString(R.string.settings_tts_voice_auto));
+            names.add("");
 
-        Set<Voice> voices = safeVoices();
-        List<Voice> spanish = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (Voice v : voices) {
-            if (v == null || v.getLocale() == null
-                    || !"es".equalsIgnoreCase(v.getLocale().getLanguage())) {
-                continue;
-            }
-            if (v.isNetworkConnectionRequired()) {
-                continue; // offline voices only: keep playback instant
-            }
-            if (v.getFeatures() != null
-                    && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) {
-                continue;
-            }
-            if (!seen.add(v.getName())) {
-                continue;
-            }
-            spanish.add(v);
-        }
-        Collections.sort(spanish, (a, b) -> a.getName().compareTo(b.getName()));
-        for (Voice v : spanish) {
-            labels.add(voiceLabel(v));
-            voiceNames.add(v.getName());
-        }
-
-        runOnUiThread(() -> {
-            ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                    this, android.R.layout.simple_spinner_item, labels);
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            spinnerVoice.setAdapter(adapter);
-            int idx = voiceNames.indexOf(preferences.getTtsVoice());
-            spinnerVoice.setSelection(idx < 0 ? 0 : idx);
-            spinnerVoice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    preferences.setTtsVoice(voiceNames.get(position));
+            Set<Voice> voices = safeVoices();
+            List<Voice> spanish = new ArrayList<>();
+            Set<String> seen = new HashSet<>();
+            for (Voice v : voices) {
+                if (v == null || v.getLocale() == null
+                        || !"es".equalsIgnoreCase(v.getLocale().getLanguage())) {
+                    continue;
                 }
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
+                if (v.isNetworkConnectionRequired()) {
+                    continue; // offline voices only: keep playback instant
+                }
+                if (v.getFeatures() != null
+                        && v.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) {
+                    continue;
+                }
+                if (!seen.add(v.getName())) {
+                    continue;
+                }
+                spanish.add(v);
+            }
+            Collections.sort(spanish, (a, b) -> a.getName().compareTo(b.getName()));
+            for (Voice v : spanish) {
+                labels.add(voiceLabel(v));
+                names.add(v.getName());
+            }
+
+            runOnUiThread(() -> {
+                voiceNames.clear();
+                voiceNames.addAll(names);
+                ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                        this, android.R.layout.simple_spinner_item, labels);
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                spinnerVoice.setAdapter(adapter);
+                int idx = voiceNames.indexOf(preferences.getTtsVoice());
+                spinnerVoice.setSelection(idx < 0 ? 0 : idx);
+                spinnerVoice.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                    @Override
+                    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                        preferences.setTtsVoice(voiceNames.get(position));
+                    }
+                    @Override
+                    public void onNothingSelected(AdapterView<?> parent) {}
+                });
             });
-        });
+        }, "atom-voice-filter").start();
     }
 
     private String voiceLabel(Voice v) {
@@ -514,6 +518,12 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             return Collections.emptySet();
         }
+    }
+
+    @Override
+    public void finish() {
+        super.finish();
+        com.atom.app.ui.NavTransitions.apply(this);
     }
 
     @Override

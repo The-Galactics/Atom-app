@@ -15,7 +15,6 @@
     <color name="accent">#BF94FF</color>            <!-- = purple_lavender -->
     <color name="accent_bright">#D6B8FF</color>     <!-- gradient highlight end -->
     <color name="accent_deep">#8C5CF0</color>       <!-- gradient deep end -->
-    <color name="accent_glow">#33BF94FF</color>     <!-- 20% accent (radial glow inner) -->
     <color name="accent_glow_soft">#0DBF94FF</color><!-- 5% accent (radial glow outer) -->
 
     <!-- On-surface text tints (white at decreasing emphasis) -->

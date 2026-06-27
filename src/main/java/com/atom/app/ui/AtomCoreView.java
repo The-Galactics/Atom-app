@@ -1,12 +1,14 @@
 package com.atom.app.ui;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.RadialGradient;
+import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.SweepGradient;
 import android.os.Build;
@@ -16,9 +18,10 @@ import android.view.animation.AnimationUtils;
 
 /**
  * The animated "atom core" centerpiece, drawn by hand with real radial-gradient glows
- * and {@link BlurMaskFilter} blooms. Blur is only honoured on a hardware canvas from
- * API 28, so below that the view falls back to a software layer; from API 28 it draws
- * directly on the GPU canvas. It renders, from back to front:
+ * and {@link BlurMaskFilter} blooms. The static-radius blooms (ring underlay, electron
+ * glow, nucleus bloom) are pre-rasterized once per size into cached bitmaps in
+ * {@link #onSizeChanged}, so {@link #onDraw} blits cheap textured quads instead of
+ * re-running an expensive blur pass every frame. It renders, from back to front:
  *
  * <ul>
  *   <li>a soft radial atmosphere glow that breathes;</li>
@@ -55,6 +58,12 @@ public class AtomCoreView extends View {
     // settles to ~30fps instead of tracking the panel's native (up to 120Hz) refresh.
     private static final long IDLE_FRAME_DELAY_MS = 24;
 
+    // Active (listening/thinking) re-draw delay: time-gates the engaged loop to ~60fps so
+    // the signature animation doesn't burn the full 120Hz cadence. The chosen delay lands
+    // the next vsync at ~16.6ms on both 60Hz and 120Hz panels; motion stays smooth because
+    // the phase is integrated from the real frame dt, not the frame count.
+    private static final long ACTIVE_FRAME_DELAY_MS = 9;
+
     // Three orbits: tilt in degrees, angular speed (sign = direction), starting phase offset.
     private static final float[] ORBIT_TILT = {0f, 62f, 121f};
     private static final float[] ORBIT_SPEED = {1.0f, -0.78f, 1.32f};
@@ -63,20 +72,29 @@ public class AtomCoreView extends View {
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint auraPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint ringGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint orbitPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint electronPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint electronGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint nucleusPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint nucleusGlowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    // Blits the pre-rasterized blooms; FILTER_BITMAP smooths the per-frame scale. Alpha is
+    // re-set per blit to modulate brightness with energy/depth, so no per-frame allocation.
+    private final Paint bloomPaint =
+            new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final RectF bloomDst = new RectF();
 
     // Size-dependent resources, rebuilt in onSizeChanged so we don't allocate per frame.
     private RadialGradient bgGlowShader;
     private RadialGradient nucleusShader;
     private SweepGradient sweepShader;
-    private BlurMaskFilter ringBlur;
-    private BlurMaskFilter electronBlur;
-    private BlurMaskFilter nucleusBlur;
+
+    // Pre-rasterized blurred blooms (baked once per size). Each *Extent is the half-size in
+    // px the bitmap represents at scale 1.0, so a frame scales it by pulse (and depth).
+    private Bitmap ringGlowBmp;
+    private Bitmap electronGlowBmp;
+    private Bitmap nucleusGlowBmp;
+    private float ringGlowExtent;
+    private float electronGlowExtent;
+    private float nucleusGlowExtent;
 
     // Desaturating + dimming paint applied to the whole layer while muted (lazy-built).
     private Paint mutedLayerPaint;
@@ -108,7 +126,6 @@ public class AtomCoreView extends View {
     private void init() {
         applyDefaultLayer();
         ringPaint.setStyle(Paint.Style.STROKE);
-        ringGlowPaint.setStyle(Paint.Style.STROKE);
         auraPaint.setStyle(Paint.Style.STROKE);
         orbitPaint.setStyle(Paint.Style.STROKE);
     }
@@ -139,7 +156,7 @@ public class AtomCoreView extends View {
         }
         if (muted) {
             // A layer with the filter paint applies the desaturation to the result; the
-            // blur still renders into it (software below API 28, hardware from 28).
+            // blooms (now bitmaps) composite into it just like the rest of the core.
             setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_HARDWARE, mutedLayerPaint);
         } else {
             applyDefaultLayer();
@@ -150,6 +167,8 @@ public class AtomCoreView extends View {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        // Blooms recycled on detach are rebaked lazily by onDraw once we have a size, so a
+        // re-attach at the same size (no onSizeChanged) still renders.
         lastFrameMs = 0;
         scheduleNextFrame();
     }
@@ -168,7 +187,8 @@ public class AtomCoreView extends View {
     /**
      * Re-posts the next animation frame, unless the view is off-screen (then the loop
      * stops). At settled idle it throttles to ~30fps since the calm motion doesn't need
-     * every vsync; while engaged it runs at the full display cadence.
+     * every vsync; while engaged it is time-gated to ~60fps rather than the panel's full
+     * (up to 120Hz) cadence.
      */
     private void scheduleNextFrame() {
         removeCallbacks(invalidateFrame);
@@ -178,7 +198,7 @@ public class AtomCoreView extends View {
         if (targetEnergy == 0f && energy < 0.01f) {
             postOnAnimationDelayed(invalidateFrame, IDLE_FRAME_DELAY_MS);
         } else {
-            postInvalidateOnAnimation();
+            postOnAnimationDelayed(invalidateFrame, ACTIVE_FRAME_DELAY_MS);
         }
     }
 
@@ -202,14 +222,60 @@ public class AtomCoreView extends View {
                 withAlpha(ACCENT, 70), withAlpha(ACCENT_BRIGHT, 255),
                 withAlpha(ACCENT, 30)
         }, new float[]{0f, 0.25f, 0.5f, 0.75f, 1f});
-        ringBlur = new BlurMaskFilter(radius * 0.06f, BlurMaskFilter.Blur.NORMAL);
-        electronBlur = new BlurMaskFilter(radius * 0.035f, BlurMaskFilter.Blur.NORMAL);
-        nucleusBlur = new BlurMaskFilter(radius * 0.08f, BlurMaskFilter.Blur.NORMAL);
+
+        bakeBlooms();
+    }
+
+    /**
+     * Pre-rasterizes the three blurred blooms at full alpha so onDraw can blit them with a
+     * per-frame alpha (energy/depth) and scale (pulse) instead of running live
+     * BlurMaskFilter passes. Recycles any previous bitmaps first. Requires {@code radius>0}.
+     */
+    private void bakeBlooms() {
+        recycleBlooms();
+        float ringR = radius * 0.44f;
+        float ringStroke = radius * 0.05f;
+        float ringBlur = radius * 0.06f;
+        ringGlowExtent = ringR + ringStroke / 2f + ringBlur * 2f;
+        ringGlowBmp = bakeRingGlow(ringR, ringStroke, ringBlur, ACCENT);
+
+        float electronR = radius * 0.034f * 2.3f;
+        float electronBlur = radius * 0.035f;
+        electronGlowExtent = electronR + electronBlur * 2f;
+        electronGlowBmp = bakeCircleGlow(electronR, electronBlur, ACCENT_BRIGHT);
+
+        float nucleusR = radius * 0.15f * 1.9f;
+        float nucleusBlur = radius * 0.08f;
+        nucleusGlowExtent = nucleusR + nucleusBlur * 2f;
+        nucleusGlowBmp = bakeCircleGlow(nucleusR, nucleusBlur, ACCENT_BRIGHT);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        removeCallbacks(invalidateFrame);
+        recycleBlooms();
+    }
+
+    private void recycleBlooms() {
+        if (ringGlowBmp != null) { ringGlowBmp.recycle(); ringGlowBmp = null; }
+        if (electronGlowBmp != null) { electronGlowBmp.recycle(); electronGlowBmp = null; }
+        if (nucleusGlowBmp != null) { nucleusGlowBmp.recycle(); nucleusGlowBmp = null; }
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         if (radius <= 0 || bgGlowShader == null) {
+            return;
+        }
+        // The blooms are recycled on detach; if the view was re-attached at the same size,
+        // onSizeChanged won't fire to rebake them. Rebake lazily here — we have a real size —
+        // so the core never renders blank. Falls through to a skip only if we somehow still
+        // have no size to bake against.
+        if (nucleusGlowBmp == null && getWidth() > 0 && getHeight() > 0) {
+            bakeBlooms();
+        }
+        if (nucleusGlowBmp == null) {
             return;
         }
 
@@ -267,11 +333,10 @@ public class AtomCoreView extends View {
     private void drawMainRing(Canvas canvas, float pulse) {
         float r = radius * 0.44f * pulse;
 
-        // Blurred glow underlay around the ring.
-        ringGlowPaint.setStrokeWidth(radius * 0.05f);
-        ringGlowPaint.setMaskFilter(ringBlur);
-        ringGlowPaint.setColor(withAlpha(ACCENT, (int) (55 + 90 * energy)));
-        canvas.drawCircle(cx, cy, r, ringGlowPaint);
+        // Blurred glow underlay around the ring (pre-rasterized; scaled by pulse,
+        // brightness modulated by energy).
+        bloomPaint.setAlpha((int) (55 + 90 * energy));
+        blitBloom(canvas, ringGlowBmp, cx, cy, ringGlowExtent * pulse);
 
         // Crisp ring with a rotating sweep-gradient highlight.
         canvas.save();
@@ -287,10 +352,9 @@ public class AtomCoreView extends View {
     private void drawNucleus(Canvas canvas, float pulse) {
         float nr = radius * 0.15f;
 
-        // Soft bloom behind the nucleus.
-        nucleusGlowPaint.setMaskFilter(nucleusBlur);
-        nucleusGlowPaint.setColor(withAlpha(ACCENT_BRIGHT, (int) (110 + 110 * energy)));
-        canvas.drawCircle(cx, cy, nr * 1.9f * pulse, nucleusGlowPaint);
+        // Soft bloom behind the nucleus (pre-rasterized; scaled by pulse, brightness by energy).
+        bloomPaint.setAlpha((int) (110 + 110 * energy));
+        blitBloom(canvas, nucleusGlowBmp, cx, cy, nucleusGlowExtent * pulse);
 
         // Gradient body.
         canvas.save();
@@ -343,13 +407,47 @@ public class AtomCoreView extends View {
             float depth = (float) (0.62 + 0.38 * Math.sin(a));
             float er = radius * 0.034f * depth;
 
-            electronGlowPaint.setMaskFilter(electronBlur);
-            electronGlowPaint.setColor(withAlpha(ACCENT_BRIGHT, (int) (130 * depth)));
-            canvas.drawCircle(px, py, er * 2.3f, electronGlowPaint);
+            // Soft bloom behind the electron (pre-rasterized; scaled + dimmed by depth).
+            bloomPaint.setAlpha((int) (130 * depth));
+            blitBloom(canvas, electronGlowBmp, px, py, electronGlowExtent * depth);
 
             electronPaint.setColor(withAlpha(ACCENT_BRIGHT, 255));
             canvas.drawCircle(px, py, er, electronPaint);
         }
+    }
+
+    /** Blits a pre-rasterized bloom centered at (x,y), scaled so its half-size is {@code extent}. */
+    private void blitBloom(Canvas canvas, Bitmap bmp, float x, float y, float extent) {
+        bloomDst.set(x - extent, y - extent, x + extent, y + extent);
+        canvas.drawBitmap(bmp, null, bloomDst, bloomPaint);
+    }
+
+    /** Bakes a blurred filled circle (radius r, color at full alpha) into a square bitmap. */
+    private static Bitmap bakeCircleGlow(float r, float blur, int color) {
+        float extent = r + blur * 2f;
+        int size = Math.max(1, Math.round(extent * 2f));
+        Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmp);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(withAlpha(color, 255));
+        p.setMaskFilter(new BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL));
+        c.drawCircle(extent, extent, r, p);
+        return bmp;
+    }
+
+    /** Bakes a blurred stroked ring (radius r, stroke width, color at full alpha) into a bitmap. */
+    private static Bitmap bakeRingGlow(float r, float strokeWidth, float blur, int color) {
+        float extent = r + strokeWidth / 2f + blur * 2f;
+        int size = Math.max(1, Math.round(extent * 2f));
+        Bitmap bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmp);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(strokeWidth);
+        p.setColor(withAlpha(color, 255));
+        p.setMaskFilter(new BlurMaskFilter(blur, BlurMaskFilter.Blur.NORMAL));
+        c.drawCircle(extent, extent, r, p);
+        return bmp;
     }
 
     private static int withAlpha(int color, int alpha) {

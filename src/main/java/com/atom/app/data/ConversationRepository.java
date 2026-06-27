@@ -46,6 +46,11 @@ public class ConversationRepository {
         return dao.observeAll();
     }
 
+    /** Most-recent messages, capped to limit, for memory-efficient overlay observations. */
+    public LiveData<List<ChatMessage>> observeRecent(int limit) {
+        return dao.observeRecent(limit);
+    }
+
     /** Clears the whole transcript off the main thread. */
     public void clear() {
         AtomDatabase.databaseWriteExecutor.execute(dao::clear);

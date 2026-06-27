@@ -9,7 +9,6 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.graphics.Rect;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -17,15 +16,10 @@ import android.provider.Settings;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.InputMethodManager;
-import android.widget.EditText;
 import android.widget.ImageButton;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
@@ -33,50 +27,31 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.atom.app.di.AppContainer;
-import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
-import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
-import com.atom.domain.action.ResolvedAction;
+import com.atom.app.ui.main.MainInputBarComponent;
+import com.atom.app.ui.main.MainViewModelBinder;
+import com.atom.app.ui.main.SpeechRecognitionCoordinator;
+import com.atom.app.ui.motion.CoreState;
+import com.atom.app.ui.motion.CoreStatePresenter;
+import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
-import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 
 public class MainActivity extends AppCompatActivity {
 
-    // Atom core energy (0 = calm idle, 1 = fully engaged) and glow strength per app state.
-    private static final float CORE_ENERGY_IDLE = 0.0f;       // calm ambient motion
-    private static final float CORE_ENERGY_THINKING = 0.6f;   // working on the request
-    private static final float CORE_ENERGY_LISTENING = 1.0f;  // actively capturing speech
-    private static final float CORE_GLOW_IDLE = 0.35f;       // dim resting glow
-    private static final float CORE_GLOW_ACTIVE = 0.7f;      // brighter while engaged
-    private static final long CORE_GLOW_ANIM_MS = 280;       // glow alpha crossfade
-
-    // Status text crossfade timing.
-    private static final long TEXT_FADE_OUT_MS = 120;
-    private static final long TEXT_FADE_IN_MS = 160;
-
-    // Input bar slide-in/out timing and the fallback travel before first layout.
-    private static final long INPUT_BAR_ANIM_MS = 200;
-    private static final float INPUT_BAR_FALLBACK_SLIDE_DP = 64f;
-
     // Delay before an error message fades back to the idle resting state.
     private static final long ERROR_AUTO_RECOVER_MS = 4000;
-
-    // Let the wake word release the mic before the manual recognizer grabs it.
-    private static final long MIC_HANDOFF_DELAY_MS = 350;
 
     // Saved-instance keys for surviving configuration changes (e.g. rotation).
     private static final String KEY_STATUS = "status_text";
     private static final String KEY_SUB_STATUS = "sub_status_text";
     private static final String KEY_ENERGY = "core_energy";
-    private static final String KEY_GLOW = "core_glow";
 
     private AtomCoreView atomCore;
-    private View coreGlow;
     private ImageButton btnMic, btnSettings, btnHistory, btnKeyboard, btnVolume;
     private TextView statusText, subStatusText, wordmark;
     private ChatViewModel viewModel;
@@ -84,9 +59,8 @@ public class MainActivity extends AppCompatActivity {
     // Shared mic feedback (press-settle + breathing pulse) reused from the overlay.
     private final MicAnimations micAnimations = new MicAnimations();
 
-    private LinearLayout inputBarRoot;
-    private EditText inputEditText;
-    private ImageButton inputSend;
+    private MainInputBarComponent inputBar;
+    private MainViewModelBinder binder;
 
     // True while capturing a spoken confirmation reply, so the transcript is fed to
     // the loop (submitSpokenConfirmation) instead of being dispatched as a new order.
@@ -94,34 +68,22 @@ public class MainActivity extends AppCompatActivity {
 
     private AndroidTextToSpeech tts;
     private AtomPreferences preferences;
-    private AndroidSpeechRecognizer speechRecognizer;
+    private SpeechRecognitionCoordinator recognition;
 
-    // True while a recognition is in flight; lets a tap cancel it and gates error recovery.
-    private boolean isListening;
-
-    // Last applied core state, kept so it can be restored across configuration changes.
-    private float currentEnergy = CORE_ENERGY_IDLE;
-    private float currentGlow = CORE_GLOW_IDLE;
+    // Last applied core energy, kept so it can be restored across configuration changes.
+    private float currentEnergy = CoreStatePresenter.energyFor(CoreState.IDLE);
 
     // Posted after an error to ease the status line back to idle.
     private final Runnable errorRecoverRunnable = this::recoverFromError;
-
-    // Back press collapses the input bar instead of leaving the screen; only enabled while it's open.
-    private final OnBackPressedCallback backCallback = new OnBackPressedCallback(false) {
-        @Override
-        public void handleOnBackPressed() {
-            hideInputBar();
-        }
-    };
 
     // Wake word fired while the app is open: capture with the in-app mic.
     private final BroadcastReceiver wakeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (!isListening
+            if (!recognition.isListening()
                     && checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                             == PackageManager.PERMISSION_GRANTED) {
-                startListening();
+                recognition.start();
             } else {
                 // Can't capture now (already listening / no permission): release the
                 // wake engine immediately instead of letting it wait for the fallback.
@@ -141,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String> micPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
                 if (granted) {
-                    startListening();
+                    recognition.start();
                 } else {
                     onMicPermissionDenied();
                 }
@@ -170,8 +132,8 @@ public class MainActivity extends AppCompatActivity {
         // First-run routing: if onboarding hasn't been completed, hand off to it
         // before inflating the main UI so the user never sees a flash of the home
         // screen. We finish() immediately so back from onboarding leaves the app.
-        AtomPreferences earlyPrefs = new AtomPreferences(this);
-        if (!earlyPrefs.isOnboardingComplete()) {
+        preferences = new AtomPreferences(this);
+        if (!preferences.isOnboardingComplete()) {
             startActivity(new Intent(this, OnboardingActivity.class));
             finish();
             return;
@@ -184,12 +146,10 @@ public class MainActivity extends AppCompatActivity {
         viewModel = new ViewModelProvider(this, new ChatViewModelFactory(appContainer))
                 .get(ChatViewModel.class);
 
-        preferences = new AtomPreferences(this);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
 
         // Initialize UI Components
         atomCore = findViewById(R.id.atom_core_animation);
-        coreGlow = findViewById(R.id.core_glow);
         btnMic = findViewById(R.id.btn_mic);
         btnSettings = findViewById(R.id.btn_settings);
         btnHistory = findViewById(R.id.btn_history);
@@ -199,22 +159,156 @@ public class MainActivity extends AppCompatActivity {
         subStatusText = findViewById(R.id.sub_status_text);
         wordmark = findViewById(R.id.wordmark);
 
-        inputBarRoot = findViewById(R.id.input_bar_root);
-        inputEditText = findViewById(R.id.input_edit_text);
-        inputSend = findViewById(R.id.input_send);
-
-        // Start the atom core in its calm idle state (dim glow, low energy).
-        if (coreGlow != null) {
-            coreGlow.setAlpha(CORE_GLOW_IDLE);
-        }
+        // Start the atom core in its calm idle state (low energy); AtomCoreView owns the glow.
         if (atomCore != null) {
-            atomCore.setEnergy(CORE_ENERGY_IDLE);
+            atomCore.setEnergy(CoreStatePresenter.energyFor(CoreState.IDLE));
         }
 
-        setupObservers();
-        setupInputBar();
+        binder = new MainViewModelBinder(this, viewModel,
+                new MainViewModelBinder.Host() {
+                    @Override
+                    public void showResponse(String response) {
+                        fadeSwap(statusText, response);
+                        fadeSwap(subStatusText, getString(R.string.sub_status_responded));
+                        applyCoreState(CoreState.RESPONDED);
+                        if (preferences.isTtsEnabled()) {
+                            tts.speak(response);
+                        }
+                    }
+
+                    @Override
+                    public void showThinking() {
+                        fadeSwap(statusText, getString(R.string.status_thinking));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
+                        applyCoreState(CoreState.THINKING);
+                    }
+
+                    @Override
+                    public void showError(String error) {
+                        fadeSwap(statusText, getString(R.string.status_error));
+                        fadeSwap(subStatusText,
+                                error != null
+                                        ? error.toUpperCase(java.util.Locale.getDefault())
+                                        : getString(R.string.status_error));
+                        applyCoreState(CoreState.ERROR);
+                        statusText.removeCallbacks(errorRecoverRunnable);
+                        statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
+                    }
+
+                    @Override
+                    public void setInputEnabled(boolean enabled) {
+                        inputBar.setInputEnabled(enabled);
+                    }
+
+                    @Override
+                    public void showOperating() {
+                        fadeSwap(statusText, getString(R.string.automation_operating));
+                        fadeSwap(subStatusText, getString(R.string.automation_operating));
+                        applyCoreState(CoreState.OPERATING);
+                    }
+
+                    @Override
+                    public void onVoiceConfirmationRequested(String question) {
+                        askConfirmationByVoice(question);
+                    }
+                });
+        binder.bind();
+
+        inputBar = new MainInputBarComponent(this, new MainInputBarComponent.Host() {
+            @Override
+            public void onSubmitText(String t) {
+                if (tts != null) tts.stop();
+                dispatchOrder(t);
+            }
+            @Override
+            public void toast(String m) {
+                MainActivity.this.toast(m);
+            }
+        });
 
         requestCallPermissionsIfNeeded();
+
+        recognition = new SpeechRecognitionCoordinator(this, preferences,
+                new SpeechRecognitionCoordinator.Host() {
+                    @Override
+                    public void onListeningStarted() {
+                        if (tts != null) tts.stop();
+                        statusText.removeCallbacks(errorRecoverRunnable);
+                        clearRetryAffordance();
+                        fadeSwap(statusText, getString(R.string.status_listening));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_listening));
+                        applyCoreState(CoreState.LISTENING);
+                        micAnimations.startMicPulse(btnMic);
+                    }
+
+                    @Override
+                    public void onListeningReady() {
+                        fadeSwap(statusText, getString(R.string.status_listening));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_listening));
+                        applyCoreState(CoreState.LISTENING);
+                    }
+
+                    @Override
+                    public void onThinking() {
+                        fadeSwap(statusText, getString(R.string.status_thinking));
+                        fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
+                        micAnimations.stopMicPulse(btnMic);
+                        applyCoreState(CoreState.THINKING);
+                    }
+
+                    @Override
+                    public void onPartialTranscript(String text) {
+                        if (subStatusText != null && text != null && !text.trim().isEmpty()) {
+                            subStatusText.animate().cancel();
+                            subStatusText.setAlpha(1f);
+                            subStatusText.setText(text);
+                        }
+                    }
+
+                    @Override
+                    public void onFinalTranscript(String text) {
+                        // A pending confirmation captures the reply for the loop, not a new order.
+                        if (confirmationCapturing) {
+                            confirmationCapturing = false;
+                            viewModel.submitSpokenConfirmation(text == null ? "" : text);
+                            return;
+                        }
+                        dispatchOrder(text);
+                    }
+
+                    @Override
+                    public void onRecognitionError(String message) {
+                        // A failed confirmation capture submits "no answer" so the loop resumes/aborts.
+                        if (confirmationCapturing) {
+                            confirmationCapturing = false;
+                            viewModel.submitSpokenConfirmation("");
+                            return;
+                        }
+                        int msg = "unavailable".equals(message)
+                                ? R.string.stt_unavailable
+                                : R.string.stt_error;
+                        fadeSwap(statusText, getString(R.string.status_idle));
+                        micAnimations.stopMicPulse(btnMic);
+                        applyCoreState(CoreState.IDLE);
+                        toast(getString(msg));
+                        showRetryAffordance();
+                    }
+
+                    @Override
+                    public void onListeningCancelled() {
+                        // Cancel during a pending confirmation: unblock the waiting loop now
+                        // and abort the held action (never run a destructive action without an
+                        // explicit spoken answer). Without this, the loop would block until the
+                        // timeout and a following mic tap would be misread as the sí/no reply.
+                        if (confirmationCapturing) {
+                            confirmationCapturing = false;
+                            viewModel.submitSpokenConfirmation(ChatViewModel.CANT_ASK);
+                        }
+                        micAnimations.stopMicPulse(btnMic);
+                        applyCoreState(CoreState.IDLE);
+                        fadeSwap(statusText, getString(R.string.status_idle));
+                    }
+                });
 
         btnMic.setOnClickListener(v -> onMicTapped());
 
@@ -232,19 +326,16 @@ public class MainActivity extends AppCompatActivity {
         // Bring back the status line and core state after a configuration change.
         restoreUiState(savedInstanceState);
 
-        // Back collapses the input bar (when open) instead of leaving the screen.
-        getOnBackPressedDispatcher().addCallback(this, backCallback);
-
         // Track mute changes made elsewhere (e.g. the floating bubble).
         preferences.registerChangeListener(muteListener);
 
         btnSettings.setOnClickListener(v ->
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
+                com.atom.app.ui.NavTransitions.start(this, SettingsActivity.class));
 
         btnHistory.setOnClickListener(v ->
-                startActivity(new Intent(MainActivity.this, HistoryActivity.class)));
+                com.atom.app.ui.NavTransitions.start(this, HistoryActivity.class));
 
-        btnKeyboard.setOnClickListener(v -> toggleInputBar());
+        btnKeyboard.setOnClickListener(v -> inputBar.toggle());
 
         btnVolume.setOnClickListener(v -> showVolumeSlider());
 
@@ -259,22 +350,21 @@ public class MainActivity extends AppCompatActivity {
      */
     private void setupQuickActions() {
         findViewById(R.id.chip_timer).setOnClickListener(v ->
-                prefillInput(getString(R.string.chip_phrase_timer)));
+                inputBar.prefill(getString(R.string.chip_phrase_timer)));
         findViewById(R.id.chip_call).setOnClickListener(v ->
-                prefillInput(getString(R.string.chip_phrase_call)));
+                inputBar.prefill(getString(R.string.chip_phrase_call)));
         findViewById(R.id.chip_message).setOnClickListener(v ->
-                prefillInput(getString(R.string.chip_phrase_message)));
+                inputBar.prefill(getString(R.string.chip_phrase_message)));
         findViewById(R.id.chip_wifi).setOnClickListener(v ->
                 dispatchOrder(getString(R.string.chip_phrase_wifi)));
         findViewById(R.id.chip_flashlight).setOnClickListener(v ->
                 dispatchOrder(getString(R.string.chip_phrase_flashlight)));
     }
 
-    /** Opens the input bar pre-filled with a starter phrase, caret at the end. */
-    private void prefillInput(String starter) {
-        showInputBar();
-        inputEditText.setText(starter);
-        inputEditText.setSelection(inputEditText.getText().length());
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (inputBar != null) inputBar.dismissIfTouchOutside(ev);
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override
@@ -284,7 +374,6 @@ public class MainActivity extends AppCompatActivity {
         outState.putString(KEY_STATUS, statusText.getText().toString());
         outState.putString(KEY_SUB_STATUS, subStatusText.getText().toString());
         outState.putFloat(KEY_ENERGY, currentEnergy);
-        outState.putFloat(KEY_GLOW, currentGlow);
     }
 
     /** Restores the status line and core state saved before a configuration change. */
@@ -294,143 +383,10 @@ public class MainActivity extends AppCompatActivity {
         }
         statusText.setText(state.getString(KEY_STATUS, getString(R.string.status_idle)));
         subStatusText.setText(state.getString(KEY_SUB_STATUS, getString(R.string.sub_status_tap_mic)));
-        applyCoreState(state.getFloat(KEY_ENERGY, CORE_ENERGY_IDLE),
-                state.getFloat(KEY_GLOW, CORE_GLOW_IDLE));
+        applyCoreState(state.getFloat(KEY_ENERGY, CoreStatePresenter.energyFor(CoreState.IDLE)));
     }
 
-    private void setupInputBar() {
-        // Accent focus border: activate the pill background's focused state.
-        inputEditText.setOnFocusChangeListener((v, hasFocus) ->
-                inputBarRoot.setActivated(hasFocus));
-
-        // Send via the trailing accent disc.
-        inputSend.setOnClickListener(v -> sendFromInputBar());
-
-        // Keep send disabled/dimmed until there's non-whitespace text.
-        InputBarUtils.setSendEnabled(inputSend, false);
-        inputEditText.addTextChangedListener(InputBarUtils.enableSendOnText(inputSend));
-
-        // IME "Send" action mirrors the send button.
-        inputEditText.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_SEND) {
-                sendFromInputBar();
-                return true;
-            }
-            return false;
-        });
-    }
-
-    /**
-     * Dismisses the input bar when the user taps anywhere outside of it. We check on the
-     * initial ACTION_DOWN: if the bar is visible and the touch lands outside its on-screen
-     * bounds, hide it (which clears focus + hides the keyboard + collapses the bar). We then
-     * still pass the event to super so the tap that fell outside (mic, keyboard, volume, etc.)
-     * is delivered normally rather than being swallowed.
-     */
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (ev.getAction() == MotionEvent.ACTION_DOWN
-                && inputBarRoot != null
-                && inputBarRoot.getVisibility() == View.VISIBLE) {
-            Rect bounds = new Rect();
-            inputBarRoot.getGlobalVisibleRect(bounds);
-            if (!bounds.contains((int) ev.getRawX(), (int) ev.getRawY())) {
-                hideInputBar();
-            }
-        }
-        return super.dispatchTouchEvent(ev);
-    }
-
-    /** Shows or hides the input bar, managing focus and the soft keyboard. */
-    private void toggleInputBar() {
-        if (inputBarRoot.getVisibility() == View.VISIBLE) {
-            hideInputBar();
-        } else {
-            showInputBar();
-        }
-    }
-
-    private void showInputBar() {
-        // Slide up + fade in instead of popping into place.
-        inputBarRoot.setVisibility(View.VISIBLE);
-        inputBarRoot.setAlpha(0f);
-        inputBarRoot.setTranslationY(inputBarSlideDistance());
-        inputBarRoot.animate()
-                .translationY(0f)
-                .alpha(1f)
-                .setDuration(INPUT_BAR_ANIM_MS)
-                .start();
-        backCallback.setEnabled(true);
-        inputEditText.requestFocus();
-        // Post the IME show to the next frame so the adjustResize layout pass (which lifts the
-        // bar above the keyboard) settles independently of the slide-in, avoiding a first-open
-        // double-move where the resting position shifts mid-animation.
-        inputEditText.post(() -> {
-            InputMethodManager imm =
-                    (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                imm.showSoftInput(inputEditText, InputMethodManager.SHOW_IMPLICIT);
-            }
-        });
-    }
-
-    private void hideInputBar() {
-        InputMethodManager imm =
-                (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        if (imm != null) {
-            imm.hideSoftInputFromWindow(inputEditText.getWindowToken(), 0);
-        }
-        inputEditText.clearFocus();
-        backCallback.setEnabled(false);
-        // Slide down + fade out, then actually collapse the view and reset it so the
-        // next show() starts from a clean resting transform.
-        inputBarRoot.animate()
-                .translationY(inputBarSlideDistance())
-                .alpha(0f)
-                .setDuration(INPUT_BAR_ANIM_MS)
-                .withEndAction(() -> {
-                    inputBarRoot.setVisibility(View.GONE);
-                    inputBarRoot.setTranslationY(0f);
-                    inputBarRoot.setAlpha(1f);
-                })
-                .start();
-    }
-
-    /** Vertical travel for the input-bar slide; its measured height, or a fallback. */
-    private float inputBarSlideDistance() {
-        int height = inputBarRoot.getHeight();
-        if (height > 0) {
-            return height;
-        }
-        // First show happens before the bar has ever been laid out (height 0).
-        return INPUT_BAR_FALLBACK_SLIDE_DP * getResources().getDisplayMetrics().density;
-    }
-
-    /** Validates and dispatches the typed message, then collapses the bar. */
-    private void sendFromInputBar() {
-        String text = inputEditText.getText().toString().trim();
-        if (text.isEmpty()) {
-            toast(getString(R.string.input_empty));
-            return;
-        }
-        inputSend.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-        // Silence any reply still being spoken so it doesn't talk over the next turn.
-        if (tts != null) {
-            tts.stop();
-        }
-        // Typed input is treated as an ORDER: the backend decides whether it is
-        // an executable action or a plain conversational reply.
-        dispatchOrder(text);
-        inputEditText.setText("");
-        hideInputBar();
-    }
-
-    /**
-     * Single entry point for dispatching an order (typed or spoken). The ViewModel
-     * owns transcript persistence now (it records the user turn at the event source,
-     * so it can't be duplicated by a replayed UI observer); this stays as the shared
-     * chokepoint for the keyboard, chip, and voice paths.
-     */
+    /** Shared dispatch point for keyboard, chip, and voice order paths. */
     private void dispatchOrder(String text) {
         viewModel.sendOrder(text);
     }
@@ -455,14 +411,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         // Tapping mid-listen cancels the in-flight recognition.
-        if (isListening) {
-            tearDownRecognizer();
+        if (recognition.isListening()) {
+            recognition.cancel();
             fadeSwap(subStatusText, getString(R.string.sub_status_tap_mic));
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED) {
-            startListening();
+            recognition.start();
         } else {
             micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO);
         }
@@ -492,19 +448,6 @@ public class MainActivity extends AppCompatActivity {
                 Uri.fromParts("package", getPackageName(), null)));
     }
 
-    /** Stops any active recognition and eases the core back to idle. */
-    private void tearDownRecognizer() {
-        if (speechRecognizer != null) {
-            // AndroidSpeechRecognizer has no stopListening(); destroy() is its stop path.
-            speechRecognizer.destroy();
-            speechRecognizer = null;
-        }
-        isListening = false;
-        micAnimations.stopMicPulse(btnMic);
-        applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
-        fadeSwap(statusText, getString(R.string.status_idle));
-    }
-
     /** Flips the persisted mute flag, refreshes the FAB, and stops capture if muting mid-listen. */
     private void toggleMicMuted() {
         boolean muted = !preferences.isMicMuted();
@@ -512,8 +455,8 @@ public class MainActivity extends AppCompatActivity {
         applyMicMutedState(muted);
         btnMic.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
         MicAnimations.playPressSettle(btnMic);
-        if (muted && isListening) {
-            tearDownRecognizer();
+        if (muted && recognition.isListening()) {
+            recognition.cancel();
         }
         fadeSwap(subStatusText, getString(
                 muted ? R.string.sub_status_muted : R.string.sub_status_tap_mic));
@@ -529,105 +472,6 @@ public class MainActivity extends AppCompatActivity {
         // Desaturate/dim the core so a muted mic doesn't look like plain idle.
         if (atomCore != null) {
             atomCore.setMuted(muted);
-        }
-    }
-
-    private void startListening() {
-        if (speechRecognizer == null) {
-            speechRecognizer = new AndroidSpeechRecognizer(this, new SttListener());
-        }
-        isListening = true;
-        // Silence any reply still being spoken before capturing the next one.
-        if (tts != null) {
-            tts.stop();
-        }
-        // Drop any pending error recovery now that we're active again.
-        statusText.removeCallbacks(errorRecoverRunnable);
-        // Clear a leftover retry hint so the sub-status is plain again while listening.
-        clearRetryAffordance();
-        fadeSwap(statusText, getString(R.string.status_listening));
-        fadeSwap(subStatusText, getString(R.string.sub_status_listening));
-        // Drive the atom core brighter/faster and start the listening mic pulse.
-        applyCoreState(CORE_ENERGY_LISTENING, CORE_GLOW_ACTIVE);
-        micAnimations.startMicPulse(btnMic);
-        // The always-on wake word holds the mic; ask it to release first, then give
-        // it a moment to free the AudioRecord before we start capturing.
-        if (preferences.isWakeWordEnabled()) {
-            sendBroadcast(new Intent(WakeWordService.ACTION_WAKE_PAUSE).setPackage(getPackageName()));
-            statusText.postDelayed(() -> {
-                if (isListening && speechRecognizer != null) {
-                    speechRecognizer.startListening();
-                }
-            }, MIC_HANDOFF_DELAY_MS);
-        } else {
-            speechRecognizer.startListening();
-        }
-    }
-
-    /** Routes recognizer callbacks to UI state and dispatches the transcript as an order. */
-    private final class SttListener implements AndroidSpeechRecognizer.Listener {
-        @Override
-        public void onReadyForSpeech() {
-            fadeSwap(statusText, getString(R.string.status_listening));
-            fadeSwap(subStatusText, getString(R.string.sub_status_listening));
-            applyCoreState(CORE_ENERGY_LISTENING, CORE_GLOW_ACTIVE);
-        }
-
-        @Override
-        public void onEndOfSpeech() {
-            isListening = false;
-            fadeSwap(statusText, getString(R.string.status_thinking));
-            fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
-            // Speech captured: settle the mic pulse and ease the core to thinking.
-            micAnimations.stopMicPulse(btnMic);
-            applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
-        }
-
-        @Override
-        public void onPartialResult(String text) {
-            // Live transcript: set directly (no fadeSwap) so the fast, frequent
-            // partials don't queue janky crossfades. Cleared on the next state change.
-            if (subStatusText != null && text != null && !text.trim().isEmpty()) {
-                subStatusText.animate().cancel();
-                subStatusText.setAlpha(1f);
-                subStatusText.setText(text);
-            }
-        }
-
-        @Override
-        public void onResult(String text) {
-            notifyWakeDone();
-            // A pending confirmation captures the reply for the loop, not a new order.
-            if (confirmationCapturing) {
-                confirmationCapturing = false;
-                viewModel.submitSpokenConfirmation(text == null ? "" : text);
-                return;
-            }
-            // Speech is treated as an ORDER, same as typed input (persist + dispatch).
-            dispatchOrder(text);
-        }
-
-        @Override
-        public void onError(String message) {
-            isListening = false;
-            notifyWakeDone();
-            if (confirmationCapturing) {
-                confirmationCapturing = false;
-                viewModel.submitSpokenConfirmation("");
-                return;
-            }
-            int msg = "unavailable".equals(message)
-                    ? R.string.stt_unavailable
-                    : R.string.stt_error;
-            fadeSwap(statusText, getString(R.string.status_idle));
-            // Recognition failed: stop the pulse and return the core to its calm idle.
-            micAnimations.stopMicPulse(btnMic);
-            applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
-            toast(getString(msg));
-            // Offer a subtle, on-brand retry: the sub-status becomes a tappable
-            // "Tap to try again" that re-runs the listen path. Cleared on the next
-            // successful listen (startListening resets the sub-status + tap handler).
-            showRetryAffordance();
         }
     }
 
@@ -711,15 +555,15 @@ public class MainActivity extends AppCompatActivity {
         if (tts != null) {
             tts.shutdown();
         }
-        if (speechRecognizer != null) {
-            speechRecognizer.destroy();
+        if (recognition != null) {
+            recognition.destroy();
         }
         super.onDestroy();
     }
 
     /** Eases the status line back to its resting state after an error, unless we're listening. */
     private void recoverFromError() {
-        if (isListening) {
+        if (recognition != null && recognition.isListening()) {
             return;
         }
         fadeSwap(statusText, getString(R.string.status_idle));
@@ -732,37 +576,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Crossfades a status TextView to new text: fade out, swap the text, fade back in.
-     * Replaces the previous abrupt {@code setText} swaps so state changes read smoothly.
+     * Speaks a confirmation question out loud, then re-opens the mic to capture the
+     * user's spoken reply and hands it to the loop via {@link ChatViewModel#submitSpokenConfirmation}.
+     * Hands-free: no tap dialog. Signals "couldn't ask" when the mic isn't available.
      */
-    private void fadeSwap(TextView view, CharSequence text) {
-        if (view == null) {
+    private void askConfirmationByVoice(String question) {
+        fadeSwap(statusText, question);
+        if (preferences.isMicMuted()
+                || checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                        != PackageManager.PERMISSION_GRANTED) {
+            // Cannot capture by voice -> signal "couldn't ask" so the loop aborts.
+            viewModel.submitSpokenConfirmation(ChatViewModel.CANT_ASK);
             return;
         }
-        view.animate()
-                .alpha(0f)
-                .setDuration(TEXT_FADE_OUT_MS)
-                .withEndAction(() -> {
-                    view.setText(text);
-                    view.animate().alpha(1f).setDuration(TEXT_FADE_IN_MS).start();
-                })
-                .start();
+        confirmationCapturing = true;
+        // Speak the question (local TTS done-callback) THEN open the mic so Atom
+        // doesn't hear its own voice; fall back to a short delay when TTS is off.
+        Runnable openMic = () -> { if (confirmationCapturing) recognition.start(); };
+        if (tts != null && preferences.isTtsEnabled()) {
+            tts.speak(question, openMic);
+        } else {
+            statusText.postDelayed(openMic, 300L);
+        }
     }
 
-    /**
-     * Drives the atom core's energy level and the surrounding glow alpha to reflect
-     * the current app state (idle / listening / thinking). The core eases its own
-     * energy internally and the glow alpha is animated, so transitions between states
-     * feel continuous rather than stepped.
-     */
-    private void applyCoreState(float energy, float glowAlpha) {
+    /** Crossfades a status TextView to new text via fade-out, swap, fade-in. */
+    private void fadeSwap(TextView view, CharSequence text) {
+        StatusCrossfader.swap(view, text);
+    }
+
+    /** Drives the core to a semantic UI state via the shared CoreStatePresenter. */
+    private void applyCoreState(CoreState state) {
+        applyCoreState(CoreStatePresenter.energyFor(state));
+    }
+
+    /** Low-level energy apply; also used by the saved-state restore path. AtomCoreView's
+     *  own breathing glow brightens with energy, so there is no separate glow View to drive. */
+    private void applyCoreState(float energy) {
         currentEnergy = energy;
-        currentGlow = glowAlpha;
         if (atomCore != null) {
             atomCore.setEnergy(energy);
-        }
-        if (coreGlow != null) {
-            coreGlow.animate().alpha(glowAlpha).setDuration(CORE_GLOW_ANIM_MS).start();
         }
     }
 
@@ -787,104 +640,4 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupObservers() {
-        // When the back-end responds
-        viewModel.getChatResponse().observe(this, response -> {
-            // Persistence happens in the ViewModel at the event source; this observer
-            // only renders the reply. (A retained LiveData replays its last value to
-            // each new observer, so saving here would duplicate the last turn on every
-            // Activity re-creation — e.g. rotation or the locale-switch recreate.)
-            fadeSwap(statusText, response);
-            fadeSwap(subStatusText, getString(R.string.sub_status_responded));
-            // Reply landed: ease the core back to its calm idle with a settle pulse.
-            applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
-            // Speak the assistant reply aloud when enabled in Settings.
-            if (preferences.isTtsEnabled()) {
-                tts.speak(response);
-            }
-        });
-
-        // When waiting for the back-end
-        viewModel.getIsLoading().observe(this, isLoading -> {
-            if (isLoading) {
-                fadeSwap(statusText, getString(R.string.status_thinking));
-                fadeSwap(subStatusText, getString(R.string.sub_status_thinking));
-                applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
-            }
-        });
-
-        // When something goes wrong
-        viewModel.getErrorMessage().observe(this, error -> {
-            fadeSwap(statusText, getString(R.string.status_error));
-            fadeSwap(subStatusText,
-                    error != null ? error.toUpperCase(java.util.Locale.getDefault()) : getString(R.string.status_error));
-            applyCoreState(CORE_ENERGY_IDLE, CORE_GLOW_IDLE);
-            // Don't leave the error on screen: ease back to idle after a short delay.
-            statusText.removeCallbacks(errorRecoverRunnable);
-            statusText.postDelayed(errorRecoverRunnable, ERROR_AUTO_RECOVER_MS);
-        });
-
-        // Held/destructive action mid-loop: speak the question and capture the spoken
-        // "sí/no" hands-free (the loop thread waits for the transcript).
-        viewModel.getVoiceConfirmationRequested().observe(this, e -> {
-            String question = e.getContentIfNotHandled();
-            if (question != null) {
-                askConfirmationByVoice(question);
-            }
-        });
-
-        // Accessibility-powered actions need the service enabled first.
-        viewModel.getAccessibilityRequired().observe(this,
-                e -> promptEnableAccessibility(e.getContentIfNotHandled()));
-
-        // While the loop runs, freeze input and show the operating indicator.
-        viewModel.getAutomationActive().observe(this, active -> {
-            boolean operating = Boolean.TRUE.equals(active);
-            inputEditText.setEnabled(!operating);
-            if (operating) {
-                fadeSwap(statusText, getString(R.string.automation_operating));
-                fadeSwap(subStatusText, getString(R.string.automation_operating));
-                applyCoreState(CORE_ENERGY_THINKING, CORE_GLOW_ACTIVE);
-            }
-        });
-    }
-
-    /** Prompts the user to enable Atom's accessibility service, then opens Settings. */
-    private void promptEnableAccessibility(ResolvedAction action) {
-        if (action == null) {
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.accessibility_prompt_title)
-                .setMessage(R.string.accessibility_prompt_message)
-                .setPositiveButton(R.string.accessibility_prompt_open,
-                        (d, w) -> startActivity(PermissionCoordinator.accessibilitySettingsIntent()))
-                .setNegativeButton(R.string.action_confirm_no, null)
-                .show();
-    }
-
-    /**
-     * Speaks a confirmation question out loud, then re-opens the mic to capture the
-     * user's spoken reply and hands it to the loop via {@link ChatViewModel#submitSpokenConfirmation}.
-     * Hands-free: no tap dialog. Falls back to "no answer" when the mic isn't available.
-     */
-    private void askConfirmationByVoice(String question) {
-        fadeSwap(statusText, question);
-        if (preferences.isMicMuted()
-                || checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                        != PackageManager.PERMISSION_GRANTED) {
-            // Cannot capture by voice -> signal "couldn't ask" so the loop aborts.
-            viewModel.submitSpokenConfirmation(ChatViewModel.CANT_ASK);
-            return;
-        }
-        confirmationCapturing = true;
-        // Speak the question (local TTS done-callback) THEN open the mic so Atom
-        // doesn't hear its own voice; fall back to a short delay when TTS is off.
-        Runnable openMic = () -> { if (confirmationCapturing) startListening(); };
-        if (tts != null && preferences.isTtsEnabled()) {
-            tts.speak(question, openMic);
-        } else {
-            statusText.postDelayed(openMic, 300L);
-        }
-    }
 }

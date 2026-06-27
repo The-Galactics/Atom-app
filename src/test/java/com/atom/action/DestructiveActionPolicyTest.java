@@ -85,19 +85,19 @@ class DestructiveActionPolicyTest {
     }
 
     @Test
-    @DisplayName("MAKE_CALL always requires confirmation by type, with benign params")
-    void flagsMakeCallByType() {
+    @DisplayName("MAKE_CALL is not locally gated: the backend handshake confirms it")
+    void doesNotGateMakeCallByType() {
         ResolvedAction call = new ResolvedAction(
                 ActionType.MAKE_CALL, Map.of("target", "Mom"), "", 1.0f, false);
-        assertThat(policy.requiresConfirmation(call)).isTrue();
+        assertThat(policy.requiresConfirmation(call)).isFalse();
     }
 
     @Test
-    @DisplayName("SEND_MESSAGE always requires confirmation by type, with benign params")
-    void flagsSendMessageByType() {
+    @DisplayName("SEND_MESSAGE is not locally gated: the backend handshake confirms it")
+    void doesNotGateSendMessageByType() {
         ResolvedAction msg = new ResolvedAction(
                 ActionType.SEND_MESSAGE, Map.of("recipient", "Ana", "body", "hola"), "", 1.0f, false);
-        assertThat(policy.requiresConfirmation(msg)).isTrue();
+        assertThat(policy.requiresConfirmation(msg)).isFalse();
     }
 
     @Test

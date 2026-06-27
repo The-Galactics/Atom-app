@@ -59,6 +59,7 @@ import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
+import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.domain.action.DestructiveActionPolicy;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
@@ -87,6 +88,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final float PUSH_OFF_FRACTION = 0.4f;    // drag this far past an edge to hide
     private static final float HANDLE_IDLE_ALPHA = 0.5f;    // dimmed handle when untouched
     private static final long STATUS_RESET_MS = 4000;       // settle status back to the resting hint
+
+    // The panel is height-capped (overlay_transcript_max_height); a recent-window keeps
+    // the always-on service from retaining/diffing the entire history.
+    private static final int OVERLAY_TRANSCRIPT_LIMIT = 50;
 
     private WindowManager windowManager;
     private LayoutInflater inflater;
@@ -150,6 +155,25 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private final android.os.Handler mainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
 
+    // Drag coalescing: a touch stream emits ACTION_MOVE faster than the display refreshes,
+    // so a per-event updateViewLayout does redundant relayouts. Instead we mutate the
+    // params synchronously and schedule a single Choreographer-aligned flush per frame, so
+    // the window manager is told the new position at most once per vsync (Epic 3.1).
+    private boolean bubbleLayoutScheduled;
+    private final Runnable bubbleLayoutFlush = () -> {
+        bubbleLayoutScheduled = false;
+        if (bubbleView != null && bubbleView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(bubbleView, bubbleParams);
+        }
+    };
+    private boolean handleLayoutScheduled;
+    private final Runnable handleLayoutFlush = () -> {
+        handleLayoutScheduled = false;
+        if (handleView != null && handleView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(handleView, handleParams);
+        }
+    };
+
     // Keeps the panel mic icon in sync when mute is toggled from the main screen.
     private final SharedPreferences.OnSharedPreferenceChangeListener muteListener =
             (sp, key) -> {
@@ -166,7 +190,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (panelView != null) {
             TextView status = panelView.findViewById(R.id.overlay_status);
             if (status != null && status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_panel_hint);
+                StatusCrossfader.swap(status, getString(R.string.overlay_panel_hint));
             }
         }
     };
@@ -196,7 +220,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         preferences.registerChangeListener(muteListener);
         seedBubblePosition(); // restore last resting position on restart
         // Observe transcript for the whole service lifetime; removed in onDestroy.
-        transcriptSource = conversationRepository.observeAll();
+        transcriptSource = conversationRepository.observeRecent(OVERLAY_TRANSCRIPT_LIMIT);
         transcriptSource.observeForever(transcriptObserver);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
@@ -458,6 +482,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     // The handle drags around the screen like the bubble; a tap (no drag) restores it.
+    /** Schedules at most one bubble relayout per frame; coalesces a burst of ACTION_MOVEs. */
+    private void scheduleBubbleLayout() {
+        if (bubbleLayoutScheduled || bubbleView == null) {
+            return;
+        }
+        bubbleLayoutScheduled = true;
+        bubbleView.postOnAnimation(bubbleLayoutFlush);
+    }
+
+    /** Schedules at most one handle relayout per frame; coalesces a burst of ACTION_MOVEs. */
+    private void scheduleHandleLayout() {
+        if (handleLayoutScheduled || handleView == null) {
+            return;
+        }
+        handleLayoutScheduled = true;
+        handleView.postOnAnimation(handleLayoutFlush);
+    }
+
     private final class HandleTouchListener implements View.OnTouchListener {
         private int initialX, initialY;
         private float touchX, touchY;
@@ -484,7 +526,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     }
                     handleParams.x = initialX + dx;
                     handleParams.y = initialY + dy;
-                    windowManager.updateViewLayout(handleView, handleParams);
+                    scheduleHandleLayout();
                     return true;
                 case MotionEvent.ACTION_UP:
                     if (dragging) {
@@ -661,7 +703,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     }
                     bubbleParams.x = initialX + dx;
                     bubbleParams.y = initialY + dy;
-                    windowManager.updateViewLayout(bubbleView, bubbleParams);
+                    scheduleBubbleLayout();
                     if (dragging) {
                         updateDismissHighlight();
                     }
@@ -817,7 +859,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             applyOverlayMicMuted(mic, muted);
             v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             MicAnimations.playPressSettle(mic);
-            status.setText(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint);
+            StatusCrossfader.swap(status,
+                    getString(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint));
             return true;
         });
 
@@ -859,7 +902,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void dispatchPrompt(EditText editText, TextView status) {
         String text = editText.getText().toString().trim();
         if (text.isEmpty()) {
-            status.setText(R.string.input_empty);
+            StatusCrossfader.swap(status, getString(R.string.input_empty));
             return;
         }
         // Silence any reply still being spoken so it doesn't talk over the next turn.
@@ -867,7 +910,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             tts.stop();
         }
         status.removeCallbacks(statusResetRunnable);
-        status.setText(R.string.overlay_sending);
+        StatusCrossfader.swap(status, getString(R.string.overlay_sending));
         editText.setText("");
         handlePrompt(text, status);
     }
@@ -890,7 +933,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         commandRepository.recognize(prompt, new CommandRepository.CommandCallback() {
             @Override
             public void onResolved(ResolvedAction action) {
-                if (!action.isExecutable()) {
+                // A held action (NONE turn with awaitingConfirmation) is still an order:
+                // it must enter the autonomous loop so the voice gate speaks the question
+                // and captures the spoken sí/no. Only true non-executable turns go to chat.
+                if (!action.isExecutable() && !action.awaitingConfirmation()) {
                     askAtom(prompt, status, null);
                     return;
                 }
@@ -908,7 +954,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             @Override
             public void onError(String error) {
                 if (status.isAttachedToWindow()) {
-                    status.setText(error);
+                    StatusCrossfader.swap(status, error);
                     scheduleStatusReset(status);
                 }
             }
@@ -967,7 +1013,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      */
     private void promptEnableAccessibility(TextView status) {
         if (status.isAttachedToWindow()) {
-            status.setText(R.string.action_accessibility_disabled);
+            StatusCrossfader.swap(status, getString(R.string.action_accessibility_disabled));
             scheduleStatusReset(status);
         }
         startActivity(PermissionCoordinator.accessibilitySettingsIntent()
@@ -1065,13 +1111,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void startVoiceCapture(TextView status, View mic) {
         // Respect the app-wide mute: a muted mic can't dictate from the bubble either.
         if (preferences.isMicMuted()) {
-            status.setText(R.string.mic_muted_hint);
+            StatusCrossfader.swap(status, getString(R.string.mic_muted_hint));
             failConfirmationCapture();
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            status.setText(R.string.overlay_mic_denied);
+            StatusCrossfader.swap(status, getString(R.string.overlay_mic_denied));
             failConfirmationCapture();
             return;
         }
@@ -1152,14 +1198,17 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         @Override
         public void onReadyForSpeech() {
             if (status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_listening);
+                StatusCrossfader.swap(status, getString(R.string.overlay_listening));
             }
         }
 
         @Override
         public void onPartialResult(String text) {
-            // Live transcript in the overlay status line as the user speaks.
+            // Live transcript: set directly (no crossfade) so the fast, frequent
+            // partials don't queue janky crossfades. Mirrors MainActivity.onPartialResult.
             if (status.isAttachedToWindow() && text != null && !text.trim().isEmpty()) {
+                status.animate().cancel();
+                status.setAlpha(1f);
                 status.setText(text);
             }
         }
@@ -1168,7 +1217,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         public void onEndOfSpeech() {
             micAnimations.stopMicPulse(mic);
             if (status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_thinking);
+                StatusCrossfader.swap(status, getString(R.string.overlay_thinking));
             }
         }
 
@@ -1185,7 +1234,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             }
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
-                    status.setText(R.string.overlay_voice_error);
+                    StatusCrossfader.swap(status, getString(R.string.overlay_voice_error));
                     scheduleStatusReset(status);
                 }
                 return;
@@ -1206,9 +1255,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             if (!status.isAttachedToWindow()) {
                 return;
             }
-            status.setText("unavailable".equals(message)
+            StatusCrossfader.swap(status, getString("unavailable".equals(message)
                     ? R.string.overlay_voice_unavailable
-                    : R.string.overlay_voice_error);
+                    : R.string.overlay_voice_error));
             scheduleStatusReset(status);
         }
     }
@@ -1231,7 +1280,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         // Record Atom's reply in the shared transcript before showing/speaking it.
         conversationRepository.saveAssistantMessage(text);
         if (status != null && status.isAttachedToWindow()) {
-            status.setText(text);
+            StatusCrossfader.swap(status, text);
         }
         if (text == null || text.trim().isEmpty() || !preferences.isTtsEnabled()) {
             return;
@@ -1260,7 +1309,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             public void onError(String error) {
                 micAnimations.stopMicPulse(mic);
                 if (status.isAttachedToWindow()) {
-                    status.setText(error);
+                    StatusCrossfader.swap(status, error);
                     scheduleStatusReset(status);
                 }
             }
