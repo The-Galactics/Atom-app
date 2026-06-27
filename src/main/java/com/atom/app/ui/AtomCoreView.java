@@ -120,6 +120,17 @@ public class AtomCoreView extends View {
     private long lastFrameMs = 0;
     private float cx, cy, radius;
 
+    private MotionProfile motionProfile = MotionProfile.BREATHE;
+    // GATHER eases orbits inward; SCAN promotes one electron to a bright directed sweep.
+    private float gather = 0f;           // 0 = normal radii, 1 = fully gathered (~12% inward)
+    private float gatherTarget = 0f;
+    private boolean scan = false;
+    // One-shot transients integrated into the render loop (no second animation system).
+    private long bloomStartMs = 0;       // 0 = inactive
+    private long shudderStartMs = 0;     // 0 = inactive
+    private static final long BLOOM_MS = 450;
+    private static final long SHUDDER_MS = 350;
+
     // Vsync-aligned re-draw used to throttle the idle loop to ~30fps.
     private final Runnable invalidateFrame = this::invalidate;
 
@@ -183,8 +194,22 @@ public class AtomCoreView extends View {
         invalidate();
     }
 
-    private void setMotionProfile(MotionProfile profile) { /* implemented in Task 5 */ }
-    public void playTransient(Transient t) { /* implemented in Task 5 */ }
+    private void setMotionProfile(MotionProfile profile) {
+        motionProfile = profile;
+        gatherTarget = profile == MotionProfile.GATHER ? 1f : 0f;
+        scan = profile == MotionProfile.SCAN;
+        scheduleNextFrame();
+    }
+
+    public void playTransient(Transient t) {
+        long now = AnimationUtils.currentAnimationTimeMillis();
+        if (t == Transient.BLOOM) {
+            bloomStartMs = now;
+        } else if (t == Transient.SHUDDER) {
+            shudderStartMs = now;
+        }
+        scheduleNextFrame();
+    }
 
     /**
      * Mutes the core's look: when muted it renders near-grayscale and dimmed so the
@@ -240,7 +265,8 @@ public class AtomCoreView extends View {
         if (!isAttachedToWindow() || getWindowVisibility() != VISIBLE || !isShown()) {
             return;
         }
-        if (targetEnergy == 0f && energy < 0.01f) {
+        boolean transientActive = bloomStartMs != 0 || shudderStartMs != 0;
+        if (targetEnergy == 0f && energy < 0.01f && gather < 0.01f && !transientActive) {
             postOnAnimationDelayed(invalidateFrame, IDLE_FRAME_DELAY_MS);
         } else {
             postOnAnimationDelayed(invalidateFrame, ACTIVE_FRAME_DELAY_MS);
@@ -336,6 +362,7 @@ public class AtomCoreView extends View {
 
         // Ease energy toward its target for smooth idle <-> listening transitions.
         energy += (targetEnergy - energy) * Math.min(1f, dt * 4f);
+        gather += (gatherTarget - gather) * Math.min(1f, dt * 4f);
 
         float speed = 0.5f + energy * 1.15f;
         phase += dt * speed;
@@ -343,12 +370,25 @@ public class AtomCoreView extends View {
         double breathe = Math.sin(phase * 1.15);          // slow -1..1 breathing
         float pulse = (float) (1.0 + 0.045 * breathe + 0.03 * energy);
 
+        float shudder = transientProgress(shudderStartMs, SHUDDER_MS);
+        canvas.save();
+        if (shudder > 0f) {
+            float dx = (float) (radius * 0.03f * shudder * Math.sin(phase * 60));
+            canvas.translate(dx, 0);
+        }
+
         drawBackgroundGlow(canvas, pulse);
         drawAuraRings(canvas);
         drawOrbitsAndElectrons(canvas, false);   // orbits + electrons passing behind
         drawMainRing(canvas, pulse);
         drawNucleus(canvas, pulse);
         drawOrbitsAndElectrons(canvas, true);    // electrons passing in front
+
+        canvas.restore();
+
+        long nowMs = AnimationUtils.currentAnimationTimeMillis();
+        if (bloomStartMs != 0 && nowMs - bloomStartMs >= BLOOM_MS) bloomStartMs = 0;
+        if (shudderStartMs != 0 && nowMs - shudderStartMs >= SHUDDER_MS) shudderStartMs = 0;
 
         scheduleNextFrame();
     }
@@ -398,8 +438,10 @@ public class AtomCoreView extends View {
         float nr = radius * 0.15f;
 
         // Soft bloom behind the nucleus (pre-rasterized; scaled by pulse, brightness by energy).
-        bloomPaint.setAlpha((int) (110 + 110 * energy));
-        blitBloom(canvas, nucleusGlowBmp, cx, cy, nucleusGlowExtent * pulse);
+        float bloom = transientProgress(bloomStartMs, BLOOM_MS); // 1 -> 0 over BLOOM_MS, else 0
+        float bloomScale = 1f + 0.35f * bloom;
+        bloomPaint.setAlpha((int) Math.min(255, (110 + 110 * energy) + 145 * bloom));
+        blitBloom(canvas, nucleusGlowBmp, cx, cy, nucleusGlowExtent * pulse * bloomScale);
 
         // Gradient body.
         canvas.save();
@@ -421,8 +463,9 @@ public class AtomCoreView extends View {
      * draws those currently on the near side of the nucleus (and vice versa).
      */
     private void drawOrbitsAndElectrons(Canvas canvas, boolean front) {
-        float orbRx = radius * 0.64f;
-        float orbRy = radius * 0.26f;
+        float gatherScale = 1f - 0.12f * gather;
+        float orbRx = radius * 0.64f * gatherScale;
+        float orbRy = radius * 0.26f * gatherScale;
 
         for (int i = 0; i < 3; i++) {
             if (!front) {
@@ -456,7 +499,8 @@ public class AtomCoreView extends View {
             bloomPaint.setAlpha((int) (130 * depth));
             blitBloom(canvas, electronGlowBmp, px, py, electronGlowExtent * depth);
 
-            electronPaint.setColor(withAlpha(accentBright, 255));
+            int electronAlpha = scan ? (i == 0 ? 255 : 90) : 255;
+            electronPaint.setColor(withAlpha(accentBright, electronAlpha));
             canvas.drawCircle(px, py, er, electronPaint);
         }
     }
@@ -506,5 +550,17 @@ public class AtomCoreView extends View {
 
     private static float lerp(float a, float b, float t) {
         return a + (b - a) * t;
+    }
+
+    /** Returns a 1->0 decay for an active one-shot, or 0 when inactive/elapsed. */
+    private float transientProgress(long startMs, long durationMs) {
+        if (startMs == 0) {
+            return 0f;
+        }
+        long elapsed = AnimationUtils.currentAnimationTimeMillis() - startMs;
+        if (elapsed >= durationMs) {
+            return 0f;
+        }
+        return 1f - (float) elapsed / durationMs;
     }
 }
