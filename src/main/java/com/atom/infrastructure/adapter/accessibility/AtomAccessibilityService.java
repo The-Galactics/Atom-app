@@ -69,8 +69,8 @@ public class AtomAccessibilityService extends AccessibilityService implements
     private static volatile AtomAccessibilityService instance;
 
     private volatile long lastMutationAtMs = 0L;
-    private com.atom.infrastructure.adapter.accessibility.capture.ResilientScreenCapturer capturer;
-    private com.atom.infrastructure.adapter.accessibility.oem.OemCompatibilityAdapter oemAdapter;
+    private volatile com.atom.infrastructure.adapter.accessibility.capture.ResilientScreenCapturer capturer;
+    private volatile com.atom.infrastructure.adapter.accessibility.oem.OemCompatibilityAdapter oemAdapter;
 
     /** The running service, or {@code null} when the user has not enabled it. */
     @Nullable
@@ -91,19 +91,33 @@ public class AtomAccessibilityService extends AccessibilityService implements
             return;
         }
         instance = this;
-        com.atom.infrastructure.adapter.accessibility.oem.PropertyReader props =
-                new com.atom.infrastructure.adapter.accessibility.oem.SystemPropertyReader();
-        com.atom.infrastructure.adapter.accessibility.oem.OemFingerprint fingerprint =
-                com.atom.infrastructure.adapter.accessibility.oem.OemDetector.detect(
-                        android.os.Build.MANUFACTURER, android.os.Build.BRAND, props);
-        this.oemAdapter = ((AtomApp) getApplication()).getAppContainer()
-                .getOemAdapterRegistry().adapterFor(fingerprint);
-        this.capturer = new com.atom.infrastructure.adapter.accessibility.capture.ResilientScreenCapturer(
-                this,
-                new com.atom.infrastructure.adapter.accessibility.capture.ScreenCleaningPipeline(),
-                new com.atom.infrastructure.adapter.accessibility.capture.UptimeClock());
-        Log.i(TAG, "OEM skin detected: " + fingerprint.skin());
         Log.i(TAG, "Atom accessibility service connected.");
+        // OEM detection can shell out to `getprop` if the SystemProperties reflection
+        // path fails, so run it off the main thread (ANR/StrictMode safe). Until it
+        // finishes, captureScreenResult() falls back to a single-pass legacy walk.
+        new Thread(this::initOemCapture, "atom-oem-detect").start();
+    }
+
+    /** Detects the OEM skin and builds the resilient capturer off the main thread. */
+    private void initOemCapture() {
+        try {
+            com.atom.infrastructure.adapter.accessibility.oem.PropertyReader props =
+                    new com.atom.infrastructure.adapter.accessibility.oem.SystemPropertyReader();
+            com.atom.infrastructure.adapter.accessibility.oem.OemFingerprint fingerprint =
+                    com.atom.infrastructure.adapter.accessibility.oem.OemDetector.detect(
+                            android.os.Build.MANUFACTURER, android.os.Build.BRAND, props);
+            com.atom.infrastructure.adapter.accessibility.oem.OemCompatibilityAdapter adapter =
+                    ((AtomApp) getApplication()).getAppContainer()
+                            .getOemAdapterRegistry().adapterFor(fingerprint);
+            this.capturer = new com.atom.infrastructure.adapter.accessibility.capture.ResilientScreenCapturer(
+                    this,
+                    new com.atom.infrastructure.adapter.accessibility.capture.ScreenCleaningPipeline(),
+                    new com.atom.infrastructure.adapter.accessibility.capture.UptimeClock());
+            this.oemAdapter = adapter; // published last: capture path requires BOTH non-null
+            Log.i(TAG, "OEM skin detected: " + fingerprint.skin());
+        } catch (Throwable t) {
+            Log.w(TAG, "OEM capture init failed; using legacy capture fallback.", t);
+        }
     }
 
     /** Opaque, fail-closed runtime security verdict (cached, computed off the main thread). */

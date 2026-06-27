@@ -73,8 +73,15 @@ public class InteractionGrpcAdapter implements ExternalInteractionPortOut {
         if (service == null) {
             return List.of();
         }
+        com.atom.infrastructure.adapter.accessibility.capture.CaptureResult result =
+                service.captureScreenResult();
+        if (result.status()
+                == com.atom.infrastructure.adapter.accessibility.capture.CaptureStatus.TIMEOUT) {
+            android.util.Log.w("InteractionGrpcAdapter",
+                    "Screen capture timed out; sending best-effort empty screen map.");
+        }
         List<ScreenElement> elements = new ArrayList<>();
-        for (AtomAccessibilityService.ScreenNode node : service.captureScreen()) {
+        for (AtomAccessibilityService.ScreenNode node : result.nodes()) {
             elements.add(ScreenElement.newBuilder()
                     .setText(node.text)
                     .setRole(node.role)
