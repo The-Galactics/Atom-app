@@ -67,6 +67,9 @@ public class AppContainer {
     // dialogue through the same instance.
     private final ConversationRepository conversationRepository;
 
+    // OEM-aware accessibility capture registry (stateless singleton adapters).
+    private final com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry oemAdapterRegistry;
+
     // Application context, retained for process-scoped permission/state checks
     // (e.g. whether the accessibility service the user must enable is running).
     private final Context appContext;
@@ -151,6 +154,10 @@ public class AppContainer {
         // Conversation transcript store. Uses the application context internally,
         // so holding it on this process-scoped container leaks nothing.
         this.conversationRepository = new ConversationRepository(context);
+
+        // OEM-aware capture registry. Stateless singletons; safe to build on any thread.
+        this.oemAdapterRegistry =
+                com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry.createDefault();
     }
 
     public StreamChatPortIn getExternalMessageUseCase() {
@@ -179,6 +186,11 @@ public class AppContainer {
 
     public InputValidationPort getInputValidationUsecase() {
         return inputValidationUsecase;
+    }
+
+    /** Resolves the OEM-specific capture adapter for the device's detected skin. */
+    public com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry getOemAdapterRegistry() {
+        return oemAdapterRegistry;
     }
 
     /** True if Atom's accessibility service is currently enabled by the user. */
