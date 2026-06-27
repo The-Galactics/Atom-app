@@ -45,4 +45,17 @@ public final class CoreStatePresenter {
     public static float energyFor(CoreState state) {
         return styleFor(state).energy;
     }
+
+    /**
+     * Returns a motion-suppressed variant for users who disabled system animations.
+     * Energy and hue are static properties and stay (they remain the differentiators);
+     * dramatic motion profiles calm to BREATHE and one-shot transients are dropped.
+     * Returns the same instance unchanged when motion is allowed.
+     */
+    public static CoreStyle resolveForReducedMotion(CoreStyle style, boolean reducedMotion) {
+        if (!reducedMotion) {
+            return style;
+        }
+        return new CoreStyle(style.energy, style.hueShift, MotionProfile.BREATHE, Transient.NONE);
+    }
 }

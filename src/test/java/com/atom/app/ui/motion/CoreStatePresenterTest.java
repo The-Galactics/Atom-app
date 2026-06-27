@@ -74,4 +74,28 @@ class CoreStatePresenterTest {
                     .isEqualTo(CoreStatePresenter.styleFor(state).energy);
         }
     }
+
+    @Test
+    void reducedMotionIsANoOpWhenMotionAllowed() {
+        CoreStyle s = CoreStatePresenter.styleFor(CoreState.OPERATING);
+        assertThat(CoreStatePresenter.resolveForReducedMotion(s, false)).isSameAs(s);
+    }
+
+    @Test
+    void reducedMotionKeepsEnergyAndHueButCalmsMotion() {
+        CoreStyle operating = CoreStatePresenter.styleFor(CoreState.OPERATING);
+        CoreStyle r = CoreStatePresenter.resolveForReducedMotion(operating, true);
+        assertThat(r.energy).isEqualTo(0.6f);   // still reads as "working"
+        assertThat(r.hueShift).isEqualTo(1.0f); // still teal -> still "operating"
+        assertThat(r.motion).isEqualTo(MotionProfile.BREATHE);
+        assertThat(r.oneShot).isEqualTo(Transient.NONE);
+    }
+
+    @Test
+    void reducedMotionStripsBloomAndShudder() {
+        assertThat(CoreStatePresenter.resolveForReducedMotion(
+                CoreStatePresenter.styleFor(CoreState.RESPONDED), true).oneShot).isEqualTo(Transient.NONE);
+        assertThat(CoreStatePresenter.resolveForReducedMotion(
+                CoreStatePresenter.styleFor(CoreState.ERROR), true).oneShot).isEqualTo(Transient.NONE);
+    }
 }
