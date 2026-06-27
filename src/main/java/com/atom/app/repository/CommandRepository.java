@@ -99,6 +99,13 @@ public class CommandRepository {
     public void recognize(String order, final CommandCallback callback) {
         executor.execute(() -> {
             try {
+                // Refresh-ahead OFF the call path (US-E3): the gRPC interceptor is now
+                // cache-only, so prime a fresh token here (on the background executor)
+                // before the first protected RPC. A refresh failure surfaces through the
+                // shared catch below as a normal error outcome.
+                if (authUseCase != null) {
+                    authUseCase.refreshIfNeeded();
+                }
                 // Routing pre-flight only: used for routing decisions, never carried into the
                 // loop. Uses a throwaway session id so it doesn't pollute the backend's ReAct
                 // history (a shared id would offset the loop's steps and trip a premature
@@ -109,7 +116,9 @@ public class CommandRepository {
             } catch (Exception e) {
                 Log.e(TAG, "recognize failed for order=\"" + order + "\"", e);
                 String message = e.getMessage() != null ? e.getMessage() : "Error in server response";
-                post(() -> callback.onError(message));
+                // Hand the original cause to the callback too, so it can distinguish an
+                // expired session (gRPC UNAUTHENTICATED) from a generic failure.
+                post(() -> callback.onError(message, e));
             }
         });
     }
@@ -242,6 +251,16 @@ public class CommandRepository {
     public interface CommandCallback {
         void onResolved(ResolvedAction action);
         void onError(String error);
+
+        /**
+         * Error variant that also carries the original throwable, so callers can
+         * inspect it (e.g. detect a gRPC {@code UNAUTHENTICATED} status and route to
+         * re-login) instead of only seeing a flattened message. Defaults to
+         * {@link #onError(String)} so existing implementers keep their behavior.
+         */
+        default void onError(String error, Throwable cause) {
+            onError(error);
+        }
     }
 
     public interface ExecutionCallback {

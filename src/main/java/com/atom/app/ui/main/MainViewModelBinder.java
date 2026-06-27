@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.atom.app.R;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.viewmodel.ChatViewModel;
+import com.atom.application.port.out.security.SessionListener;
 import com.atom.domain.action.ResolvedAction;
 
 /**
@@ -80,6 +81,17 @@ public final class MainViewModelBinder {
         // Accessibility-powered actions need the service enabled first.
         viewModel.getAccessibilityRequired().observe(activity,
                 e -> promptEnableAccessibility(e.getContentIfNotHandled()));
+
+        // Session expired (a recognize/RPC call returned UNAUTHENTICATED): hand off to
+        // the app-wide redirect (AtomApp implements SessionListener) so the user lands
+        // on Login with the back stack cleared — the same path the auth layer uses on a
+        // rejected refresh. One-shot Event avoids re-firing on recreation.
+        viewModel.getSessionExpired().observe(activity, e -> {
+            if (Boolean.TRUE.equals(e.getContentIfNotHandled())
+                    && activity.getApplication() instanceof SessionListener) {
+                ((SessionListener) activity.getApplication()).onSessionExpired();
+            }
+        });
 
         // While the loop runs, freeze input and show the operating indicator.
         viewModel.getAutomationActive().observe(activity, active -> {

@@ -16,6 +16,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 public class ChatViewModel extends ViewModel {
     private final ChatRepository repository;
     private final CommandRepository commandRepository;
@@ -34,6 +37,12 @@ public class ChatViewModel extends ViewModel {
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
     // Emitted when an action needs the accessibility service but it is disabled.
     private MutableLiveData<Event<ResolvedAction>> accessibilityRequired = new MutableLiveData<>();
+    // One-shot signal that the session is no longer valid: a pre-flight recognize()
+    // RPC came back gRPC UNAUTHENTICATED (the access/refresh token is rejected). The
+    // Activity observes this and redirects to Login instead of letting the dead
+    // session surface as a transient, auto-recovering error. This funnels into the
+    // same secure re-login pipeline as AtomApp.onSessionExpired() (SessionListener).
+    private MutableLiveData<Event<Boolean>> sessionExpired = new MutableLiveData<>();
     // True while the loop runs; the UI freezes input and shows progress until it ends.
     private MutableLiveData<Boolean> automationActive = new MutableLiveData<>(false);
     // A spoken confirmation question to voice + capture; one-shot Event. The Activity
@@ -66,6 +75,7 @@ public class ChatViewModel extends ViewModel {
     public LiveData<Boolean> getIsLoading() { return isLoading; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
     public LiveData<Event<ResolvedAction>> getAccessibilityRequired() { return accessibilityRequired; }
+    public LiveData<Event<Boolean>> getSessionExpired() { return sessionExpired; }
     public LiveData<Boolean> getAutomationActive() { return automationActive; }
     public LiveData<Event<String>> getVoiceConfirmationRequested() { return voiceConfirmationRequested; }
 
@@ -130,7 +140,36 @@ public class ChatViewModel extends ViewModel {
                 isLoading.setValue(false);
                 errorMessage.setValue(error);
             }
+
+            @Override
+            public void onError(String error, Throwable cause) {
+                isLoading.setValue(false);
+                if (isUnauthenticated(cause)) {
+                    // Dead session: don't swallow it as a transient error. Surface a
+                    // one-shot event so the UI redirects to Login (secure pipeline).
+                    sessionExpired.setValue(new Event<>(Boolean.TRUE));
+                } else {
+                    // Non-auth failures keep the existing generic error behavior.
+                    errorMessage.setValue(error);
+                }
+            }
         });
+    }
+
+    /**
+     * True when {@code cause} (or any throwable it wraps) is a gRPC call that failed
+     * with {@link Status.Code#UNAUTHENTICATED} — i.e. the access/refresh token is no
+     * longer accepted and the user must re-authenticate. Walks the cause chain so a
+     * status wrapped by an intermediate layer is still detected.
+     */
+    private static boolean isUnauthenticated(Throwable cause) {
+        for (Throwable t = cause; t != null; t = t.getCause()) {
+            if (t instanceof StatusRuntimeException) {
+                return ((StatusRuntimeException) t).getStatus().getCode()
+                        == Status.Code.UNAUTHENTICATED;
+            }
+        }
+        return false;
     }
 
     /**
