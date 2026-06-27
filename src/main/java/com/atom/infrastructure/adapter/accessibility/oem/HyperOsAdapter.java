@@ -57,7 +57,15 @@ public class HyperOsAdapter implements OemCompatibilityAdapter {
 
     @Override
     public boolean isPhantom(NodeSnapshot node) {
-        return false; // implemented in 7.3
+        if (node.area() == 0) {
+            return true; // zero/negative bounds: nothing is actually drawn
+        }
+        if (OVERLAY_PACKAGES.contains(node.packageName())) {
+            return true; // MIUI overlay/ad/security frame
+        }
+        boolean hasSignal = !node.text().isEmpty()
+                || node.clickable() || node.editable() || node.scrollable();
+        return !node.visibleToUser() && !hasSignal; // invisible and inert
     }
 
     @Override

@@ -52,4 +52,32 @@ class HyperOsAdapterTest {
                 true, true, "com.app.b", 0, 0, 100, 300);   // area 30_000
         assertThat(adapter.selectActiveWindow(List.of(small, large)).windowId()).isEqualTo(2);
     }
+
+    @Test
+    void zeroAreaNodeIsPhantom() {
+        NodeSnapshot n = NodeSnapshot.builder().text("x").bounds(10, 10, 10, 10)
+                .visibleToUser(true).build();
+        assertThat(adapter.isPhantom(n)).isTrue();
+    }
+
+    @Test
+    void invisibleNodeWithoutSignalIsPhantom() {
+        NodeSnapshot n = NodeSnapshot.builder().bounds(0, 0, 50, 50)
+                .visibleToUser(false).build(); // no text, not actionable
+        assertThat(adapter.isPhantom(n)).isTrue();
+    }
+
+    @Test
+    void overlayPackageNodeIsPhantom() {
+        NodeSnapshot n = NodeSnapshot.builder().text("ad").bounds(0, 0, 50, 50)
+                .visibleToUser(true).packageName("com.miui.contentcatcher").build();
+        assertThat(adapter.isPhantom(n)).isTrue();
+    }
+
+    @Test
+    void realVisibleButtonIsNotPhantom() {
+        NodeSnapshot n = NodeSnapshot.builder().text("Send").role("Button").clickable(true)
+                .bounds(0, 0, 80, 40).visibleToUser(true).packageName("com.whatsapp").build();
+        assertThat(adapter.isPhantom(n)).isFalse();
+    }
 }
