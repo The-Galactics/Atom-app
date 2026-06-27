@@ -57,6 +57,12 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
 
+            // Embed native debug symbols (BoringSSL/gRPC .so) into the bundle so
+            // Play Console can symbolicate native crashes/ANRs — no separate upload.
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
+
             val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
             val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
             val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
