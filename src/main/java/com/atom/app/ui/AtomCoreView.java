@@ -16,6 +16,10 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.AnimationUtils;
 
+import com.atom.app.ui.motion.CoreStyle;
+import com.atom.app.ui.motion.MotionProfile;
+import com.atom.app.ui.motion.Transient;
+
 /**
  * The animated "atom core" centerpiece, drawn by hand with real radial-gradient glows
  * and {@link BlurMaskFilter} blooms. The static-radius blooms (ring underlay, electron
@@ -43,6 +47,17 @@ public class AtomCoreView extends View {
     private static final int ACCENT = 0xFFBF94FF;
     private static final int ACCENT_BRIGHT = 0xFFD6B8FF;
     private static final int ACCENT_DEEP = 0xFF8C5CF0;
+
+    // Teal "operating" accent endpoints, parallel to the lavender ramp above.
+    private static final int TEAL = 0xFF35E0D8;
+    private static final int TEAL_BRIGHT = 0xFF7FF3EE;
+    private static final int TEAL_DEEP = 0xFF14A39C;
+
+    // Live palette: lavender at hueShift 0, blended toward teal at hueShift 1.
+    private int accent = ACCENT;
+    private int accentBright = ACCENT_BRIGHT;
+    private int accentDeep = ACCENT_DEEP;
+    private float hueShift = 0f;
 
     // Muted look: near-grayscale and dimmed so a muted mic reads differently from idle.
     private static final float MUTED_SATURATION = 0.15f;
@@ -141,6 +156,36 @@ public class AtomCoreView extends View {
         scheduleNextFrame();
     }
 
+    /** Applies a semantic style: energy drives engagement, hueShift blends lavender->teal. */
+    public void setStyle(CoreStyle style) {
+        applyHueShift(style.hueShift);
+        setMotionProfile(style.motion);
+        setEnergy(style.energy);
+        if (style.oneShot != Transient.NONE) {
+            playTransient(style.oneShot);
+        }
+    }
+
+    /** Blends the palette toward teal and rebuilds the size-dependent shaders/blooms once. */
+    private void applyHueShift(float shift) {
+        float clamped = Math.max(0f, Math.min(1f, shift));
+        if (clamped == hueShift) {
+            return;
+        }
+        hueShift = clamped;
+        accent = ColorBlend.lerp(ACCENT, TEAL, clamped);
+        accentBright = ColorBlend.lerp(ACCENT_BRIGHT, TEAL_BRIGHT, clamped);
+        accentDeep = ColorBlend.lerp(ACCENT_DEEP, TEAL_DEEP, clamped);
+        if (radius > 0) {
+            // Rebuild the size-dependent shaders + baked blooms with the new palette.
+            onSizeChanged(getWidth(), getHeight(), getWidth(), getHeight());
+        }
+        invalidate();
+    }
+
+    private void setMotionProfile(MotionProfile profile) { /* implemented in Task 5 */ }
+    public void playTransient(Transient t) { /* implemented in Task 5 */ }
+
     /**
      * Mutes the core's look: when muted it renders near-grayscale and dimmed so the
      * "mic off" state is legible at a glance, distinct from the vivid lavender idle.
@@ -212,15 +257,15 @@ public class AtomCoreView extends View {
             return;
         }
         bgGlowShader = new RadialGradient(cx, cy, radius * 0.98f,
-                new int[]{withAlpha(ACCENT, 90), withAlpha(ACCENT_DEEP, 38), 0x00000000},
+                new int[]{withAlpha(accent, 90), withAlpha(accentDeep, 38), 0x00000000},
                 new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
         nucleusShader = new RadialGradient(cx, cy, radius * 0.16f,
-                new int[]{0xFFFFFFFF, ACCENT_BRIGHT, withAlpha(ACCENT_DEEP, 210)},
+                new int[]{0xFFFFFFFF, accentBright, withAlpha(accentDeep, 210)},
                 new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP);
         sweepShader = new SweepGradient(cx, cy, new int[]{
-                withAlpha(ACCENT, 30), withAlpha(ACCENT_BRIGHT, 255),
-                withAlpha(ACCENT, 70), withAlpha(ACCENT_BRIGHT, 255),
-                withAlpha(ACCENT, 30)
+                withAlpha(accent, 30), withAlpha(accentBright, 255),
+                withAlpha(accent, 70), withAlpha(accentBright, 255),
+                withAlpha(accent, 30)
         }, new float[]{0f, 0.25f, 0.5f, 0.75f, 1f});
 
         bakeBlooms();
@@ -237,17 +282,17 @@ public class AtomCoreView extends View {
         float ringStroke = radius * 0.05f;
         float ringBlur = radius * 0.06f;
         ringGlowExtent = ringR + ringStroke / 2f + ringBlur * 2f;
-        ringGlowBmp = bakeRingGlow(ringR, ringStroke, ringBlur, ACCENT);
+        ringGlowBmp = bakeRingGlow(ringR, ringStroke, ringBlur, accent);
 
         float electronR = radius * 0.034f * 2.3f;
         float electronBlur = radius * 0.035f;
         electronGlowExtent = electronR + electronBlur * 2f;
-        electronGlowBmp = bakeCircleGlow(electronR, electronBlur, ACCENT_BRIGHT);
+        electronGlowBmp = bakeCircleGlow(electronR, electronBlur, accentBright);
 
         float nucleusR = radius * 0.15f * 1.9f;
         float nucleusBlur = radius * 0.08f;
         nucleusGlowExtent = nucleusR + nucleusBlur * 2f;
-        nucleusGlowBmp = bakeCircleGlow(nucleusR, nucleusBlur, ACCENT_BRIGHT);
+        nucleusGlowBmp = bakeCircleGlow(nucleusR, nucleusBlur, accentBright);
     }
 
     @Override
@@ -325,7 +370,7 @@ public class AtomCoreView extends View {
             float p = frac((float) (phase * 0.13) + k / 3f);
             float r = lerp(radius * 0.34f, radius * 0.98f, p);
             int alpha = (int) ((1f - p) * (70 + 60 * energy));
-            auraPaint.setColor(withAlpha(ACCENT, alpha));
+            auraPaint.setColor(withAlpha(accent, alpha));
             canvas.drawCircle(cx, cy, r, auraPaint);
         }
     }
@@ -385,7 +430,7 @@ public class AtomCoreView extends View {
                 canvas.save();
                 canvas.rotate(ORBIT_TILT[i], cx, cy);
                 orbitPaint.setStrokeWidth(radius * 0.006f);
-                orbitPaint.setColor(withAlpha(ACCENT, (int) (26 + 34 * energy)));
+                orbitPaint.setColor(withAlpha(accent, (int) (26 + 34 * energy)));
                 canvas.drawOval(cx - orbRx, cy - orbRy, cx + orbRx, cy + orbRy, orbitPaint);
                 canvas.restore();
             }
@@ -411,7 +456,7 @@ public class AtomCoreView extends View {
             bloomPaint.setAlpha((int) (130 * depth));
             blitBloom(canvas, electronGlowBmp, px, py, electronGlowExtent * depth);
 
-            electronPaint.setColor(withAlpha(ACCENT_BRIGHT, 255));
+            electronPaint.setColor(withAlpha(accentBright, 255));
             canvas.drawCircle(px, py, er, electronPaint);
         }
     }
