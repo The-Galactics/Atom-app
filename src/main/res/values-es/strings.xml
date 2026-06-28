@@ -79,6 +79,21 @@
     <!-- Progreso del bucle autónomo -->
     <string name="automation_operating">Atom está operando…</string>
 
+    <!-- Notificación en primer plano "operando" en vivo (Atom está controlando otras apps). -->
+    <string name="notif_operating_title">Atom está operando</string>
+    <string name="notif_operating_step">Paso %1$d</string>
+    <string name="action_verb_open_app">Abriendo una app</string>
+    <string name="action_verb_make_call">Haciendo una llamada</string>
+    <string name="action_verb_send_message">Enviando un mensaje</string>
+    <string name="action_verb_set_alarm">Poniendo una alarma</string>
+    <string name="action_verb_set_timer">Poniendo un temporizador</string>
+    <string name="action_verb_toggle_setting">Cambiando un ajuste</string>
+    <string name="action_verb_navigate">Navegando</string>
+    <string name="action_verb_scroll">Desplazando</string>
+    <string name="action_verb_read_screen">Leyendo la pantalla</string>
+    <string name="action_verb_tap_element">Tocando</string>
+    <string name="action_verb_type_text">Escribiendo</string>
+
     <!-- Superposición flotante -->
     <string name="overlay_notification_title">Atom está flotando</string>
     <string name="overlay_notification_text">Toca la burbuja para preguntarle a Atom desde cualquier app.</string>

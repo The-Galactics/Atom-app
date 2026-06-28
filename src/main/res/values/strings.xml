@@ -80,6 +80,21 @@
     <!-- Autonomous loop progress -->
     <string name="automation_operating">Atom is operating…</string>
 
+    <!-- Live "operating" foreground notification (Atom is driving other apps). -->
+    <string name="notif_operating_title">Atom is operating</string>
+    <string name="notif_operating_step">Step %1$d</string>
+    <string name="action_verb_open_app">Opening an app</string>
+    <string name="action_verb_make_call">Placing a call</string>
+    <string name="action_verb_send_message">Sending a message</string>
+    <string name="action_verb_set_alarm">Setting an alarm</string>
+    <string name="action_verb_set_timer">Setting a timer</string>
+    <string name="action_verb_toggle_setting">Changing a setting</string>
+    <string name="action_verb_navigate">Navigating</string>
+    <string name="action_verb_scroll">Scrolling</string>
+    <string name="action_verb_read_screen">Reading the screen</string>
+    <string name="action_verb_tap_element">Tapping</string>
+    <string name="action_verb_type_text">Typing</string>
+
     <!-- Floating overlay -->
     <string name="overlay_notification_title">Atom is floating</string>
     <string name="overlay_notification_text">Tap the bubble to ask Atom from any app.</string>

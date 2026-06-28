@@ -34,4 +34,7 @@
     <color name="ripple_accent">#33BF94FF</color>
     <color name="ripple_light">#1FFFFFFF</color>
 
+    <!-- Operating accent: signals Atom is actively driving the device. -->
+    <color name="accent_teal">#FF35E0D8</color>
+
 </resources>

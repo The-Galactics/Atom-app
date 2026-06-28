@@ -60,8 +60,10 @@ import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.InputBarUtils;
 import com.atom.app.ui.MicAnimations;
 import com.atom.app.ui.motion.StatusCrossfader;
+import com.atom.domain.action.ActionType;
 import com.atom.domain.action.DestructiveActionPolicy;
 import com.atom.domain.action.ResolvedAction;
+import com.atom.app.overlay.OperatingNotificationText;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
@@ -135,6 +137,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private View handleView;          // edge tab shown while the bubble is hidden
     private WindowManager.LayoutParams handleParams;
     private ValueAnimator handleSettle; // handle edge snap / fade-to-idle glide
+    private android.animation.ValueAnimator handlePulse; // teal pulse while operating
     private boolean collapsedToHandle; // bubble is tucked away to the edge handle
     private boolean lastBubbleOnLeft;  // which edge the bubble last rested on
     private int lastBubbleY = -1;      // last bubble Y, reused to place the handle
@@ -385,6 +388,11 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     // The ongoing notification doubles as the way back from a hide: tapping it
     // (or the "Show" action) re-displays the bubble; "Turn off" stops the overlay.
     private Notification buildNotification(boolean hidden) {
+        return buildNotification(hidden, null);
+    }
+
+    // operatingText != null => live "operating" body (title + step/action), keeps Stop.
+    private Notification buildNotification(boolean hidden, String operatingText) {
         int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 ? PendingIntent.FLAG_IMMUTABLE : 0;
         Intent showIntent = new Intent(this, FloatingBubbleService.class).setAction(ACTION_SHOW);
@@ -392,21 +400,55 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         Intent stopIntent = new Intent(this, FloatingBubbleService.class).setAction(ACTION_STOP);
         PendingIntent stopPending = PendingIntent.getService(this, 0, stopIntent, flag);
 
+        String title = operatingText != null
+                ? getString(R.string.notif_operating_title)
+                : getString(R.string.overlay_notification_title);
+        String body = operatingText != null
+                ? operatingText
+                : getString(hidden ? R.string.overlay_notification_text_hidden
+                                   : R.string.overlay_notification_text);
+
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(getString(R.string.overlay_notification_title))
-                .setContentText(getString(hidden
-                        ? R.string.overlay_notification_text_hidden
-                        : R.string.overlay_notification_text))
+                .setContentTitle(title)
+                .setContentText(body)
                 .setSmallIcon(R.drawable.ic_mic)
                 .setOngoing(true)
                 .setContentIntent(showPending);
-        if (hidden) {
+        if (hidden && operatingText == null) {
             builder.addAction(R.drawable.ic_atom_glyph,
                     getString(R.string.overlay_action_show), showPending);
         }
         builder.addAction(R.drawable.ic_close,
                 getString(R.string.overlay_action_stop), stopPending);
         return builder.build();
+    }
+
+    /** Pushes a live operating-state notification (step + action verb). */
+    private void updateOperatingNotification(ResolvedAction action, int step) {
+        String label = getString(R.string.notif_operating_step); // template "Step %1$d"
+        String verb = action != null && action.isExecutable() ? getString(verbResIdFor(action.type())) : null;
+        String text = OperatingNotificationText.compose(label, step, verb);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.notify(NOTIFICATION_ID, buildNotification(true, text));
+        }
+    }
+
+    private int verbResIdFor(ActionType type) {
+        switch (type) {
+            case OPEN_APP:       return R.string.action_verb_open_app;
+            case MAKE_CALL:      return R.string.action_verb_make_call;
+            case SEND_MESSAGE:   return R.string.action_verb_send_message;
+            case SET_ALARM:      return R.string.action_verb_set_alarm;
+            case SET_TIMER:      return R.string.action_verb_set_timer;
+            case TOGGLE_SETTING: return R.string.action_verb_toggle_setting;
+            case NAVIGATE:       return R.string.action_verb_navigate;
+            case SCROLL:         return R.string.action_verb_scroll;
+            case READ_SCREEN:    return R.string.action_verb_read_screen;
+            case TAP_ELEMENT:    return R.string.action_verb_tap_element;
+            case TYPE_TEXT:      return R.string.action_verb_type_text;
+            default:             return R.string.notif_operating_title; // unused (NONE not executable)
+        }
     }
 
     private void updateNotification(boolean hidden) {
@@ -615,6 +657,36 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (handleSettle != null) {
             handleSettle.cancel();
             handleSettle = null;
+        }
+    }
+
+    private void startHandlePulse() {
+        if (handleView == null) {
+            return;
+        }
+        // Tint the handle bar teal for the operating window.
+        handleView.findViewById(R.id.handle_bar)
+                .setBackgroundColor(getColor(R.color.accent_teal));
+        stopHandlePulse();
+        handlePulse = android.animation.ValueAnimator.ofFloat(HANDLE_IDLE_ALPHA, 1f);
+        handlePulse.setDuration(900);
+        handlePulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        handlePulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        handlePulse.addUpdateListener(a -> {
+            if (handleView != null) {
+                handleView.setAlpha((float) a.getAnimatedValue());
+            }
+        });
+        handlePulse.start();
+    }
+
+    private void stopHandlePulse() {
+        if (handlePulse != null) {
+            handlePulse.cancel();
+            handlePulse = null;
+        }
+        if (handleView != null) {
+            handleView.setAlpha(HANDLE_IDLE_ALPHA);
         }
     }
 
@@ -974,16 +1046,22 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 if (bubbleView != null || panelView != null) {
                     hideToHandle();
                 }
+                updateOperatingNotification(action, step);
+                startHandlePulse();
             }
 
             @Override
             public void onComplete(String finalMessage) {
+                stopHandlePulse();
+                updateNotification(collapsedToHandle);
                 reExpandAfterAutomation();
                 respondFromAutomation(finalMessage);
             }
 
             @Override
             public void onAborted(String message) {
+                stopHandlePulse();
+                updateNotification(collapsedToHandle);
                 reExpandAfterAutomation();
                 if (message != null && !message.trim().isEmpty()) {
                     respondFromAutomation(message);
@@ -1461,6 +1539,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void cancelAnimations() {
         cancelBubbleSettle();
         cancelHandleSettle();
+        stopHandlePulse();
         if (bubbleView != null) {
             bubbleView.animate().cancel();
         }
