@@ -12,7 +12,8 @@ import io.grpc.ManagedChannelBuilder;
 /**
  * Owns the single gRPC {@link ManagedChannel} and exposes two views:
  * a raw channel for the public auth RPCs, and a Bearer-intercepted channel for
- * protected RPCs. TLS in release builds; plaintext in debug builds.
+ * protected RPCs. TLS is controlled by the GRPC_TLS flag (local.properties ->
+ * BuildConfig.GRPC_TLS), independent of the debug/release build type.
  */
 public class GrpcChannelProvider {
 
@@ -21,8 +22,10 @@ public class GrpcChannelProvider {
 
     public GrpcChannelProvider(String host, int port, Supplier<String> accessTokenSupplier) {
         ManagedChannelBuilder<?> builder = ManagedChannelBuilder.forAddress(host, port);
-        // Debug builds use plaintext (dev agent is insecure); release keeps TLS.
-        if (BuildConfig.DEBUG) {
+        // TLS is driven by the GRPC_TLS flag from local.properties (wired into
+        // BuildConfig), not the build type: a debug build can still talk to the
+        // TLS production endpoint, and a release build can talk plaintext locally.
+        if (!BuildConfig.GRPC_TLS) {
             builder.usePlaintext();
         }
         this.channel = builder.build();
