@@ -182,6 +182,8 @@ public class AtomCoreView extends View {
     /** Blends the palette toward teal and rebuilds the size-dependent shaders/blooms once. */
     private void applyHueShift(float shift) {
         float clamped = Math.max(0f, Math.min(1f, shift));
+        // Safe exact-compare: hueShift only ever receives the exact constants 0f/1f
+        // from CoreStyle; revisit if a future caller passes a computed/animated value.
         if (clamped == hueShift) {
             return;
         }

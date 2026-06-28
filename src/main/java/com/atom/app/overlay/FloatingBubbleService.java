@@ -664,10 +664,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (handleView == null) {
             return;
         }
-        // Tint the handle bar teal for the operating window.
-        handleView.findViewById(R.id.handle_bar)
-                .setBackgroundColor(getColor(R.color.accent_teal));
-        stopHandlePulse();
+        stopHandlePulse();   // cancel any prior animator and reset the bar to idle FIRST
+        // Now apply the operating teal so the reset above cannot wipe it.
+        View handleBar = handleView.findViewById(R.id.handle_bar);
+        if (handleBar != null) {
+            handleBar.setBackgroundColor(getColor(R.color.accent_teal));
+        }
         handlePulse = android.animation.ValueAnimator.ofFloat(HANDLE_IDLE_ALPHA, 1f);
         handlePulse.setDuration(900);
         handlePulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
@@ -696,6 +698,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     // Removes the edge tab and re-displays the bubble where it was tucked away.
     private void restoreBubble() {
+        stopHandlePulse();   // stop pulse before nulling handleView so reset can still reach it
         removeView(handleView);
         handleView = null;
         handleParams = null;
