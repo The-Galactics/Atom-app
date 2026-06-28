@@ -6,9 +6,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
 
+import androidx.core.app.NotificationManagerCompat;
+
+import com.atom.app.permission.oem.OemSettingsIntents;
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
@@ -102,5 +106,27 @@ public final class PermissionCoordinator {
     /** Intent that opens the system Accessibility settings so the user can enable Atom. */
     public static Intent accessibilitySettingsIntent() {
         return new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+    }
+
+    /** True if the user currently allows Atom to post notifications (app-level toggle). */
+    public static boolean notificationsEnabled(Context context) {
+        return NotificationManagerCompat.from(context).areNotificationsEnabled();
+    }
+
+    /** Intent that opens Atom's system notification settings so the user can re-enable them. */
+    public static Intent appNotificationSettingsIntent(Context context) {
+        return new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
+    }
+
+    /** True if Atom is exempt from Doze battery optimization (services survive background). */
+    public static boolean isIgnoringBatteryOptimizations(Context context) {
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isIgnoringBatteryOptimizations(context.getPackageName());
+    }
+
+    /** Intent that asks for (or shows the list to grant) the battery-optimization exemption. */
+    public static Intent batteryOptimizationIntent(Context context) {
+        return OemSettingsIntents.batteryIntent(context);
     }
 }

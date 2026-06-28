@@ -301,6 +301,121 @@
                         android:text="@string/settings_perm_fix"
                         android:contentDescription="@string/cd_fix_microphone" />
                 </LinearLayout>
+
+                <!-- Notifications row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_notifications"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_notifications_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_notifications"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_notifications" />
+                </LinearLayout>
+
+                <!-- Battery row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_battery"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_battery_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_battery"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_battery" />
+                </LinearLayout>
+
+                <!-- Autostart row (hidden on skins without an autostart concept) -->
+                <LinearLayout
+                    android:id="@+id/row_autostart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_autostart"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_autostart_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_autostart"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/permsetup_done"
+                        android:contentDescription="@string/cd_fix_autostart" />
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Wake word section: enable + battery-saver toggle. -->

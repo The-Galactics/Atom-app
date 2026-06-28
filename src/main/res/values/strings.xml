@@ -14,6 +14,7 @@
     <string name="mic_muted_hint">Mic is muted. Long-press to unmute.</string>
     <string name="sub_status_thinking">Reaching the Atom core</string>
     <string name="sub_status_responded">Atom responded</string>
+    <string name="sub_status_task_done">✓ Task completed</string>
 
     <!-- Content descriptions -->
     <string name="cd_history">History</string>
@@ -80,6 +81,23 @@
     <!-- Autonomous loop progress -->
     <string name="automation_operating">Atom is operating…</string>
 
+    <!-- Live "operating" foreground notification (Atom is driving other apps). -->
+    <string name="notif_operating_title">Atom is operating</string>
+    <string name="notif_operating_step">Step %1$d</string>
+    <string name="notif_task_complete">✓ Task completed</string>
+    <string name="notif_complete_channel_name">Task completion</string>
+    <string name="action_verb_open_app">Opening an app</string>
+    <string name="action_verb_make_call">Placing a call</string>
+    <string name="action_verb_send_message">Sending a message</string>
+    <string name="action_verb_set_alarm">Setting an alarm</string>
+    <string name="action_verb_set_timer">Setting a timer</string>
+    <string name="action_verb_toggle_setting">Changing a setting</string>
+    <string name="action_verb_navigate">Navigating</string>
+    <string name="action_verb_scroll">Scrolling</string>
+    <string name="action_verb_read_screen">Reading the screen</string>
+    <string name="action_verb_tap_element">Tapping</string>
+    <string name="action_verb_type_text">Typing</string>
+
     <!-- Floating overlay -->
     <string name="overlay_notification_title">Atom is floating</string>
     <string name="overlay_notification_text">Tap the bubble to ask Atom from any app.</string>
@@ -120,12 +138,14 @@
     <string name="settings_perm_overlay">Display over other apps</string>
     <string name="settings_perm_accessibility">Accessibility</string>
     <string name="settings_perm_microphone">Microphone</string>
+    <string name="settings_perm_notifications">Notifications</string>
     <string name="settings_perm_fix">Fix</string>
     <string name="settings_perm_granted">Granted</string>
     <string name="settings_perm_not_granted">Not granted</string>
     <string name="cd_fix_overlay">Fix overlay permission</string>
     <string name="cd_fix_accessibility">Fix accessibility permission</string>
     <string name="cd_fix_microphone">Fix microphone permission</string>
+    <string name="cd_fix_notifications">Fix notifications permission</string>
 
     <!-- Wake word settings -->
     <string name="settings_wake_word">Wake word</string>
@@ -236,4 +256,30 @@
     <string name="auth_google_button">Continue with Google</string>
     <string name="auth_logout">Sign out</string>
     <string name="auth_fields_required">Please fill in all fields.</string>
+
+    <!-- Permission setup (first run) -->
+    <string name="permsetup_title">Set up permissions</string>
+    <string name="permsetup_subtitle">Atom needs these to listen, see the screen, and act for you.</string>
+    <string name="permsetup_continue">Continue</string>
+    <string name="permsetup_continue_blocked">Grant %1$d more to continue</string>
+    <string name="permsetup_grant">Grant</string>
+    <string name="permsetup_open">Open</string>
+    <string name="permsetup_done">I\'ve enabled it</string>
+    <string name="permsetup_overlay_title">Display over apps</string>
+    <string name="permsetup_overlay_body">Show Atom on top of other apps.</string>
+    <string name="permsetup_accessibility_title">Accessibility</string>
+    <string name="permsetup_accessibility_body">Let Atom read the screen and act across apps.</string>
+    <string name="permsetup_mic_title">Microphone</string>
+    <string name="permsetup_mic_body">Hear your voice commands.</string>
+    <string name="permsetup_notifications_title">Notifications</string>
+    <string name="permsetup_notifications_body">Show task progress and results.</string>
+    <string name="permsetup_battery_title">Battery exemption</string>
+    <string name="permsetup_battery_body">Keep Atom running in the background.</string>
+    <string name="permsetup_autostart_title">Autostart</string>
+    <string name="permsetup_autostart_body">Allow Atom to start in the background (required on this device).</string>
+    <string name="settings_perm_battery">Battery exemption</string>
+    <string name="settings_perm_autostart">Autostart</string>
+    <string name="settings_perm_action_needed">Action needed</string>
+    <string name="cd_fix_battery">Fix battery exemption</string>
+    <string name="cd_fix_autostart">Fix autostart</string>
 </resources>

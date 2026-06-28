@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.atom.app.di.AppContainer;
+import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
 import com.atom.app.ui.MicAnimations;
@@ -35,6 +36,8 @@ import com.atom.app.ui.main.MainViewModelBinder;
 import com.atom.app.ui.main.SpeechRecognitionCoordinator;
 import com.atom.app.ui.motion.CoreState;
 import com.atom.app.ui.motion.CoreStatePresenter;
+import com.atom.app.ui.motion.CoreStyle;
+import com.atom.app.ui.motion.MotionPreferences;
 import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
@@ -115,6 +118,10 @@ public class MainActivity extends AppCompatActivity {
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(), results -> { });
 
+    // Asked once on startup (API 33+) so Atom's cross-app cues can actually post.
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> { });
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -135,6 +142,13 @@ public class MainActivity extends AppCompatActivity {
         preferences = new AtomPreferences(this);
         if (!preferences.isOnboardingComplete()) {
             startActivity(new Intent(this, OnboardingActivity.class));
+            finish();
+            return;
+        }
+
+        // Onboarding done but permissions not yet set up: run the one-time setup screen first.
+        if (!preferences.isPermissionSetupComplete()) {
+            startActivity(new Intent(this, PermissionSetupActivity.class));
             finish();
             return;
         }
@@ -211,6 +225,16 @@ public class MainActivity extends AppCompatActivity {
                     public void onVoiceConfirmationRequested(String question) {
                         askConfirmationByVoice(question);
                     }
+
+                    @Override
+                    public void onTaskCompleted(String finalMessage) {
+                        // showResponse already rendered the result text, spoke it, and
+                        // bloomed the core. Make a task completion DISTINCT from an ordinary
+                        // reply: a success sub-label plus a confirmation haptic so a
+                        // hands-free user feels the finish without watching the screen.
+                        fadeSwap(subStatusText, getString(R.string.sub_status_task_done));
+                        performCompletionHaptic();
+                    }
                 });
         binder.bind();
 
@@ -227,6 +251,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         requestCallPermissionsIfNeeded();
+        requestNotificationPermissionIfNeeded();
 
         recognition = new SpeechRecognitionCoordinator(this, preferences,
                 new SpeechRecognitionCoordinator.Host() {
@@ -605,9 +630,37 @@ public class MainActivity extends AppCompatActivity {
         StatusCrossfader.swap(view, text);
     }
 
+    /**
+     * One-shot "task done" haptic. Uses the dedicated CONFIRM feedback where available
+     * (API 30+) and falls back to LONG_PRESS below it. No VIBRATE permission needed —
+     * {@link View#performHapticFeedback} routes through the view's haptic channel.
+     */
+    private void performCompletionHaptic() {
+        View target = atomCore != null ? atomCore : btnMic;
+        if (target == null) {
+            return;
+        }
+        int feedback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? HapticFeedbackConstants.CONFIRM
+                : HapticFeedbackConstants.LONG_PRESS;
+        target.performHapticFeedback(feedback);
+    }
+
     /** Drives the core to a semantic UI state via the shared CoreStatePresenter. */
     private void applyCoreState(CoreState state) {
-        applyCoreState(CoreStatePresenter.energyFor(state));
+        CoreStyle style = CoreStatePresenter.styleFor(state);
+        style = CoreStatePresenter.resolveForReducedMotion(style, isReducedMotion());
+        currentEnergy = style.energy;
+        if (atomCore != null) {
+            atomCore.setStyle(style);
+        }
+    }
+
+    /** True when the user disabled system animations (transition scale 0). */
+    private boolean isReducedMotion() {
+        float scale = Settings.Global.getFloat(getContentResolver(),
+                Settings.Global.TRANSITION_ANIMATION_SCALE, 1f);
+        return MotionPreferences.isReducedMotion(scale);
     }
 
     /** Low-level energy apply; also used by the saved-state restore path. AtomCoreView's
@@ -637,6 +690,22 @@ public class MainActivity extends AppCompatActivity {
         }
         if (needsAny) {
             startupPermissionLauncher.launch(callPerms);
+        }
+    }
+
+    /**
+     * Asks for POST_NOTIFICATIONS once on startup (API 33+ only) so Atom's operating and
+     * completion cues can post. Below API 33 notifications are granted at install time, so
+     * nothing to do. The system shows the prompt at most once; a permanent denial makes
+     * launch() a no-op, which is fine — the Settings dashboard can still route the user
+     * to re-enable.
+     */
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (!PermissionCoordinator.isGranted(this, Manifest.permission.POST_NOTIFICATIONS)) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
         }
     }
 

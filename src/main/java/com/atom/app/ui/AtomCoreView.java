@@ -16,6 +16,10 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.view.animation.AnimationUtils;
 
+import com.atom.app.ui.motion.CoreStyle;
+import com.atom.app.ui.motion.MotionProfile;
+import com.atom.app.ui.motion.Transient;
+
 /**
  * The animated "atom core" centerpiece, drawn by hand with real radial-gradient glows
  * and {@link BlurMaskFilter} blooms. The static-radius blooms (ring underlay, electron
@@ -43,6 +47,17 @@ public class AtomCoreView extends View {
     private static final int ACCENT = 0xFFBF94FF;
     private static final int ACCENT_BRIGHT = 0xFFD6B8FF;
     private static final int ACCENT_DEEP = 0xFF8C5CF0;
+
+    // Teal "operating" accent endpoints, parallel to the lavender ramp above.
+    private static final int TEAL = 0xFF35E0D8;
+    private static final int TEAL_BRIGHT = 0xFF7FF3EE;
+    private static final int TEAL_DEEP = 0xFF14A39C;
+
+    // Live palette: lavender at hueShift 0, blended toward teal at hueShift 1.
+    private int accent = ACCENT;
+    private int accentBright = ACCENT_BRIGHT;
+    private int accentDeep = ACCENT_DEEP;
+    private float hueShift = 0f;
 
     // Muted look: near-grayscale and dimmed so a muted mic reads differently from idle.
     private static final float MUTED_SATURATION = 0.15f;
@@ -98,12 +113,27 @@ public class AtomCoreView extends View {
 
     // Desaturating + dimming paint applied to the whole layer while muted (lazy-built).
     private Paint mutedLayerPaint;
+    private boolean muted;            // mic muted
+    private boolean styleDesaturated; // style.desaturate (e.g. reduced-motion error)
+
+    // Desaturating layer paint for the ERROR shudder flash (lazy-built, reused).
+    private Paint shudderLayerPaint;
 
     private double phase = 0;        // ever-advancing animation phase
     private float energy = 0f;       // current eased energy
     private float targetEnergy = 0f; // requested energy
     private long lastFrameMs = 0;
     private float cx, cy, radius;
+
+    // GATHER eases orbits inward; SCAN promotes one electron to a bright directed sweep.
+    private float gather = 0f;           // 0 = normal radii, 1 = fully gathered (~12% inward)
+    private float gatherTarget = 0f;
+    private boolean scan = false;
+    // One-shot transients integrated into the render loop (no second animation system).
+    private long bloomStartMs = 0;       // 0 = inactive
+    private long shudderStartMs = 0;     // 0 = inactive
+    private static final long BLOOM_MS = 450;
+    private static final long SHUDDER_MS = 350;
 
     // Vsync-aligned re-draw used to throttle the idle loop to ~30fps.
     private final Runnable invalidateFrame = this::invalidate;
@@ -141,23 +171,91 @@ public class AtomCoreView extends View {
         scheduleNextFrame();
     }
 
+    /** Applies a semantic style: energy drives engagement, hueShift blends lavender->teal. */
+    public void setStyle(CoreStyle style) {
+        applyHueShift(style.hueShift);
+        setMotionProfile(style.motion);
+        setEnergy(style.energy);
+        if (style.oneShot != Transient.NONE) {
+            playTransient(style.oneShot);
+        }
+        setStyleDesaturated(style.desaturate);
+    }
+
+    /** Blends the palette toward teal and rebuilds the size-dependent shaders/blooms once. */
+    private void applyHueShift(float shift) {
+        float clamped = Math.max(0f, Math.min(1f, shift));
+        // Safe exact-compare: hueShift only ever receives the exact constants 0f/1f
+        // from CoreStyle; revisit if a future caller passes a computed/animated value.
+        if (clamped == hueShift) {
+            return;
+        }
+        hueShift = clamped;
+        accent = ColorBlend.lerp(ACCENT, TEAL, clamped);
+        accentBright = ColorBlend.lerp(ACCENT_BRIGHT, TEAL_BRIGHT, clamped);
+        accentDeep = ColorBlend.lerp(ACCENT_DEEP, TEAL_DEEP, clamped);
+        if (radius > 0) {
+            // Rebuild the size-dependent shaders + baked blooms with the new palette.
+            onSizeChanged(getWidth(), getHeight(), getWidth(), getHeight());
+        }
+        invalidate();
+    }
+
+    private void setMotionProfile(MotionProfile profile) {
+        gatherTarget = profile == MotionProfile.GATHER ? 1f : 0f;
+        scan = profile == MotionProfile.SCAN;
+        scheduleNextFrame();
+    }
+
+    public void playTransient(Transient t) {
+        long now = AnimationUtils.currentAnimationTimeMillis();
+        if (t == Transient.BLOOM) {
+            bloomStartMs = now;
+        } else if (t == Transient.SHUDDER) {
+            shudderStartMs = now;
+        }
+        scheduleNextFrame();
+    }
+
     /**
      * Mutes the core's look: when muted it renders near-grayscale and dimmed so the
      * "mic off" state is legible at a glance, distinct from the vivid lavender idle.
      * Implemented as a color filter on a layer: the whole composited core is desaturated.
      */
     public void setMuted(boolean muted) {
-        if (muted && mutedLayerPaint == null) {
+        if (this.muted == muted) {
+            return;
+        }
+        this.muted = muted;
+        updateDesaturationLayer();
+    }
+
+    private void setStyleDesaturated(boolean desaturate) {
+        if (styleDesaturated == desaturate) {
+            return;
+        }
+        styleDesaturated = desaturate;
+        updateDesaturationLayer();
+    }
+
+    private void ensureMutedPaint() {
+        if (mutedLayerPaint == null) {
             ColorMatrix matrix = new ColorMatrix();
             matrix.setSaturation(MUTED_SATURATION);
             mutedLayerPaint = new Paint();
             mutedLayerPaint.setColorFilter(new ColorMatrixColorFilter(matrix));
             mutedLayerPaint.setAlpha(MUTED_ALPHA);
         }
-        if (muted) {
+    }
+
+    /** Desaturate the whole core when muted OR style-desaturated; else the default layer. */
+    private void updateDesaturationLayer() {
+        if (muted || styleDesaturated) {
+            ensureMutedPaint();
             // A layer with the filter paint applies the desaturation to the result; the
             // blooms (now bitmaps) composite into it just like the rest of the core.
-            setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_HARDWARE, mutedLayerPaint);
+            setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_HARDWARE,
+                    mutedLayerPaint);
         } else {
             applyDefaultLayer();
         }
@@ -195,7 +293,8 @@ public class AtomCoreView extends View {
         if (!isAttachedToWindow() || getWindowVisibility() != VISIBLE || !isShown()) {
             return;
         }
-        if (targetEnergy == 0f && energy < 0.01f) {
+        boolean transientActive = bloomStartMs != 0 || shudderStartMs != 0;
+        if (targetEnergy == 0f && energy < 0.01f && gather < 0.01f && !transientActive) {
             postOnAnimationDelayed(invalidateFrame, IDLE_FRAME_DELAY_MS);
         } else {
             postOnAnimationDelayed(invalidateFrame, ACTIVE_FRAME_DELAY_MS);
@@ -212,15 +311,15 @@ public class AtomCoreView extends View {
             return;
         }
         bgGlowShader = new RadialGradient(cx, cy, radius * 0.98f,
-                new int[]{withAlpha(ACCENT, 90), withAlpha(ACCENT_DEEP, 38), 0x00000000},
+                new int[]{withAlpha(accent, 90), withAlpha(accentDeep, 38), 0x00000000},
                 new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
         nucleusShader = new RadialGradient(cx, cy, radius * 0.16f,
-                new int[]{0xFFFFFFFF, ACCENT_BRIGHT, withAlpha(ACCENT_DEEP, 210)},
+                new int[]{0xFFFFFFFF, accentBright, withAlpha(accentDeep, 210)},
                 new float[]{0f, 0.45f, 1f}, Shader.TileMode.CLAMP);
         sweepShader = new SweepGradient(cx, cy, new int[]{
-                withAlpha(ACCENT, 30), withAlpha(ACCENT_BRIGHT, 255),
-                withAlpha(ACCENT, 70), withAlpha(ACCENT_BRIGHT, 255),
-                withAlpha(ACCENT, 30)
+                withAlpha(accent, 30), withAlpha(accentBright, 255),
+                withAlpha(accent, 70), withAlpha(accentBright, 255),
+                withAlpha(accent, 30)
         }, new float[]{0f, 0.25f, 0.5f, 0.75f, 1f});
 
         bakeBlooms();
@@ -237,17 +336,17 @@ public class AtomCoreView extends View {
         float ringStroke = radius * 0.05f;
         float ringBlur = radius * 0.06f;
         ringGlowExtent = ringR + ringStroke / 2f + ringBlur * 2f;
-        ringGlowBmp = bakeRingGlow(ringR, ringStroke, ringBlur, ACCENT);
+        ringGlowBmp = bakeRingGlow(ringR, ringStroke, ringBlur, accent);
 
         float electronR = radius * 0.034f * 2.3f;
         float electronBlur = radius * 0.035f;
         electronGlowExtent = electronR + electronBlur * 2f;
-        electronGlowBmp = bakeCircleGlow(electronR, electronBlur, ACCENT_BRIGHT);
+        electronGlowBmp = bakeCircleGlow(electronR, electronBlur, accentBright);
 
         float nucleusR = radius * 0.15f * 1.9f;
         float nucleusBlur = radius * 0.08f;
         nucleusGlowExtent = nucleusR + nucleusBlur * 2f;
-        nucleusGlowBmp = bakeCircleGlow(nucleusR, nucleusBlur, ACCENT_BRIGHT);
+        nucleusGlowBmp = bakeCircleGlow(nucleusR, nucleusBlur, accentBright);
     }
 
     @Override
@@ -291,6 +390,7 @@ public class AtomCoreView extends View {
 
         // Ease energy toward its target for smooth idle <-> listening transitions.
         energy += (targetEnergy - energy) * Math.min(1f, dt * 4f);
+        gather += (gatherTarget - gather) * Math.min(1f, dt * 4f);
 
         float speed = 0.5f + energy * 1.15f;
         phase += dt * speed;
@@ -298,12 +398,34 @@ public class AtomCoreView extends View {
         double breathe = Math.sin(phase * 1.15);          // slow -1..1 breathing
         float pulse = (float) (1.0 + 0.045 * breathe + 0.03 * energy);
 
+        float shudder = transientProgress(shudderStartMs, SHUDDER_MS);
+        int canvasSave;
+        if (shudder > 0f) {
+            if (shudderLayerPaint == null) {
+                ColorMatrix shudderMatrix = new ColorMatrix();
+                shudderMatrix.setSaturation(0.35f);
+                shudderLayerPaint = new Paint();
+                shudderLayerPaint.setColorFilter(new ColorMatrixColorFilter(shudderMatrix));
+            }
+            canvasSave = canvas.saveLayer(null, shudderLayerPaint);
+            float dx = (float) (radius * 0.03f * shudder * Math.sin(phase * 60));
+            canvas.translate(dx, 0);
+        } else {
+            canvasSave = canvas.save();
+        }
+
         drawBackgroundGlow(canvas, pulse);
         drawAuraRings(canvas);
         drawOrbitsAndElectrons(canvas, false);   // orbits + electrons passing behind
         drawMainRing(canvas, pulse);
         drawNucleus(canvas, pulse);
         drawOrbitsAndElectrons(canvas, true);    // electrons passing in front
+
+        canvas.restoreToCount(canvasSave);
+
+        long nowMs = AnimationUtils.currentAnimationTimeMillis();
+        if (bloomStartMs != 0 && nowMs - bloomStartMs >= BLOOM_MS) bloomStartMs = 0;
+        if (shudderStartMs != 0 && nowMs - shudderStartMs >= SHUDDER_MS) shudderStartMs = 0;
 
         scheduleNextFrame();
     }
@@ -325,7 +447,7 @@ public class AtomCoreView extends View {
             float p = frac((float) (phase * 0.13) + k / 3f);
             float r = lerp(radius * 0.34f, radius * 0.98f, p);
             int alpha = (int) ((1f - p) * (70 + 60 * energy));
-            auraPaint.setColor(withAlpha(ACCENT, alpha));
+            auraPaint.setColor(withAlpha(accent, alpha));
             canvas.drawCircle(cx, cy, r, auraPaint);
         }
     }
@@ -353,8 +475,10 @@ public class AtomCoreView extends View {
         float nr = radius * 0.15f;
 
         // Soft bloom behind the nucleus (pre-rasterized; scaled by pulse, brightness by energy).
-        bloomPaint.setAlpha((int) (110 + 110 * energy));
-        blitBloom(canvas, nucleusGlowBmp, cx, cy, nucleusGlowExtent * pulse);
+        float bloom = transientProgress(bloomStartMs, BLOOM_MS); // 1 -> 0 over BLOOM_MS, else 0
+        float bloomScale = 1f + 0.35f * bloom;
+        bloomPaint.setAlpha((int) Math.min(255, (110 + 110 * energy) + 145 * bloom));
+        blitBloom(canvas, nucleusGlowBmp, cx, cy, nucleusGlowExtent * pulse * bloomScale);
 
         // Gradient body.
         canvas.save();
@@ -376,8 +500,9 @@ public class AtomCoreView extends View {
      * draws those currently on the near side of the nucleus (and vice versa).
      */
     private void drawOrbitsAndElectrons(Canvas canvas, boolean front) {
-        float orbRx = radius * 0.64f;
-        float orbRy = radius * 0.26f;
+        float gatherScale = 1f - 0.12f * gather;
+        float orbRx = radius * 0.64f * gatherScale;
+        float orbRy = radius * 0.26f * gatherScale;
 
         for (int i = 0; i < 3; i++) {
             if (!front) {
@@ -385,7 +510,7 @@ public class AtomCoreView extends View {
                 canvas.save();
                 canvas.rotate(ORBIT_TILT[i], cx, cy);
                 orbitPaint.setStrokeWidth(radius * 0.006f);
-                orbitPaint.setColor(withAlpha(ACCENT, (int) (26 + 34 * energy)));
+                orbitPaint.setColor(withAlpha(accent, (int) (26 + 34 * energy)));
                 canvas.drawOval(cx - orbRx, cy - orbRy, cx + orbRx, cy + orbRy, orbitPaint);
                 canvas.restore();
             }
@@ -411,7 +536,8 @@ public class AtomCoreView extends View {
             bloomPaint.setAlpha((int) (130 * depth));
             blitBloom(canvas, electronGlowBmp, px, py, electronGlowExtent * depth);
 
-            electronPaint.setColor(withAlpha(ACCENT_BRIGHT, 255));
+            int electronAlpha = scan ? (i == 0 ? 255 : 90) : 255;
+            electronPaint.setColor(withAlpha(accentBright, electronAlpha));
             canvas.drawCircle(px, py, er, electronPaint);
         }
     }
@@ -461,5 +587,17 @@ public class AtomCoreView extends View {
 
     private static float lerp(float a, float b, float t) {
         return a + (b - a) * t;
+    }
+
+    /** Returns a 1->0 decay for an active one-shot, or 0 when inactive/elapsed. */
+    private static float transientProgress(long startMs, long durationMs) {
+        if (startMs == 0) {
+            return 0f;
+        }
+        long elapsed = AnimationUtils.currentAnimationTimeMillis() - startMs;
+        if (elapsed >= durationMs) {
+            return 0f;
+        }
+        return 1f - (float) elapsed / durationMs;
     }
 }

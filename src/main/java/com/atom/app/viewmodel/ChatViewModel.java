@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
+import com.atom.app.overlay.OperatingCueBus;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
@@ -22,6 +23,8 @@ import io.grpc.StatusRuntimeException;
 public class ChatViewModel extends ViewModel {
     private final ChatRepository repository;
     private final CommandRepository commandRepository;
+    // Bridges this path's autonomous loop to the overlay's cross-app operating cue.
+    private final OperatingCueBus operatingCueBus;
     // Reports whether Atom's accessibility service is enabled. Kept as a
     // supplier so the ViewModel stays free of an Android Context and unit-testable.
     private final BooleanSupplier accessibilityEnabled;
@@ -48,6 +51,13 @@ public class ChatViewModel extends ViewModel {
     // A spoken confirmation question to voice + capture; one-shot Event. The Activity
     // speaks it, re-opens the mic, and feeds the transcript via submitSpokenConfirmation.
     private MutableLiveData<Event<String>> voiceConfirmationRequested = new MutableLiveData<>();
+    // One-shot signal that an autonomous chain COMPLETED (not aborted). The Activity uses
+    // it to confirm the finish tangibly — a distinct success sub-label + a confirmation
+    // haptic — so the user knows the task is done even when not watching the orb. Separate
+    // from chatResponse (which also fires for ordinary chat replies) so only real task
+    // completions get the affordance, and from the OperatingCueBus (whose one-shot Events
+    // the overlay service already consumes) to avoid a second Event consumer.
+    private MutableLiveData<Event<String>> taskCompleted = new MutableLiveData<>();
     // Hands the spoken reply back to the blocked loop thread (capacity 1).
     private final BlockingQueue<String> spokenConfirmation = new ArrayBlockingQueue<>(1);
     // How long the loop waits for the spoken reply before treating it as no answer.
@@ -61,11 +71,13 @@ public class ChatViewModel extends ViewModel {
 
     public ChatViewModel(ChatRepository repository, CommandRepository commandRepository,
                          ConversationRepository conversationRepository,
-                         BooleanSupplier accessibilityEnabled) {
+                         BooleanSupplier accessibilityEnabled,
+                         OperatingCueBus operatingCueBus) {
         this.repository = repository;
         this.commandRepository = commandRepository;
         this.conversationRepository = conversationRepository;
         this.accessibilityEnabled = accessibilityEnabled;
+        this.operatingCueBus = operatingCueBus;
         // The backend holds sensitive actions and asks out loud mid-loop; this gate
         // speaks the question and captures the spoken "sí/no" (hands-free).
         commandRepository.setConfirmationGate(new VoiceConfirmationGate());
@@ -78,6 +90,7 @@ public class ChatViewModel extends ViewModel {
     public LiveData<Event<Boolean>> getSessionExpired() { return sessionExpired; }
     public LiveData<Boolean> getAutomationActive() { return automationActive; }
     public LiveData<Event<String>> getVoiceConfirmationRequested() { return voiceConfirmationRequested; }
+    public LiveData<Event<String>> getTaskCompleted() { return taskCompleted; }
 
     /** Free-form conversational message (token-streamed via StreamChat). */
     public void sendMessage(String prompt) {
@@ -182,19 +195,26 @@ public class ChatViewModel extends ViewModel {
         commandRepository.executeAutonomous(order, new CommandRepository.AutomationCallback() {
             @Override
             public void onActionStarted(ResolvedAction action, int step) {
-                // Per-step progress; the boolean state already drives the indicator.
+                // Bridge to the overlay's cross-app cue (pulsing handle + live notification).
+                // The on-screen core (driven by automationActive) still covers the foreground.
+                operatingCueBus.started(action != null ? action.type() : null, step);
             }
 
             @Override
             public void onComplete(String finalMessage) {
                 automationActive.setValue(false);
+                operatingCueBus.finished(finalMessage, false);
                 conversationRepository.saveAssistantMessage(finalMessage);
                 chatResponse.setValue(finalMessage);
+                // Fire AFTER chatResponse so the Activity's success affordance (sub-label +
+                // haptic) lands on top of the ordinary showResponse render, not before it.
+                taskCompleted.setValue(new Event<>(finalMessage));
             }
 
             @Override
             public void onAborted(String message) {
                 automationActive.setValue(false);
+                operatingCueBus.finished(message, true);
                 if (message != null && !message.trim().isEmpty()) {
                     errorMessage.setValue(message);
                 }

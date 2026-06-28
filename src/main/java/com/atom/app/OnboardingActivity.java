@@ -134,8 +134,8 @@ public class OnboardingActivity extends AppCompatActivity {
         preferences.setWakeWordName(preferences.getAssistantName());
         preferences.setOnboardingComplete(true);
 
-        // Route on to the main screen and close onboarding so back doesn't return here.
-        startActivity(new Intent(this, MainActivity.class));
+        // Route on to the first-run permission setup and close onboarding so back doesn't return here.
+        startActivity(new Intent(this, PermissionSetupActivity.class));
         finish();
     }
 

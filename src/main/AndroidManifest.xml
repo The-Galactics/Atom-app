@@ -33,6 +33,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Overlay / "super position": draw the assistant UI on top of other apps. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- ============================================================= -->
     <!-- Package visibility (Android 11+)                              -->
@@ -56,6 +57,13 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- OEM autostart screens targeted by OemSettingsRouter.autostartCandidates. -->
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.coloros.safecenter" />
+        <package android:name="com.oppo.safe" />
+        <package android:name="com.oneplus.security" />
+        <package android:name="com.vivo.permissionmanager" />
+        <package android:name="com.iqoo.secure" />
     </queries>
 
     <application
@@ -90,6 +98,9 @@
 
         <!-- First-run onboarding (name + assistant name + permissions intro). -->
         <activity android:name=".OnboardingActivity" />
+
+        <!-- First-run permission setup screen (shown once after onboarding). -->
+        <activity android:name=".PermissionSetupActivity" />
 
         <!-- Login / register screen. -->
         <activity android:name=".LoginActivity" android:exported="false" />
