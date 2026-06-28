@@ -33,6 +33,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Overlay / "super position": draw the assistant UI on top of other apps. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- ============================================================= -->
     <!-- Package visibility (Android 11+)                              -->
