@@ -67,6 +67,11 @@ public class AppContainer {
     // dialogue through the same instance.
     private final ConversationRepository conversationRepository;
 
+    // App-scoped bridge from the chat path's autonomous loop to the overlay's cross-app
+    // operating cue. Built here so the chat ViewModel and the overlay share one instance.
+    private final com.atom.app.overlay.OperatingCueBus operatingCueBus =
+            new com.atom.app.overlay.OperatingCueBus();
+
     // OEM-aware accessibility capture registry (stateless singleton adapters).
     private final com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry oemAdapterRegistry;
 
@@ -200,6 +205,10 @@ public class AppContainer {
 
     public ConversationRepository getConversationRepository() {
         return conversationRepository;
+    }
+
+    public com.atom.app.overlay.OperatingCueBus getOperatingCueBus() {
+        return operatingCueBus;
     }
 
     /** Returns the stored UUID for {@code key}, creating and persisting one if absent. */

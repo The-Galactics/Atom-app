@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
+import com.atom.app.overlay.OperatingCueBus;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
@@ -22,6 +23,8 @@ import io.grpc.StatusRuntimeException;
 public class ChatViewModel extends ViewModel {
     private final ChatRepository repository;
     private final CommandRepository commandRepository;
+    // Bridges this path's autonomous loop to the overlay's cross-app operating cue.
+    private final OperatingCueBus operatingCueBus;
     // Reports whether Atom's accessibility service is enabled. Kept as a
     // supplier so the ViewModel stays free of an Android Context and unit-testable.
     private final BooleanSupplier accessibilityEnabled;
@@ -61,11 +64,13 @@ public class ChatViewModel extends ViewModel {
 
     public ChatViewModel(ChatRepository repository, CommandRepository commandRepository,
                          ConversationRepository conversationRepository,
-                         BooleanSupplier accessibilityEnabled) {
+                         BooleanSupplier accessibilityEnabled,
+                         OperatingCueBus operatingCueBus) {
         this.repository = repository;
         this.commandRepository = commandRepository;
         this.conversationRepository = conversationRepository;
         this.accessibilityEnabled = accessibilityEnabled;
+        this.operatingCueBus = operatingCueBus;
         // The backend holds sensitive actions and asks out loud mid-loop; this gate
         // speaks the question and captures the spoken "sí/no" (hands-free).
         commandRepository.setConfirmationGate(new VoiceConfirmationGate());
@@ -182,12 +187,15 @@ public class ChatViewModel extends ViewModel {
         commandRepository.executeAutonomous(order, new CommandRepository.AutomationCallback() {
             @Override
             public void onActionStarted(ResolvedAction action, int step) {
-                // Per-step progress; the boolean state already drives the indicator.
+                // Bridge to the overlay's cross-app cue (pulsing handle + live notification).
+                // The on-screen core (driven by automationActive) still covers the foreground.
+                operatingCueBus.started(action != null ? action.type() : null, step);
             }
 
             @Override
             public void onComplete(String finalMessage) {
                 automationActive.setValue(false);
+                operatingCueBus.finished(finalMessage, false);
                 conversationRepository.saveAssistantMessage(finalMessage);
                 chatResponse.setValue(finalMessage);
             }
@@ -195,6 +203,7 @@ public class ChatViewModel extends ViewModel {
             @Override
             public void onAborted(String message) {
                 automationActive.setValue(false);
+                operatingCueBus.finished(message, true);
                 if (message != null && !message.trim().isEmpty()) {
                     errorMessage.setValue(message);
                 }
