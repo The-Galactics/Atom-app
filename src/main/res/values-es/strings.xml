@@ -83,7 +83,6 @@
     <!-- Notificación en primer plano "operando" en vivo (Atom está controlando otras apps). -->
     <string name="notif_operating_title">Atom está operando</string>
     <string name="notif_operating_step">Paso %1$d</string>
-    <string name="notif_operating_done">Listo</string>
     <string name="notif_task_complete">✓ Tarea completada</string>
     <string name="notif_complete_channel_name">Tareas completadas</string>
     <string name="action_verb_open_app">Abriendo una app</string>
