@@ -178,7 +178,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     // --- Permission dashboard ------------------------------------------------
 
-    /** Wires the three "Fix" buttons; statuses are filled in by {@link #refreshPermissionDashboard}. */
+    /** Wires the four "Fix" buttons; statuses are filled in by {@link #refreshPermissionDashboard}. */
     private void setupPermissionDashboard() {
         chipOverlayStatus = findViewById(R.id.chip_overlay_status);
         chipAccessibilityStatus = findViewById(R.id.chip_accessibility_status);
@@ -242,7 +242,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    /** Refreshes the three status chips to reflect the current grant state. */
+    /** Refreshes the four status chips to reflect the current grant state. */
     private void refreshPermissionDashboard() {
         applyChip(chipOverlayStatus, PermissionCoordinator.canDrawOverlays(this));
         applyChip(chipAccessibilityStatus,
