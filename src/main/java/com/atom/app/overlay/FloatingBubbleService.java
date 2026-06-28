@@ -58,6 +58,7 @@ import com.atom.app.repository.CommandRepository;
 import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.InputBarUtils;
+import com.atom.app.viewmodel.Event;
 import com.atom.app.ui.MicAnimations;
 import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.domain.action.ActionType;
@@ -140,6 +141,25 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private android.animation.ValueAnimator handlePulse; // teal pulse while operating
     private boolean collapsedToHandle; // bubble is tucked away to the edge handle
     private boolean lastBubbleOnLeft;  // which edge the bubble last rested on
+
+    // Operating cue bridged from the chat path (main-app-initiated actions). The bubble
+    // path drives the cue inline and does NOT publish here, so there is no double-drive.
+    private OperatingCueBus operatingCueBus;
+    private final Observer<Event<OperatingCueBus.Cue>> operatingCueObserver = event -> {
+        OperatingCueBus.Cue cue = event.getContentIfNotHandled();
+        if (cue == null) {
+            return;
+        }
+        if (cue.kind == OperatingCueBus.Cue.Kind.STARTED) {
+            onOperatingStarted(cue.actionType, cue.step);
+        } else {
+            onOperatingFinished(cue.message, cue.aborted);
+        }
+    };
+    private boolean operatingFromApp;     // an app-initiated action chain is running
+    private boolean operatingCueShown;    // the cross-app handle/notification is up for it
+    @Nullable private ActionType lastOperatingType;
+    private int lastOperatingStep;
     private int lastBubbleY = -1;      // last bubble Y, reused to place the handle
 
     private AtomApp app;
@@ -228,6 +248,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         app.setForegroundListener(this);
+        operatingCueBus = app.getAppContainer().getOperatingCueBus();
+        operatingCueBus.cues().observeForever(operatingCueObserver);
     }
 
     @Override
@@ -345,6 +367,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 || bubbleView != null || panelView != null || handleView != null) {
             return;
         }
+        // Atom went cross-app mid-action (decision 1): surface the pulsing handle and the
+        // live operating notification, not the resting bubble.
+        if (operatingFromApp) {
+            showOperatingHandle();
+            updateOperatingNotification(lastOperatingType, lastOperatingStep);
+            return;
+        }
         // Come back in whichever state the user left us: tucked to the handle, or open.
         if (collapsedToHandle) {
             showHandle();
@@ -425,13 +454,66 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     /** Pushes a live operating-state notification (step + action verb). */
     private void updateOperatingNotification(ResolvedAction action, int step) {
+        ActionType type = action != null && action.isExecutable() ? action.type() : null;
+        updateOperatingNotification(type, step);
+    }
+
+    /** Same, keyed off the action type alone (the bus carries a type, not a ResolvedAction). */
+    private void updateOperatingNotification(ActionType type, int step) {
         String label = getString(R.string.notif_operating_step); // template "Step %1$d"
-        String verb = action != null && action.isExecutable() ? getString(verbResIdFor(action.type())) : null;
+        String verb = type != null ? getString(verbResIdFor(type)) : null;
         String text = OperatingNotificationText.compose(label, step, verb);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
             nm.notify(NOTIFICATION_ID, buildNotification(collapsedToHandle, text));
         }
+    }
+
+    // An app-initiated action started/advanced. While Atom's own UI is foreground we keep
+    // the overlay hidden (the on-screen core already signals operating, decision 1); once
+    // Atom has gone cross-app we surface the pulsing edge handle + live operating notification.
+    private void onOperatingStarted(@Nullable ActionType type, int step) {
+        operatingFromApp = true;
+        lastOperatingType = type;
+        lastOperatingStep = step;
+        if (!overlayEnabled || app.isAppInForeground()) {
+            return; // surfaced later by onAppBackground() once Atom navigates away
+        }
+        showOperatingHandle();
+        updateOperatingNotification(type, step);
+    }
+
+    // An app-initiated chain finished. Only if we actually showed the cross-app cue do we
+    // stop the pulse and flash a brief completion line (decision 4: no cue, no completion
+    // flash, for purely in-app actions that never backgrounded the app).
+    private void onOperatingFinished(@Nullable String message, boolean aborted) {
+        operatingFromApp = false;
+        boolean hadCue = operatingCueShown;
+        operatingCueShown = false;
+        lastOperatingType = null;
+        lastOperatingStep = 0;
+        if (!hadCue) {
+            return;
+        }
+        stopHandlePulse();
+        postCompletionNotification(); // added in Task 4
+    }
+
+    // Brings up the pulsing teal handle as the cross-app operating surface, tucking away
+    // any open bubble/panel first so it never covers Atom's taps.
+    private void showOperatingHandle() {
+        if (bubbleView != null || panelView != null) {
+            hideToHandle();          // sets collapsedToHandle, shows the handle, resting notif
+        } else if (handleView == null) {
+            collapsedToHandle = true;
+            showHandle();
+        }
+        startHandlePulse();
+        operatingCueShown = true;
+    }
+
+    private void postCompletionNotification() {
+        updateNotification(collapsedToHandle);
     }
 
     private int verbResIdFor(ActionType type) {
@@ -1622,6 +1704,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         if (transcriptSource != null) {
             transcriptSource.removeObserver(transcriptObserver);
+        }
+        if (operatingCueBus != null) {
+            operatingCueBus.cues().removeObserver(operatingCueObserver);
         }
         destroyRecognizer();
         if (tts != null) {
