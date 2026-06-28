@@ -22,6 +22,8 @@ public class AtomPreferences {
     private static final String KEY_BUBBLE_ON_LEFT = "bubble_on_left";
     private static final String KEY_BUBBLE_Y = "bubble_y";
     private static final String KEY_BUBBLE_ENABLED = "bubble_enabled";
+    private static final String KEY_PERMISSION_SETUP_COMPLETE = "permission_setup_complete";
+    private static final String KEY_OEM_AUTOSTART_CONFIRMED = "oem_autostart_confirmed";
 
     /** Language follows the system locale until the user picks a specific one. */
     public static final String LANGUAGE_SYSTEM = "system";
@@ -175,6 +177,24 @@ public class AtomPreferences {
 
     public void setBubbleEnabled(boolean enabled) {
         prefs.edit().putBoolean(KEY_BUBBLE_ENABLED, enabled).apply();
+    }
+
+    /** True once the first-run permission setup screen has been completed (or skipped past). */
+    public boolean isPermissionSetupComplete() {
+        return prefs.getBoolean(KEY_PERMISSION_SETUP_COMPLETE, false);
+    }
+
+    public void setPermissionSetupComplete(boolean complete) {
+        prefs.edit().putBoolean(KEY_PERMISSION_SETUP_COMPLETE, complete).apply();
+    }
+
+    /** User-confirmed they enabled OEM autostart (no API exists to detect it). */
+    public boolean isOemAutostartConfirmed() {
+        return prefs.getBoolean(KEY_OEM_AUTOSTART_CONFIRMED, false);
+    }
+
+    public void setOemAutostartConfirmed(boolean confirmed) {
+        prefs.edit().putBoolean(KEY_OEM_AUTOSTART_CONFIRMED, confirmed).apply();
     }
 
     /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */
