@@ -2,6 +2,7 @@ package com.atom.app;
 
 import android.Manifest;
 import android.content.Intent;
+import android.os.Build;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -59,13 +60,17 @@ public class SettingsActivity extends AppCompatActivity {
     private static final float MAX_RATE = 1.5f;
 
     // Permission dashboard chips, refreshed in onResume.
-    private TextView chipOverlayStatus, chipAccessibilityStatus, chipMicrophoneStatus;
+    private TextView chipOverlayStatus, chipAccessibilityStatus, chipMicrophoneStatus, chipNotificationsStatus;
 
     // Microphone runtime request from the dashboard's "Fix" button.
     private final ActivityResultLauncher<String> micPermissionLauncher =
             registerForActivityResult(new ActivityResultContracts.RequestPermission(),
                     granted -> refreshPermissionDashboard());
 
+    // Notifications runtime request (API 33+) from the dashboard's "Fix" button.
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(),
+                    granted -> refreshPermissionDashboard());
 
     // Overlay ("super position") permission result: re-check on return from Settings.
     private final ActivityResultLauncher<Intent> overlayPermissionLauncher =
@@ -178,10 +183,12 @@ public class SettingsActivity extends AppCompatActivity {
         chipOverlayStatus = findViewById(R.id.chip_overlay_status);
         chipAccessibilityStatus = findViewById(R.id.chip_accessibility_status);
         chipMicrophoneStatus = findViewById(R.id.chip_microphone_status);
+        chipNotificationsStatus = findViewById(R.id.chip_notifications_status);
 
         MaterialButton btnFixOverlay = findViewById(R.id.btn_fix_overlay);
         MaterialButton btnFixAccessibility = findViewById(R.id.btn_fix_accessibility);
         MaterialButton btnFixMicrophone = findViewById(R.id.btn_fix_microphone);
+        MaterialButton btnFixNotifications = findViewById(R.id.btn_fix_notifications);
 
         // Reuse PermissionCoordinator so the permission constants/intents aren't duplicated.
         btnFixOverlay.setOnClickListener(v ->
@@ -189,6 +196,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnFixAccessibility.setOnClickListener(v ->
                 startActivity(PermissionCoordinator.accessibilitySettingsIntent()));
         btnFixMicrophone.setOnClickListener(v -> fixMicrophonePermission());
+        btnFixNotifications.setOnClickListener(v -> fixNotificationsPermission());
     }
 
     /**
@@ -217,6 +225,23 @@ public class SettingsActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * Notifications fix: on API 33+ request the runtime permission directly when we can
+     * still prompt; otherwise (or below 33, where notifications are an app-level toggle)
+     * route to Atom's system notification settings.
+     */
+    private void fixNotificationsPermission() {
+        if (PermissionCoordinator.notificationsEnabled(this)) {
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+        } else {
+            startActivity(PermissionCoordinator.appNotificationSettingsIntent(this));
+        }
+    }
+
     /** Refreshes the three status chips to reflect the current grant state. */
     private void refreshPermissionDashboard() {
         applyChip(chipOverlayStatus, PermissionCoordinator.canDrawOverlays(this));
@@ -224,6 +249,7 @@ public class SettingsActivity extends AppCompatActivity {
                 PermissionCoordinator.isAccessibilityServiceEnabled(this));
         applyChip(chipMicrophoneStatus,
                 PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO));
+        applyChip(chipNotificationsStatus, PermissionCoordinator.notificationsEnabled(this));
     }
 
     /** Colors and labels a status chip: accent when granted, label tint when not. */

@@ -137,12 +137,14 @@
     <string name="settings_perm_overlay">Mostrar sobre otras apps</string>
     <string name="settings_perm_accessibility">Accesibilidad</string>
     <string name="settings_perm_microphone">Micrófono</string>
+    <string name="settings_perm_notifications">Notificaciones</string>
     <string name="settings_perm_fix">Arreglar</string>
     <string name="settings_perm_granted">Concedido</string>
     <string name="settings_perm_not_granted">No concedido</string>
     <string name="cd_fix_overlay">Corregir permiso de superposición</string>
     <string name="cd_fix_accessibility">Corregir permiso de accesibilidad</string>
     <string name="cd_fix_microphone">Corregir permiso de micrófono</string>
+    <string name="cd_fix_notifications">Arreglar permiso de notificaciones</string>
 
     <!-- Ajustes de la palabra de activación -->
     <string name="settings_wake_word">Palabra de activación</string>

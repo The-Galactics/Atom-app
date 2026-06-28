@@ -138,12 +138,14 @@
     <string name="settings_perm_overlay">Display over other apps</string>
     <string name="settings_perm_accessibility">Accessibility</string>
     <string name="settings_perm_microphone">Microphone</string>
+    <string name="settings_perm_notifications">Notifications</string>
     <string name="settings_perm_fix">Fix</string>
     <string name="settings_perm_granted">Granted</string>
     <string name="settings_perm_not_granted">Not granted</string>
     <string name="cd_fix_overlay">Fix overlay permission</string>
     <string name="cd_fix_accessibility">Fix accessibility permission</string>
     <string name="cd_fix_microphone">Fix microphone permission</string>
+    <string name="cd_fix_notifications">Fix notifications permission</string>
 
     <!-- Wake word settings -->
     <string name="settings_wake_word">Wake word</string>
