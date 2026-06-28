@@ -98,4 +98,37 @@ class CoreStatePresenterTest {
         assertThat(CoreStatePresenter.resolveForReducedMotion(
                 CoreStatePresenter.styleFor(CoreState.ERROR), true).oneShot).isEqualTo(Transient.NONE);
     }
+
+    @Test
+    void reducedMotionSuccessHoldsBrighterThanIdle() {
+        CoreStyle r = CoreStatePresenter.resolveForReducedMotion(
+                CoreStatePresenter.styleFor(CoreState.RESPONDED), true);
+        assertThat(r.energy).isGreaterThan(0.0f);
+        assertThat(r.desaturate).isFalse();
+        assertThat(r.motion).isEqualTo(MotionProfile.BREATHE);
+        assertThat(r.oneShot).isEqualTo(Transient.NONE);
+    }
+
+    @Test
+    void reducedMotionErrorDesaturates() {
+        CoreStyle r = CoreStatePresenter.resolveForReducedMotion(
+                CoreStatePresenter.styleFor(CoreState.ERROR), true);
+        assertThat(r.desaturate).isTrue();
+        assertThat(r.motion).isEqualTo(MotionProfile.BREATHE);
+        assertThat(r.oneShot).isEqualTo(Transient.NONE);
+    }
+
+    @Test
+    void reducedMotionIdleAndWorkingAreNotDesaturated() {
+        for (CoreState s : new CoreState[]{
+                CoreState.IDLE, CoreState.THINKING, CoreState.OPERATING, CoreState.LISTENING}) {
+            assertThat(CoreStatePresenter.resolveForReducedMotion(
+                    CoreStatePresenter.styleFor(s), true).desaturate).isFalse();
+        }
+    }
+
+    @Test
+    void coreStyleFourArgDefaultsDesaturateFalse() {
+        assertThat(new CoreStyle(0.5f, 0.2f, MotionProfile.BREATHE, Transient.NONE).desaturate).isFalse();
+    }
 }

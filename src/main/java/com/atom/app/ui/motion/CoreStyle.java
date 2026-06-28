@@ -12,11 +12,19 @@ public final class CoreStyle {
     public final float hueShift;
     public final MotionProfile motion;
     public final Transient oneShot;
+    /** When true, the core renders desaturated/dimmed (static "muted/error" look). */
+    public final boolean desaturate;
 
     public CoreStyle(float energy, float hueShift, MotionProfile motion, Transient oneShot) {
+        this(energy, hueShift, motion, oneShot, false);
+    }
+
+    public CoreStyle(float energy, float hueShift, MotionProfile motion, Transient oneShot,
+                     boolean desaturate) {
         this.energy = energy;
         this.hueShift = hueShift;
         this.motion = motion;
         this.oneShot = oneShot;
+        this.desaturate = desaturate;
     }
 }

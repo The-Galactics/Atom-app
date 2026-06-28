@@ -18,6 +18,7 @@ public final class CoreStatePresenter {
     private static final float ENERGY_IDLE = 0.0f;
     private static final float ENERGY_THINKING = 0.6f;
     private static final float ENERGY_LISTENING = 1.0f;
+    private static final float ENERGY_SUCCESS_HOLD = 0.35f;
 
     private static final float HUE_LAVENDER = 0.0f;
     private static final float HUE_TEAL = 1.0f;
@@ -56,6 +57,19 @@ public final class CoreStatePresenter {
         if (!reducedMotion) {
             return style;
         }
-        return new CoreStyle(style.energy, style.hueShift, MotionProfile.BREATHE, Transient.NONE);
+        // Energy + hue stay as differentiators; give the two outcome states a distinct
+        // STATIC look (no animation): success holds brighter, error desaturates.
+        switch (style.oneShot) {
+            case BLOOM:   // RESPONDED / success
+                return new CoreStyle(ENERGY_SUCCESS_HOLD, style.hueShift,
+                        MotionProfile.BREATHE, Transient.NONE, false);
+            case SHUDDER: // ERROR
+                return new CoreStyle(style.energy, style.hueShift,
+                        MotionProfile.BREATHE, Transient.NONE, true);
+            case NONE:
+            default:
+                return new CoreStyle(style.energy, style.hueShift,
+                        MotionProfile.BREATHE, Transient.NONE, false);
+        }
     }
 }

@@ -113,6 +113,8 @@ public class AtomCoreView extends View {
 
     // Desaturating + dimming paint applied to the whole layer while muted (lazy-built).
     private Paint mutedLayerPaint;
+    private boolean muted;            // mic muted
+    private boolean styleDesaturated; // style.desaturate (e.g. reduced-motion error)
 
     // Desaturating layer paint for the ERROR shudder flash (lazy-built, reused).
     private Paint shudderLayerPaint;
@@ -177,6 +179,7 @@ public class AtomCoreView extends View {
         if (style.oneShot != Transient.NONE) {
             playTransient(style.oneShot);
         }
+        setStyleDesaturated(style.desaturate);
     }
 
     /** Blends the palette toward teal and rebuilds the size-dependent shaders/blooms once. */
@@ -220,17 +223,39 @@ public class AtomCoreView extends View {
      * Implemented as a color filter on a layer: the whole composited core is desaturated.
      */
     public void setMuted(boolean muted) {
-        if (muted && mutedLayerPaint == null) {
+        if (this.muted == muted) {
+            return;
+        }
+        this.muted = muted;
+        updateDesaturationLayer();
+    }
+
+    private void setStyleDesaturated(boolean desaturate) {
+        if (styleDesaturated == desaturate) {
+            return;
+        }
+        styleDesaturated = desaturate;
+        updateDesaturationLayer();
+    }
+
+    private void ensureMutedPaint() {
+        if (mutedLayerPaint == null) {
             ColorMatrix matrix = new ColorMatrix();
             matrix.setSaturation(MUTED_SATURATION);
             mutedLayerPaint = new Paint();
             mutedLayerPaint.setColorFilter(new ColorMatrixColorFilter(matrix));
             mutedLayerPaint.setAlpha(MUTED_ALPHA);
         }
-        if (muted) {
+    }
+
+    /** Desaturate the whole core when muted OR style-desaturated; else the default layer. */
+    private void updateDesaturationLayer() {
+        if (muted || styleDesaturated) {
+            ensureMutedPaint();
             // A layer with the filter paint applies the desaturation to the result; the
             // blooms (now bitmaps) composite into it just like the rest of the core.
-            setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_HARDWARE, mutedLayerPaint);
+            setLayerType(BLUR_NEEDS_SOFTWARE ? LAYER_TYPE_SOFTWARE : LAYER_TYPE_HARDWARE,
+                    mutedLayerPaint);
         } else {
             applyDefaultLayer();
         }
