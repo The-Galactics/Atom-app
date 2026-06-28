@@ -9,6 +9,8 @@ import android.net.Uri;
 import android.provider.Settings;
 import android.text.TextUtils;
 
+import androidx.core.app.NotificationManagerCompat;
+
 import com.atom.domain.action.ActionType;
 import com.atom.domain.action.ResolvedAction;
 import com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService;
@@ -102,5 +104,16 @@ public final class PermissionCoordinator {
     /** Intent that opens the system Accessibility settings so the user can enable Atom. */
     public static Intent accessibilitySettingsIntent() {
         return new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+    }
+
+    /** True if the user currently allows Atom to post notifications (app-level toggle). */
+    public static boolean notificationsEnabled(Context context) {
+        return NotificationManagerCompat.from(context).areNotificationsEnabled();
+    }
+
+    /** Intent that opens Atom's system notification settings so the user can re-enable them. */
+    public static Intent appNotificationSettingsIntent(Context context) {
+        return new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
     }
 }
