@@ -203,9 +203,9 @@
     <string name="action_opening_settings">Opening %1$s settings.</string>
     <!-- Accessibility-powered actions -->
     <string name="action_accessibility_disabled">Enable Atom\'s accessibility service in Settings to do that.</string>
-    <string name="accessibility_prompt_title">Accessibility needed</string>
-    <string name="accessibility_prompt_message">To navigate, scroll, read or tap the screen, Atom needs its accessibility service enabled. Open Settings to turn it on?</string>
-    <string name="accessibility_prompt_open">Open settings</string>
+    <string name="accessibility_prompt_title">Allow Atom to use Accessibility?</string>
+    <string name="accessibility_prompt_message">Atom uses Android\'s Accessibility service to read the content on your screen so it can carry out what you ask by voice — tapping, scrolling, reading and navigating across apps. The on-screen content it reads is sent securely (TLS-encrypted) to Atom\'s servers only to interpret your command and decide what action to take. It is not used for advertising or sold to third parties, and you can turn it off anytime in Settings. Do you agree to enable it?</string>
+    <string name="accessibility_prompt_open">I agree, open Settings</string>
     <string name="action_navigate_unknown">I didn\'t understand where to navigate.</string>
     <string name="action_navigated">Done: %1$s.</string>
     <string name="action_navigate_failed">I couldn\'t do that navigation.</string>
