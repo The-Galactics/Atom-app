@@ -425,7 +425,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     // The ongoing notification doubles as the way back from a hide: tapping it
     // (or the "Show" action) re-displays the bubble; "Turn off" stops the overlay.
     private Notification buildNotification(boolean hidden) {
-        return buildOngoing(hidden,
+        return buildOngoing(
                 getString(R.string.overlay_notification_title),
                 getString(hidden ? R.string.overlay_notification_text_hidden
                                   : R.string.overlay_notification_text),
@@ -434,7 +434,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     // operatingText != null => live "operating" body (title + step/action), keeps Stop.
     private Notification buildNotification(boolean hidden, String operatingText) {
-        return buildOngoing(hidden,
+        return buildOngoing(
                 getString(R.string.notif_operating_title),
                 operatingText,
                 /* allowRestoreAction= */ false);
@@ -443,7 +443,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     // A brief "Done" completion line shown cross-app after a chain finishes, then the
     // resting notification is restored. Resting title, completion body, no restore action.
     private Notification buildCompletionNotification(boolean hidden, String doneText) {
-        return buildOngoing(hidden,
+        return buildOngoing(
                 getString(R.string.overlay_notification_title),
                 doneText,
                 /* allowRestoreAction= */ false);
@@ -451,7 +451,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
 
     // Shared builder for the ongoing overlay notification. allowRestoreAction adds the
     // "Show" action (only meaningful for the resting hidden state).
-    private Notification buildOngoing(boolean hidden, String title, String body,
+    private Notification buildOngoing(String title, String body,
                                       boolean allowRestoreAction) {
         int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 ? PendingIntent.FLAG_IMMUTABLE : 0;
@@ -1757,6 +1757,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             voiceRepository = null;
         }
         cancelAnimations();
+        mainHandler.removeCallbacksAndMessages(null);
         hideDismissTarget();
         removeView(bubbleView);
         removeView(panelView);
