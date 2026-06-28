@@ -350,6 +350,7 @@ public class SettingsActivity extends AppCompatActivity {
             startService(new Intent(this, FloatingBubbleService.class)
                     .setAction(FloatingBubbleService.ACTION_STOP));
             bubbleEnabled = false;
+            new AtomPreferences(this).setBubbleEnabled(false);
             toast(getString(R.string.settings_bubble_stopped));
             refreshBubbleControl();
             return;
@@ -366,6 +367,7 @@ public class SettingsActivity extends AppCompatActivity {
                 .setAction(FloatingBubbleService.ACTION_START);
         startForegroundService(start);
         bubbleEnabled = true;
+        new AtomPreferences(this).setBubbleEnabled(true);
         toast(getString(R.string.settings_bubble_started));
         refreshBubbleControl();
     }

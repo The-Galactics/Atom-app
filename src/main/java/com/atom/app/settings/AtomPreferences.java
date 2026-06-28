@@ -21,6 +21,7 @@ public class AtomPreferences {
     private static final String KEY_LANGUAGE = "app_language";
     private static final String KEY_BUBBLE_ON_LEFT = "bubble_on_left";
     private static final String KEY_BUBBLE_Y = "bubble_y";
+    private static final String KEY_BUBBLE_ENABLED = "bubble_enabled";
 
     /** Language follows the system locale until the user picks a specific one. */
     public static final String LANGUAGE_SYSTEM = "system";
@@ -165,6 +166,15 @@ public class AtomPreferences {
 
     public void setBubbleY(int y) {
         prefs.edit().putInt(KEY_BUBBLE_Y, y).apply();
+    }
+
+    /** True if the user turned the floating bubble on; gates the cross-app operating cue. */
+    public boolean isBubbleEnabled() {
+        return prefs.getBoolean(KEY_BUBBLE_ENABLED, false);
+    }
+
+    public void setBubbleEnabled(boolean enabled) {
+        prefs.edit().putBoolean(KEY_BUBBLE_ENABLED, enabled).apply();
     }
 
     /** Observe preference changes (e.g. to keep the mute icon in sync across surfaces). */

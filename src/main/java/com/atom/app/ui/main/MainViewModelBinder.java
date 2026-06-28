@@ -1,10 +1,14 @@
 package com.atom.app.ui.main;
 
+import android.content.Intent;
+
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.atom.app.R;
+import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.permission.PermissionCoordinator;
+import com.atom.app.settings.AtomPreferences;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.application.port.out.security.SessionListener;
 import com.atom.domain.action.ResolvedAction;
@@ -99,8 +103,27 @@ public final class MainViewModelBinder {
             host.setInputEnabled(!operating);
             if (operating) {
                 host.showOperating();
+                ensureOperatingOverlay();
             }
         });
+    }
+
+    // When an order starts from the app, make sure the overlay service is alive so the
+    // cross-app operating cue (pulsing edge handle + live notification) can appear once
+    // Atom navigates away. Gated strictly on already-granted overlay permission and the
+    // user's bubble preference — no new permissions, and nothing happens if the user
+    // never enabled the bubble.
+    private void ensureOperatingOverlay() {
+        if (!PermissionCoordinator.canDrawOverlays(activity)
+                || !new AtomPreferences(activity).isBubbleEnabled()) {
+            return;
+        }
+        try {
+            activity.startForegroundService(new Intent(activity, FloatingBubbleService.class)
+                    .setAction(FloatingBubbleService.ACTION_PREPARE_OPERATING));
+        } catch (Exception ignored) {
+            // Background-start restrictions etc.; the cue is best-effort.
+        }
     }
 
     /** Prompts the user to enable Atom's accessibility service, then opens Settings. */

@@ -81,6 +81,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     public static final String ACTION_SHOW = "com.atom.app.overlay.SHOW";
     /** Opens the panel and starts voice capture — fired by the wake-word service. */
     public static final String ACTION_LISTEN = "com.atom.app.overlay.LISTEN";
+    public static final String ACTION_PREPARE_OPERATING = "com.atom.app.overlay.PREPARE_OPERATING";
 
     private static final int NOTIFICATION_ID = 0xA70;
     private static final String CHANNEL_ID = "atom_floating_assistant";
@@ -272,6 +273,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return START_NOT_STICKY;
         }
         overlayEnabled = true;
+        if (ACTION_PREPARE_OPERATING.equals(action)) {
+            // Come up silently to host the cross-app operating cue. Show nothing while the
+            // app's own UI is foreground (decision 1) — onAppBackground() surfaces the
+            // pulsing handle once Atom navigates away, gated by operatingFromApp.
+            startForegroundWithNotification();
+            return START_STICKY;
+        }
         if (ACTION_SHOW.equals(action)) {
             // Brought back from the notification after a hide.
             startForegroundWithNotification();
