@@ -437,6 +437,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                         COMPLETION_CHANNEL_ID,
                         getString(R.string.notif_complete_channel_name),
                         NotificationManager.IMPORTANCE_HIGH);
+                done.enableVibration(true);
                 nm.createNotificationChannel(done);
             }
         }
