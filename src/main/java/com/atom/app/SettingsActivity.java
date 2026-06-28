@@ -33,6 +33,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.atom.app.di.AppContainer;
 import com.atom.app.overlay.FloatingBubbleService;
 import com.atom.app.permission.PermissionCoordinator;
+import com.atom.app.permission.oem.OemSettingsIntents;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
 import com.google.android.material.button.MaterialButton;
@@ -61,6 +62,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     // Permission dashboard chips, refreshed in onResume.
     private TextView chipOverlayStatus, chipAccessibilityStatus, chipMicrophoneStatus, chipNotificationsStatus;
+    private TextView chipBatteryStatus, chipAutostartStatus;
+    private View rowAutostart;
 
     // Microphone runtime request from the dashboard's "Fix" button.
     private final ActivityResultLauncher<String> micPermissionLauncher =
@@ -190,6 +193,13 @@ public class SettingsActivity extends AppCompatActivity {
         MaterialButton btnFixMicrophone = findViewById(R.id.btn_fix_microphone);
         MaterialButton btnFixNotifications = findViewById(R.id.btn_fix_notifications);
 
+        chipBatteryStatus = findViewById(R.id.chip_battery_status);
+        chipAutostartStatus = findViewById(R.id.chip_autostart_status);
+        rowAutostart = findViewById(R.id.row_autostart);
+
+        MaterialButton btnFixBattery = findViewById(R.id.btn_fix_battery);
+        MaterialButton btnFixAutostart = findViewById(R.id.btn_fix_autostart);
+
         // Reuse PermissionCoordinator so the permission constants/intents aren't duplicated.
         btnFixOverlay.setOnClickListener(v ->
                 overlayPermissionLauncher.launch(PermissionCoordinator.overlaySettingsIntent(this)));
@@ -197,6 +207,15 @@ public class SettingsActivity extends AppCompatActivity {
                 startActivity(PermissionCoordinator.accessibilitySettingsIntent()));
         btnFixMicrophone.setOnClickListener(v -> fixMicrophonePermission());
         btnFixNotifications.setOnClickListener(v -> fixNotificationsPermission());
+        btnFixBattery.setOnClickListener(v ->
+                startActivity(PermissionCoordinator.batteryOptimizationIntent(this)));
+        btnFixAutostart.setOnClickListener(v -> {
+            startActivity(OemSettingsIntents.autostartIntent(this));
+            preferences.setOemAutostartConfirmed(true);
+        });
+        // Hide the autostart row on skins that have no such screen (OneUI/Stock).
+        rowAutostart.setVisibility(
+                OemSettingsIntents.supportsAutostart(this) ? View.VISIBLE : View.GONE);
     }
 
     /**
@@ -242,7 +261,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    /** Refreshes the four status chips to reflect the current grant state. */
+    /** Refreshes the six status chips to reflect the current grant state. */
     private void refreshPermissionDashboard() {
         applyChip(chipOverlayStatus, PermissionCoordinator.canDrawOverlays(this));
         applyChip(chipAccessibilityStatus,
@@ -250,6 +269,13 @@ public class SettingsActivity extends AppCompatActivity {
         applyChip(chipMicrophoneStatus,
                 PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO));
         applyChip(chipNotificationsStatus, PermissionCoordinator.notificationsEnabled(this));
+        applyChip(chipBatteryStatus, PermissionCoordinator.isIgnoringBatteryOptimizations(this));
+        if (rowAutostart != null && rowAutostart.getVisibility() == View.VISIBLE) {
+            boolean confirmed = preferences.isOemAutostartConfirmed();
+            chipAutostartStatus.setText(confirmed
+                    ? R.string.settings_perm_granted : R.string.settings_perm_action_needed);
+            chipAutostartStatus.setTextColor(getColor(confirmed ? R.color.accent : R.color.status_error));
+        }
     }
 
     /** Colors and labels a status chip: accent when granted, label tint when not. */
