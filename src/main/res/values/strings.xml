@@ -256,4 +256,30 @@
     <string name="auth_google_button">Continue with Google</string>
     <string name="auth_logout">Sign out</string>
     <string name="auth_fields_required">Please fill in all fields.</string>
+
+    <!-- Permission setup (first run) -->
+    <string name="permsetup_title">Set up permissions</string>
+    <string name="permsetup_subtitle">Atom needs these to listen, see the screen, and act for you.</string>
+    <string name="permsetup_continue">Continue</string>
+    <string name="permsetup_continue_blocked">Grant %1$d more to continue</string>
+    <string name="permsetup_grant">Grant</string>
+    <string name="permsetup_open">Open</string>
+    <string name="permsetup_done">I\'ve enabled it</string>
+    <string name="permsetup_overlay_title">Display over apps</string>
+    <string name="permsetup_overlay_body">Show Atom on top of other apps.</string>
+    <string name="permsetup_accessibility_title">Accessibility</string>
+    <string name="permsetup_accessibility_body">Let Atom read the screen and act across apps.</string>
+    <string name="permsetup_mic_title">Microphone</string>
+    <string name="permsetup_mic_body">Hear your voice commands.</string>
+    <string name="permsetup_notifications_title">Notifications</string>
+    <string name="permsetup_notifications_body">Show task progress and results.</string>
+    <string name="permsetup_battery_title">Battery exemption</string>
+    <string name="permsetup_battery_body">Keep Atom running in the background.</string>
+    <string name="permsetup_autostart_title">Autostart</string>
+    <string name="permsetup_autostart_body">Allow Atom to start in the background (required on this device).</string>
+    <string name="settings_perm_battery">Battery exemption</string>
+    <string name="settings_perm_autostart">Autostart</string>
+    <string name="settings_perm_action_needed">Action needed</string>
+    <string name="cd_fix_battery">Fix battery exemption</string>
+    <string name="cd_fix_autostart">Fix autostart</string>
 </resources>

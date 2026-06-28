@@ -236,4 +236,30 @@
     <string name="auth_google_button">Continuar con Google</string>
     <string name="auth_logout">Cerrar sesión</string>
     <string name="auth_fields_required">Completa todos los campos.</string>
+
+    <!-- Configuración de permisos (primer inicio) -->
+    <string name="permsetup_title">Configurar permisos</string>
+    <string name="permsetup_subtitle">Atom los necesita para escuchar, ver la pantalla y actuar por ti.</string>
+    <string name="permsetup_continue">Continuar</string>
+    <string name="permsetup_continue_blocked">Concede %1$d más para continuar</string>
+    <string name="permsetup_grant">Conceder</string>
+    <string name="permsetup_open">Abrir</string>
+    <string name="permsetup_done">Ya lo activé</string>
+    <string name="permsetup_overlay_title">Mostrar sobre otras apps</string>
+    <string name="permsetup_overlay_body">Mostrar Atom encima de otras aplicaciones.</string>
+    <string name="permsetup_accessibility_title">Accesibilidad</string>
+    <string name="permsetup_accessibility_body">Permite que Atom lea la pantalla y actúe entre apps.</string>
+    <string name="permsetup_mic_title">Micrófono</string>
+    <string name="permsetup_mic_body">Escuchar tus comandos de voz.</string>
+    <string name="permsetup_notifications_title">Notificaciones</string>
+    <string name="permsetup_notifications_body">Mostrar el progreso y los resultados de las tareas.</string>
+    <string name="permsetup_battery_title">Exención de batería</string>
+    <string name="permsetup_battery_body">Mantener Atom funcionando en segundo plano.</string>
+    <string name="permsetup_autostart_title">Inicio automático</string>
+    <string name="permsetup_autostart_body">Permite que Atom se inicie en segundo plano (necesario en este dispositivo).</string>
+    <string name="settings_perm_battery">Exención de batería</string>
+    <string name="settings_perm_autostart">Inicio automático</string>
+    <string name="settings_perm_action_needed">Acción necesaria</string>
+    <string name="cd_fix_battery">Corregir exención de batería</string>
+    <string name="cd_fix_autostart">Corregir inicio automático</string>
 </resources>
