@@ -27,6 +27,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.atom.app.di.AppContainer;
+import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.AtomCoreView;
 import com.atom.app.ui.MicAnimations;
@@ -116,6 +117,10 @@ public class MainActivity extends AppCompatActivity {
     private final ActivityResultLauncher<String[]> startupPermissionLauncher =
             registerForActivityResult(
                     new ActivityResultContracts.RequestMultiplePermissions(), results -> { });
+
+    // Asked once on startup (API 33+) so Atom's cross-app cues can actually post.
+    private final ActivityResultLauncher<String> notificationPermissionLauncher =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> { });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -239,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         requestCallPermissionsIfNeeded();
+        requestNotificationPermissionIfNeeded();
 
         recognition = new SpeechRecognitionCoordinator(this, preferences,
                 new SpeechRecognitionCoordinator.Host() {
@@ -677,6 +683,22 @@ public class MainActivity extends AppCompatActivity {
         }
         if (needsAny) {
             startupPermissionLauncher.launch(callPerms);
+        }
+    }
+
+    /**
+     * Asks for POST_NOTIFICATIONS once on startup (API 33+ only) so Atom's operating and
+     * completion cues can post. Below API 33 notifications are granted at install time, so
+     * nothing to do. The system shows the prompt at most once; a permanent denial makes
+     * launch() a no-op, which is fine — the Settings dashboard can still route the user
+     * to re-enable.
+     */
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;
+        }
+        if (!PermissionCoordinator.isGranted(this, Manifest.permission.POST_NOTIFICATIONS)) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
         }
     }
 
