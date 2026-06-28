@@ -161,6 +161,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private boolean operatingCueShown;    // the cross-app handle/notification is up for it
     @Nullable private ActionType lastOperatingType;
     private int lastOperatingStep;
+    // Pending "Done"->resting notification revert; tracked so a newer completion cancels the
+    // previous one's revert instead of letting it fire mid-flash and truncate the new "Done".
+    @Nullable private Runnable pendingCompletionRevert;
     private int lastBubbleY = -1;      // last bubble Y, reused to place the handle
 
     private AtomApp app;
@@ -367,6 +370,11 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     @Override
     public void onAppForeground() {
         hideOverlayViews();
+        // The cross-app cue surface is gone while our own UI is foreground; clear the flag so a
+        // completion that lands now won't flash a "Done" line over the app (decision 1: the cue
+        // is cross-app only). If Atom backgrounds again mid-action, onAppBackground re-surfaces
+        // the handle and re-sets this flag.
+        operatingCueShown = false;
     }
 
     @Override
@@ -548,11 +556,18 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         nm.notify(NOTIFICATION_ID,
                 buildCompletionNotification(collapsedToHandle, getString(R.string.notif_operating_done)));
-        mainHandler.postDelayed(() -> {
+        // Cancel a previous completion's still-pending revert so it can't fire during THIS
+        // "Done" flash and cut it short on rapid back-to-back operations.
+        if (pendingCompletionRevert != null) {
+            mainHandler.removeCallbacks(pendingCompletionRevert);
+        }
+        pendingCompletionRevert = () -> {
+            pendingCompletionRevert = null;
             if (!operatingFromApp) {
                 updateNotification(collapsedToHandle);
             }
-        }, OPERATING_DONE_REVERT_MS);
+        };
+        mainHandler.postDelayed(pendingCompletionRevert, OPERATING_DONE_REVERT_MS);
     }
 
     private int verbResIdFor(ActionType type) {
@@ -1758,6 +1773,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         cancelAnimations();
         mainHandler.removeCallbacksAndMessages(null);
+        pendingCompletionRevert = null;
         hideDismissTarget();
         removeView(bubbleView);
         removeView(panelView);
