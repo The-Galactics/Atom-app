@@ -146,6 +146,13 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // Onboarding done but permissions not yet set up: run the one-time setup screen first.
+        if (!preferences.isPermissionSetupComplete()) {
+            startActivity(new Intent(this, PermissionSetupActivity.class));
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_main);
 
         // Initialize ViewModel via the composition root (AppContainer).
