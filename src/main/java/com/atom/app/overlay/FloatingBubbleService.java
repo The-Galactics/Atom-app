@@ -668,7 +668,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         // Now apply the operating teal so the reset above cannot wipe it.
         View handleBar = handleView.findViewById(R.id.handle_bar);
         if (handleBar != null) {
-            handleBar.setBackgroundColor(getColor(R.color.accent_teal));
+            // Teal variant of the same capsule shape (NOT setBackgroundColor, which would
+            // flatten the rounded edge-line into a sharp teal rectangle).
+            handleBar.setBackgroundResource(R.drawable.bg_edge_handle_teal);
         }
         handlePulse = android.animation.ValueAnimator.ofFloat(HANDLE_IDLE_ALPHA, 1f);
         handlePulse.setDuration(900);
