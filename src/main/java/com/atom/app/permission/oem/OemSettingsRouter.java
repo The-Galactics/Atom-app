@@ -34,6 +34,7 @@ public final class OemSettingsRouter {
         return switch (skin) {
             case HYPEROS, MIUI, COLOROS, ORIGINOS_FUNTOUCH -> true;
             case ONEUI, STOCK -> false;
+            default -> throw new IllegalStateException("Unhandled OemSkin: " + skin);
         };
     }
 
@@ -66,6 +67,7 @@ public final class OemSettingsRouter {
                 {"com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity"},
             };
             case ONEUI, STOCK -> new String[][] {};
+            default -> throw new IllegalStateException("Unhandled OemSkin: " + skin);
         };
     }
 }
