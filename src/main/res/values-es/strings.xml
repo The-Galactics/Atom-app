@@ -216,4 +216,9 @@
     <string name="auth_google_button">Continuar con Google</string>
     <string name="auth_logout">Cerrar sesión</string>
     <string name="auth_fields_required">Completa todos los campos.</string>
+
+    <!-- Divulgación destacada del servicio de Accesibilidad (requisito de Google Play). -->
+    <string name="accessibility_prompt_title">¿Permitir que Atom use Accesibilidad?</string>
+    <string name="accessibility_prompt_message">Atom usa el servicio de Accesibilidad de Android para leer el contenido de tu pantalla y así ejecutar lo que pides por voz: tocar, desplazar, leer y navegar entre apps. El contenido de pantalla que lee se envía de forma segura (cifrado TLS) a los servidores de Atom únicamente para interpretar tu comando y decidir qué acción realizar. No se usa para publicidad ni se vende a terceros, y puedes desactivarlo cuando quieras desde Ajustes. ¿Aceptas activarlo?</string>
+    <string name="accessibility_prompt_open">Acepto, abrir Ajustes</string>
 </resources>
