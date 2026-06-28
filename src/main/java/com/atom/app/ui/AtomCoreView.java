@@ -114,13 +114,15 @@ public class AtomCoreView extends View {
     // Desaturating + dimming paint applied to the whole layer while muted (lazy-built).
     private Paint mutedLayerPaint;
 
+    // Desaturating layer paint for the ERROR shudder flash (lazy-built, reused).
+    private Paint shudderLayerPaint;
+
     private double phase = 0;        // ever-advancing animation phase
     private float energy = 0f;       // current eased energy
     private float targetEnergy = 0f; // requested energy
     private long lastFrameMs = 0;
     private float cx, cy, radius;
 
-    private MotionProfile motionProfile = MotionProfile.BREATHE;
     // GATHER eases orbits inward; SCAN promotes one electron to a bright directed sweep.
     private float gather = 0f;           // 0 = normal radii, 1 = fully gathered (~12% inward)
     private float gatherTarget = 0f;
@@ -195,7 +197,6 @@ public class AtomCoreView extends View {
     }
 
     private void setMotionProfile(MotionProfile profile) {
-        motionProfile = profile;
         gatherTarget = profile == MotionProfile.GATHER ? 1f : 0f;
         scan = profile == MotionProfile.SCAN;
         scheduleNextFrame();
@@ -371,10 +372,19 @@ public class AtomCoreView extends View {
         float pulse = (float) (1.0 + 0.045 * breathe + 0.03 * energy);
 
         float shudder = transientProgress(shudderStartMs, SHUDDER_MS);
-        canvas.save();
+        int canvasSave;
         if (shudder > 0f) {
+            if (shudderLayerPaint == null) {
+                ColorMatrix shudderMatrix = new ColorMatrix();
+                shudderMatrix.setSaturation(0.35f);
+                shudderLayerPaint = new Paint();
+                shudderLayerPaint.setColorFilter(new ColorMatrixColorFilter(shudderMatrix));
+            }
+            canvasSave = canvas.saveLayer(null, shudderLayerPaint);
             float dx = (float) (radius * 0.03f * shudder * Math.sin(phase * 60));
             canvas.translate(dx, 0);
+        } else {
+            canvasSave = canvas.save();
         }
 
         drawBackgroundGlow(canvas, pulse);
@@ -384,7 +394,7 @@ public class AtomCoreView extends View {
         drawNucleus(canvas, pulse);
         drawOrbitsAndElectrons(canvas, true);    // electrons passing in front
 
-        canvas.restore();
+        canvas.restoreToCount(canvasSave);
 
         long nowMs = AnimationUtils.currentAnimationTimeMillis();
         if (bloomStartMs != 0 && nowMs - bloomStartMs >= BLOOM_MS) bloomStartMs = 0;
@@ -553,7 +563,7 @@ public class AtomCoreView extends View {
     }
 
     /** Returns a 1->0 decay for an active one-shot, or 0 when inactive/elapsed. */
-    private float transientProgress(long startMs, long durationMs) {
+    private static float transientProgress(long startMs, long durationMs) {
         if (startMs == 0) {
             return 0f;
         }
