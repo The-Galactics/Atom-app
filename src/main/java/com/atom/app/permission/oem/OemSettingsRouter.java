@@ -31,8 +31,10 @@ public final class OemSettingsRouter {
     }
 
     public static boolean supportsAutostart(OemSkin skin) {
-        return skin == OemSkin.HYPEROS || skin == OemSkin.MIUI ||
-               skin == OemSkin.COLOROS || skin == OemSkin.ORIGINOS_FUNTOUCH;
+        return switch (skin) {
+            case HYPEROS, MIUI, COLOROS, ORIGINOS_FUNTOUCH -> true;
+            case ONEUI, STOCK -> false;
+        };
     }
 
     /** First vendor autostart/background-management screen that resolves, else app details. */
@@ -48,26 +50,22 @@ public final class OemSettingsRouter {
     // Ordered {package, class} candidates per skin (best-known first). Wrong/renamed
     // components simply fail to resolve and fall through — never crash.
     private static String[][] autostartCandidates(OemSkin skin) {
-        if (skin == OemSkin.HYPEROS || skin == OemSkin.MIUI) {
-            return new String[][] {
+        return switch (skin) {
+            case HYPEROS, MIUI -> new String[][] {
                 {"com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"},
             };
-        } else if (skin == OemSkin.COLOROS) {
-            return new String[][] {
+            case COLOROS -> new String[][] {
                 {"com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"},
                 {"com.coloros.safecenter", "com.coloros.privacypermissionsentry.PermissionTopActivity"},
                 {"com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"},
                 {"com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"},
             };
-        } else if (skin == OemSkin.ORIGINOS_FUNTOUCH) {
-            return new String[][] {
+            case ORIGINOS_FUNTOUCH -> new String[][] {
                 {"com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"},
                 {"com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"},
                 {"com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity"},
             };
-        } else {
-            // ONEUI and STOCK
-            return new String[][] {};
-        }
+            case ONEUI, STOCK -> new String[][] {};
+        };
     }
 }

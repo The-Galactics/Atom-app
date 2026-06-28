@@ -1,4 +1,3 @@
-// src/test/java/com/atom/app/permission/oem/OemSettingsRouterAutostartTest.java
 package com.atom.app.permission.oem;
 
 import com.atom.infrastructure.adapter.accessibility.oem.OemSkin;
@@ -47,6 +46,15 @@ class OemSettingsRouterAutostartTest {
         OemRedirect r = OemSettingsRouter.chooseAutostart(OemSkin.COLOROS,
                 componentsResolving(Set.of("com.oppo.safe.permission.startup.StartupAppListActivity")));
         assertThat(r.packageName()).isEqualTo("com.oppo.safe");
+        assertThat(r.className()).isEqualTo("com.oppo.safe.permission.startup.StartupAppListActivity");
+    }
+
+    @Test
+    void autostart_picksMiuiSecurityCenterForMiui() {
+        OemRedirect r = OemSettingsRouter.chooseAutostart(OemSkin.MIUI,
+                componentsResolving(java.util.Set.of("com.miui.permcenter.autostart.AutoStartManagementActivity")));
+        assertThat(r.packageName()).isEqualTo("com.miui.securitycenter");
+        assertThat(r.className()).isEqualTo("com.miui.permcenter.autostart.AutoStartManagementActivity");
     }
 
     @Test
