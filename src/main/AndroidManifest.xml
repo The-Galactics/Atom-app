@@ -92,6 +92,9 @@
         <!-- First-run onboarding (name + assistant name + permissions intro). -->
         <activity android:name=".OnboardingActivity" />
 
+        <!-- First-run permission setup screen (shown once after onboarding). -->
+        <activity android:name=".PermissionSetupActivity" />
+
         <!-- Login / register screen. -->
         <activity android:name=".LoginActivity" android:exported="false" />
 
