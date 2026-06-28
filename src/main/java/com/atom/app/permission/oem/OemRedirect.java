@@ -8,6 +8,15 @@ package com.atom.app.permission.oem;
  */
 public record OemRedirect(String packageName, String className, String action) {
 
+    public OemRedirect {
+        if (action == null && (packageName == null || className == null)) {
+            throw new IllegalArgumentException("component form requires packageName and className");
+        }
+        if (action != null && (packageName != null || className != null)) {
+            throw new IllegalArgumentException("action form must have null component fields");
+        }
+    }
+
     public static OemRedirect component(String packageName, String className) {
         return new OemRedirect(packageName, className, null);
     }

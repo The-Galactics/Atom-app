@@ -210,8 +210,14 @@ public class SettingsActivity extends AppCompatActivity {
         btnFixBattery.setOnClickListener(v ->
                 startActivity(PermissionCoordinator.batteryOptimizationIntent(this)));
         btnFixAutostart.setOnClickListener(v -> {
-            startActivity(OemSettingsIntents.autostartIntent(this));
-            preferences.setOemAutostartConfirmed(true);
+            try {
+                startActivity(OemSettingsIntents.autostartIntent(this));
+                preferences.setOemAutostartConfirmed(true);
+            } catch (android.content.ActivityNotFoundException | SecurityException e) {
+                startActivity(new android.content.Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", getPackageName(), null)));
+            }
         });
         // Hide the autostart row on skins that have no such screen (OneUI/Stock).
         rowAutostart.setVisibility(

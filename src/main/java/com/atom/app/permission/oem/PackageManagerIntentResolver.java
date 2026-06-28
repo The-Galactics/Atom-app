@@ -1,4 +1,3 @@
-// src/main/java/com/atom/app/permission/oem/PackageManagerIntentResolver.java
 package com.atom.app.permission.oem;
 
 import android.content.Context;

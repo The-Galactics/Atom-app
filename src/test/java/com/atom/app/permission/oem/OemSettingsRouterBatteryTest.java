@@ -1,4 +1,3 @@
-// src/test/java/com/atom/app/permission/oem/OemSettingsRouterBatteryTest.java
 package com.atom.app.permission.oem;
 
 import org.junit.jupiter.api.Test;

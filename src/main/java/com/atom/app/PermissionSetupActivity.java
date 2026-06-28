@@ -1,4 +1,3 @@
-// src/main/java/com/atom/app/PermissionSetupActivity.java
 package com.atom.app;
 
 import android.Manifest;
@@ -7,13 +6,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.atom.app.permission.PermissionCoordinator;
@@ -33,6 +30,7 @@ public class PermissionSetupActivity extends AppCompatActivity {
     private AtomPreferences preferences;
     private LinearLayout rowsContainer;
     private MaterialButton continueButton;
+    private boolean micRequested = false;
 
     // One row's live view refs, rebound on resume.
     private TextView overlayStatus, accessibilityStatus, micStatus, notificationsStatus, batteryStatus, autostartStatus;
@@ -66,7 +64,7 @@ public class PermissionSetupActivity extends AppCompatActivity {
                 v -> settingsLauncher.launch(PermissionCoordinator.accessibilitySettingsIntent()));
         micStatus = addRow(R.string.permsetup_mic_title, R.string.permsetup_mic_body,
                 R.string.permsetup_grant,
-                v -> micLauncher.launch(Manifest.permission.RECORD_AUDIO));
+                v -> requestMicrophone());
         notificationsStatus = addRow(R.string.permsetup_notifications_title, R.string.permsetup_notifications_body,
                 R.string.permsetup_grant, v -> requestNotifications());
         batteryStatus = addRow(R.string.permsetup_battery_title, R.string.permsetup_battery_body,
@@ -76,12 +74,34 @@ public class PermissionSetupActivity extends AppCompatActivity {
         autostartRowPresent = OemSettingsIntents.supportsAutostart(this);
         if (autostartRowPresent) {
             autostartStatus = addRow(R.string.permsetup_autostart_title, R.string.permsetup_autostart_body,
-                    R.string.permsetup_done, v -> {
-                        // No API to detect autostart; open the vendor screen, then mark confirmed.
+                    R.string.permsetup_done,
+                v -> {
+                    try {
                         settingsLauncher.launch(OemSettingsIntents.autostartIntent(this));
                         preferences.setOemAutostartConfirmed(true);
-                    });
+                    } catch (android.content.ActivityNotFoundException | SecurityException e) {
+                        startActivity(new android.content.Intent(
+                                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                android.net.Uri.fromParts("package", getPackageName(), null)));
+                    }
+                });
         }
+    }
+
+    private void requestMicrophone() {
+        if (PermissionCoordinator.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
+            return;
+        }
+        // After a permanent denial the system stops prompting (rationale==false once we've asked).
+        // Route to app details so the user always has a way to grant it.
+        if (micRequested && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+            startActivity(new android.content.Intent(
+                    android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.fromParts("package", getPackageName(), null)));
+            return;
+        }
+        micRequested = true;
+        micLauncher.launch(Manifest.permission.RECORD_AUDIO);
     }
 
     /** Inflates one row, wires its action button, and returns its status TextView. */

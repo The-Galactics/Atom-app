@@ -52,7 +52,7 @@ class OemSettingsRouterAutostartTest {
     @Test
     void autostart_picksMiuiSecurityCenterForMiui() {
         OemRedirect r = OemSettingsRouter.chooseAutostart(OemSkin.MIUI,
-                componentsResolving(java.util.Set.of("com.miui.permcenter.autostart.AutoStartManagementActivity")));
+                componentsResolving(Set.of("com.miui.permcenter.autostart.AutoStartManagementActivity")));
         assertThat(r.packageName()).isEqualTo("com.miui.securitycenter");
         assertThat(r.className()).isEqualTo("com.miui.permcenter.autostart.AutoStartManagementActivity");
     }
@@ -62,5 +62,13 @@ class OemSettingsRouterAutostartTest {
         OemRedirect r = OemSettingsRouter.chooseAutostart(OemSkin.ORIGINOS_FUNTOUCH, nothingResolves());
         assertThat(r.isComponent()).isFalse();
         assertThat(r.action()).isEqualTo(OemSettingsRouter.ACTION_APP_DETAILS);
+    }
+
+    @Test
+    void autostart_oneUiAndStockFallBackToAppDetails() {
+        assertThat(OemSettingsRouter.chooseAutostart(OemSkin.ONEUI, nothingResolves()).action())
+                .isEqualTo(OemSettingsRouter.ACTION_APP_DETAILS);
+        assertThat(OemSettingsRouter.chooseAutostart(OemSkin.STOCK, nothingResolves()).action())
+                .isEqualTo(OemSettingsRouter.ACTION_APP_DETAILS);
     }
 }
