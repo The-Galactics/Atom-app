@@ -35,6 +35,8 @@ import com.atom.app.ui.main.MainViewModelBinder;
 import com.atom.app.ui.main.SpeechRecognitionCoordinator;
 import com.atom.app.ui.motion.CoreState;
 import com.atom.app.ui.motion.CoreStatePresenter;
+import com.atom.app.ui.motion.CoreStyle;
+import com.atom.app.ui.motion.MotionPreferences;
 import com.atom.app.ui.motion.StatusCrossfader;
 import com.atom.app.viewmodel.ChatViewModel;
 import com.atom.app.viewmodel.ChatViewModelFactory;
@@ -607,7 +609,19 @@ public class MainActivity extends AppCompatActivity {
 
     /** Drives the core to a semantic UI state via the shared CoreStatePresenter. */
     private void applyCoreState(CoreState state) {
-        applyCoreState(CoreStatePresenter.energyFor(state));
+        CoreStyle style = CoreStatePresenter.styleFor(state);
+        style = CoreStatePresenter.resolveForReducedMotion(style, isReducedMotion());
+        currentEnergy = style.energy;
+        if (atomCore != null) {
+            atomCore.setStyle(style);
+        }
+    }
+
+    /** True when the user disabled system animations (transition scale 0). */
+    private boolean isReducedMotion() {
+        float scale = Settings.Global.getFloat(getContentResolver(),
+                Settings.Global.TRANSITION_ANIMATION_SCALE, 1f);
+        return MotionPreferences.isReducedMotion(scale);
     }
 
     /** Low-level energy apply; also used by the saved-state restore path. AtomCoreView's
