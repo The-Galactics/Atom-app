@@ -27,6 +27,8 @@ import com.google.android.material.button.MaterialButton;
  */
 public class PermissionSetupActivity extends AppCompatActivity {
 
+    private static final String STATE_MIC_REQUESTED = "mic_requested";
+
     private AtomPreferences preferences;
     private LinearLayout rowsContainer;
     private MaterialButton continueButton;
@@ -46,6 +48,9 @@ public class PermissionSetupActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (savedInstanceState != null) {
+            micRequested = savedInstanceState.getBoolean(STATE_MIC_REQUESTED, false);
+        }
         setContentView(R.layout.activity_permission_setup);
         preferences = new AtomPreferences(this);
         rowsContainer = findViewById(R.id.permsetup_rows);
@@ -128,6 +133,12 @@ public class PermissionSetupActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         refresh();
+    }
+
+    @Override
+    protected void onSaveInstanceState(@androidx.annotation.NonNull android.os.Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean(STATE_MIC_REQUESTED, micRequested);
     }
 
     private void refresh() {
