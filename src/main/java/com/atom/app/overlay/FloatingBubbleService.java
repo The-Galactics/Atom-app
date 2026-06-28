@@ -417,11 +417,34 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     // The ongoing notification doubles as the way back from a hide: tapping it
     // (or the "Show" action) re-displays the bubble; "Turn off" stops the overlay.
     private Notification buildNotification(boolean hidden) {
-        return buildNotification(hidden, null);
+        return buildOngoing(hidden,
+                getString(R.string.overlay_notification_title),
+                getString(hidden ? R.string.overlay_notification_text_hidden
+                                  : R.string.overlay_notification_text),
+                /* allowRestoreAction= */ hidden);
     }
 
     // operatingText != null => live "operating" body (title + step/action), keeps Stop.
     private Notification buildNotification(boolean hidden, String operatingText) {
+        return buildOngoing(hidden,
+                getString(R.string.notif_operating_title),
+                operatingText,
+                /* allowRestoreAction= */ false);
+    }
+
+    // A brief "Done" completion line shown cross-app after a chain finishes, then the
+    // resting notification is restored. Resting title, completion body, no restore action.
+    private Notification buildCompletionNotification(boolean hidden, String doneText) {
+        return buildOngoing(hidden,
+                getString(R.string.overlay_notification_title),
+                doneText,
+                /* allowRestoreAction= */ false);
+    }
+
+    // Shared builder for the ongoing overlay notification. allowRestoreAction adds the
+    // "Show" action (only meaningful for the resting hidden state).
+    private Notification buildOngoing(boolean hidden, String title, String body,
+                                      boolean allowRestoreAction) {
         int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 ? PendingIntent.FLAG_IMMUTABLE : 0;
         Intent showIntent = new Intent(this, FloatingBubbleService.class).setAction(ACTION_SHOW);
@@ -429,21 +452,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         Intent stopIntent = new Intent(this, FloatingBubbleService.class).setAction(ACTION_STOP);
         PendingIntent stopPending = PendingIntent.getService(this, 0, stopIntent, flag);
 
-        String title = operatingText != null
-                ? getString(R.string.notif_operating_title)
-                : getString(R.string.overlay_notification_title);
-        String body = operatingText != null
-                ? operatingText
-                : getString(hidden ? R.string.overlay_notification_text_hidden
-                                   : R.string.overlay_notification_text);
-
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setSmallIcon(R.drawable.ic_mic)
                 .setOngoing(true)
                 .setContentIntent(showPending);
-        if (hidden && operatingText == null) {
+        if (allowRestoreAction) {
             builder.addAction(R.drawable.ic_atom_glyph,
                     getString(R.string.overlay_action_show), showPending);
         }
@@ -512,8 +527,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         operatingCueShown = true;
     }
 
+    // How long the brief "Done" line stays before the resting notification returns.
+    private static final long OPERATING_DONE_REVERT_MS = 2500L;
+
+    // Flashes a short completion line so the result is visible cross-app (TTS-independent),
+    // then settles back to the resting notification (unless a new operation started meanwhile).
     private void postCompletionNotification() {
-        updateNotification(collapsedToHandle);
+        NotificationManager nm =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) {
+            return;
+        }
+        nm.notify(NOTIFICATION_ID,
+                buildCompletionNotification(collapsedToHandle, getString(R.string.notif_operating_done)));
+        mainHandler.postDelayed(() -> {
+            if (!operatingFromApp) {
+                updateNotification(collapsedToHandle);
+            }
+        }, OPERATING_DONE_REVERT_MS);
     }
 
     private int verbResIdFor(ActionType type) {
