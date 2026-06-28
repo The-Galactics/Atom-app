@@ -430,7 +430,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         String text = OperatingNotificationText.compose(label, step, verb);
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
-            nm.notify(NOTIFICATION_ID, buildNotification(true, text));
+            nm.notify(NOTIFICATION_ID, buildNotification(collapsedToHandle, text));
         }
     }
 
@@ -687,6 +687,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         if (handleView != null) {
             handleView.setAlpha(HANDLE_IDLE_ALPHA);
+            View handleBar = handleView.findViewById(R.id.handle_bar);
+            if (handleBar != null) {
+                handleBar.setBackgroundResource(R.drawable.bg_edge_handle);
+            }
         }
     }
 
