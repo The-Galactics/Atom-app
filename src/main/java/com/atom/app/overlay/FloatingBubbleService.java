@@ -86,6 +86,12 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final int NOTIFICATION_ID = 0xA70;
     private static final String CHANNEL_ID = "atom_floating_assistant";
 
+    // Separate high-importance channel + id for the cross-app completion banner, so it
+    // pops as a heads-up over the current app while the ongoing overlay notification
+    // (CHANNEL_ID, IMPORTANCE_LOW) stays quiet.
+    private static final int COMPLETION_NOTIFICATION_ID = 0xA71;
+    private static final String COMPLETION_CHANNEL_ID = "atom_task_complete";
+
     // Motion tuning for the bubble. Kept in code (behaviour, not layout).
     // Mic press/pulse tuning now lives in the shared MicAnimations helper.
     private static final long SNAP_DURATION_MS = 220;       // edge snap glide
@@ -161,9 +167,6 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private boolean operatingCueShown;    // the cross-app handle/notification is up for it
     @Nullable private ActionType lastOperatingType;
     private int lastOperatingStep;
-    // Pending "Done"->resting notification revert; tracked so a newer completion cancels the
-    // previous one's revert instead of letting it fire mid-flash and truncate the new "Done".
-    @Nullable private Runnable pendingCompletionRevert;
     private int lastBubbleY = -1;      // last bubble Y, reused to place the handle
 
     private AtomApp app;
@@ -420,13 +423,22 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void ensureNotificationChannel() {
         NotificationManager nm =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null
-                && nm.getNotificationChannel(CHANNEL_ID) == null) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    getString(R.string.overlay_channel_name),
-                    NotificationManager.IMPORTANCE_LOW);
-            nm.createNotificationChannel(channel);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
+            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+                NotificationChannel channel = new NotificationChannel(
+                        CHANNEL_ID,
+                        getString(R.string.overlay_channel_name),
+                        NotificationManager.IMPORTANCE_LOW);
+                nm.createNotificationChannel(channel);
+            }
+            if (nm.getNotificationChannel(COMPLETION_CHANNEL_ID) == null) {
+                // IMPORTANCE_HIGH => heads-up banner + default vibration when posted.
+                NotificationChannel done = new NotificationChannel(
+                        COMPLETION_CHANNEL_ID,
+                        getString(R.string.notif_complete_channel_name),
+                        NotificationManager.IMPORTANCE_HIGH);
+                nm.createNotificationChannel(done);
+            }
         }
     }
 
@@ -446,13 +458,6 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 getString(R.string.notif_operating_title),
                 operatingText,
                 /* allowRestoreAction= */ false);
-    }
-
-    // A brief completion notification shown cross-app after a chain finishes, then the
-    // resting notification is restored. "Done" headline, the actual result as the body,
-    // no restore action.
-    private Notification buildCompletionNotification(String title, String body) {
-        return buildOngoing(title, body, /* allowRestoreAction= */ false);
     }
 
     // Shared builder for the ongoing overlay notification. allowRestoreAction adds the
@@ -479,6 +484,45 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         builder.addAction(R.drawable.ic_close,
                 getString(R.string.overlay_action_stop), stopPending);
         return builder.build();
+    }
+
+    // A heads-up, auto-cancel completion banner shown cross-app on the high-importance
+    // channel so the result pops over the current app (the ongoing overlay notification
+    // stays quiet). Tapping it opens Atom.
+    private Notification buildCompletionBanner(String body) {
+        int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_IMMUTABLE : 0;
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        PendingIntent openPending = open != null
+                ? PendingIntent.getActivity(this, 2, open, flag) : null;
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, COMPLETION_CHANNEL_ID)
+                .setContentTitle(getString(R.string.notif_task_complete))
+                .setSmallIcon(R.drawable.ic_atom_glyph)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(false);
+        if (body != null && !body.isEmpty()) {
+            builder.setContentText(body);
+        }
+        if (openPending != null) {
+            builder.setContentIntent(openPending);
+        }
+        return builder.build();
+    }
+
+    // Tactile "done" cross-app via the overlay surface (no VIBRATE permission needed).
+    // Belt-and-suspenders with the IMPORTANCE_HIGH channel's own default vibration.
+    private void performCompletionHaptic() {
+        View v = handleView != null ? handleView
+                : (bubbleView != null ? bubbleView : panelView);
+        if (v == null) {
+            return;
+        }
+        int feedback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? HapticFeedbackConstants.CONFIRM
+                : HapticFeedbackConstants.LONG_PRESS;
+        v.performHapticFeedback(feedback);
     }
 
     /** Pushes a live operating-state notification (step + action verb). */
@@ -525,7 +569,21 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return;
         }
         stopHandlePulse();
-        postCompletionNotification(message);
+        // Settle the ongoing overlay notification back to its resting state.
+        updateNotification(collapsedToHandle);
+        if (aborted) {
+            return; // no success banner / haptic for a cancelled chain
+        }
+        // Announce completion saliently: a heads-up banner carrying the result on the
+        // high-importance channel (pops over the current app + vibrates), plus a haptic,
+        // so the user knows it finished without returning to Atom.
+        NotificationManager nm =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            String body = OperatingNotificationText.completionBody(message, COMPLETION_BODY_MAX_CHARS);
+            nm.notify(COMPLETION_NOTIFICATION_ID, buildCompletionBanner(body));
+        }
+        performCompletionHaptic();
     }
 
     // Brings up the pulsing teal handle as the cross-app operating surface, tucking away
@@ -541,37 +599,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         operatingCueShown = true;
     }
 
-    // How long the completion line stays before the resting notification returns.
-    private static final long OPERATING_DONE_REVERT_MS = 2500L;
-
     // Longest result body shown in the completion notification before it is elided.
     private static final int COMPLETION_BODY_MAX_CHARS = 80;
-
-    // Flashes a "Done" completion line carrying the chain's result so it's visible
-    // cross-app (TTS-independent), then settles back to the resting notification (unless a
-    // new operation started meanwhile). Falls back to a bare "Done" when there's no message.
-    private void postCompletionNotification(@Nullable String message) {
-        NotificationManager nm =
-                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm == null) {
-            return;
-        }
-        String body = OperatingNotificationText.completionBody(message, COMPLETION_BODY_MAX_CHARS);
-        nm.notify(NOTIFICATION_ID,
-                buildCompletionNotification(getString(R.string.notif_operating_done), body));
-        // Cancel a previous completion's still-pending revert so it can't fire during THIS
-        // "Done" flash and cut it short on rapid back-to-back operations.
-        if (pendingCompletionRevert != null) {
-            mainHandler.removeCallbacks(pendingCompletionRevert);
-        }
-        pendingCompletionRevert = () -> {
-            pendingCompletionRevert = null;
-            if (!operatingFromApp) {
-                updateNotification(collapsedToHandle);
-            }
-        };
-        mainHandler.postDelayed(pendingCompletionRevert, OPERATING_DONE_REVERT_MS);
-    }
 
     private int verbResIdFor(ActionType type) {
         switch (type) {
@@ -1776,7 +1805,6 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
         cancelAnimations();
         mainHandler.removeCallbacksAndMessages(null);
-        pendingCompletionRevert = null;
         hideDismissTarget();
         removeView(bubbleView);
         removeView(panelView);

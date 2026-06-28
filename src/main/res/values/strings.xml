@@ -85,6 +85,8 @@
     <string name="notif_operating_title">Atom is operating</string>
     <string name="notif_operating_step">Step %1$d</string>
     <string name="notif_operating_done">Done</string>
+    <string name="notif_task_complete">✓ Task completed</string>
+    <string name="notif_complete_channel_name">Task completion</string>
     <string name="action_verb_open_app">Opening an app</string>
     <string name="action_verb_make_call">Placing a call</string>
     <string name="action_verb_send_message">Sending a message</string>
