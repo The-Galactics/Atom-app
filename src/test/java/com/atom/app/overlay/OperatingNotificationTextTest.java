@@ -23,4 +23,25 @@ class OperatingNotificationTextTest {
         assertThat(OperatingNotificationText.compose("Step %d", 4, "  Scrolling  "))
                 .isEqualTo("Step 4 · Scrolling");
     }
+
+    @Test
+    void completionBodyIsEmptyWhenNoMessage() {
+        assertThat(OperatingNotificationText.completionBody(null, 40)).isEmpty();
+        assertThat(OperatingNotificationText.completionBody("   ", 40)).isEmpty();
+    }
+
+    @Test
+    void completionBodyReturnsTrimmedMessageWhenShort() {
+        assertThat(OperatingNotificationText.completionBody("  La calculadora ya está abierta ", 40))
+                .isEqualTo("La calculadora ya está abierta");
+    }
+
+    @Test
+    void completionBodyTruncatesLongMessageWithEllipsis() {
+        String body = OperatingNotificationText.completionBody(
+                "Listo: he abierto la calculadora y configurado el temporizador", 20);
+        assertThat(body).hasSize(20);
+        assertThat(body).endsWith("…");
+        assertThat(body).startsWith("Listo: he abierto");
+    }
 }

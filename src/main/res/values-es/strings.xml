@@ -14,6 +14,7 @@
     <string name="mic_muted_hint">El micrófono está silenciado. Mantén pulsado para reactivar.</string>
     <string name="sub_status_thinking">Conectando con el núcleo de Atom</string>
     <string name="sub_status_responded">Atom respondió</string>
+    <string name="sub_status_task_done">✓ Tarea completada</string>
 
     <!-- Descripciones de contenido -->
     <string name="cd_history">Historial</string>

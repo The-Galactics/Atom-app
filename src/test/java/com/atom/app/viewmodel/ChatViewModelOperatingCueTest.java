@@ -81,6 +81,53 @@ class ChatViewModelOperatingCueTest {
     }
 
     @Test
+    void runAutonomous_complete_emitsTaskCompletedWithFinalMessage() {
+        doAnswer(inv -> {
+            CommandRepository.AutomationCallback cb = inv.getArgument(1);
+            cb.onActionStarted(openApp(), 1);
+            cb.onComplete("La calculadora ya está abierta");
+            return null;
+        }).when(commands).executeAutonomous(eq("abre la calculadora"), any());
+
+        ChatViewModel vm = new ChatViewModel(chat, commands, conversation, accessibilityEnabled, bus);
+
+        List<String> completed = new ArrayList<>();
+        vm.getTaskCompleted().observeForever(e -> {
+            String m = e.getContentIfNotHandled();
+            if (m != null) {
+                completed.add(m);
+            }
+        });
+
+        vm.runAutonomous("abre la calculadora");
+
+        assertThat(completed).containsExactly("La calculadora ya está abierta");
+    }
+
+    @Test
+    void runAutonomous_abort_doesNotEmitTaskCompleted() {
+        doAnswer(inv -> {
+            CommandRepository.AutomationCallback cb = inv.getArgument(1);
+            cb.onAborted("Cancelado");
+            return null;
+        }).when(commands).executeAutonomous(eq("haz algo"), any());
+
+        ChatViewModel vm = new ChatViewModel(chat, commands, conversation, accessibilityEnabled, bus);
+
+        List<String> completed = new ArrayList<>();
+        vm.getTaskCompleted().observeForever(e -> {
+            String m = e.getContentIfNotHandled();
+            if (m != null) {
+                completed.add(m);
+            }
+        });
+
+        vm.runAutonomous("haz algo");
+
+        assertThat(completed).isEmpty();
+    }
+
+    @Test
     void runAutonomous_abort_publishesFinishedAborted() {
         doAnswer(inv -> {
             CommandRepository.AutomationCallback cb = inv.getArgument(1);

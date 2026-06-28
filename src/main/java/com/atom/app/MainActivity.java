@@ -213,6 +213,16 @@ public class MainActivity extends AppCompatActivity {
                     public void onVoiceConfirmationRequested(String question) {
                         askConfirmationByVoice(question);
                     }
+
+                    @Override
+                    public void onTaskCompleted(String finalMessage) {
+                        // showResponse already rendered the result text, spoke it, and
+                        // bloomed the core. Make a task completion DISTINCT from an ordinary
+                        // reply: a success sub-label plus a confirmation haptic so a
+                        // hands-free user feels the finish without watching the screen.
+                        fadeSwap(subStatusText, getString(R.string.sub_status_task_done));
+                        performCompletionHaptic();
+                    }
                 });
         binder.bind();
 
@@ -605,6 +615,22 @@ public class MainActivity extends AppCompatActivity {
     /** Crossfades a status TextView to new text via fade-out, swap, fade-in. */
     private void fadeSwap(TextView view, CharSequence text) {
         StatusCrossfader.swap(view, text);
+    }
+
+    /**
+     * One-shot "task done" haptic. Uses the dedicated CONFIRM feedback where available
+     * (API 30+) and falls back to LONG_PRESS below it. No VIBRATE permission needed —
+     * {@link View#performHapticFeedback} routes through the view's haptic channel.
+     */
+    private void performCompletionHaptic() {
+        View target = atomCore != null ? atomCore : btnMic;
+        if (target == null) {
+            return;
+        }
+        int feedback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? HapticFeedbackConstants.CONFIRM
+                : HapticFeedbackConstants.LONG_PRESS;
+        target.performHapticFeedback(feedback);
     }
 
     /** Drives the core to a semantic UI state via the shared CoreStatePresenter. */

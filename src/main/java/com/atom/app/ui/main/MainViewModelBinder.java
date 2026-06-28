@@ -40,6 +40,8 @@ public final class MainViewModelBinder {
         void showOperating();
         /** Held/destructive action mid-loop: speak the question and capture the spoken reply. */
         void onVoiceConfirmationRequested(String question);
+        /** An autonomous task finished (not aborted): confirm it tangibly (success sub-label + haptic). */
+        void onTaskCompleted(String finalMessage);
     }
 
     private final AppCompatActivity activity;
@@ -94,6 +96,16 @@ public final class MainViewModelBinder {
             if (Boolean.TRUE.equals(e.getContentIfNotHandled())
                     && activity.getApplication() instanceof SessionListener) {
                 ((SessionListener) activity.getApplication()).onSessionExpired();
+            }
+        });
+
+        // A task finished successfully: confirm it tangibly so the user knows Atom did
+        // something, even when they aren't watching the orb. One-shot Event avoids
+        // re-confirming on recreation.
+        viewModel.getTaskCompleted().observe(activity, e -> {
+            String finalMessage = e.getContentIfNotHandled();
+            if (finalMessage != null) {
+                host.onTaskCompleted(finalMessage);
             }
         });
 

@@ -448,13 +448,11 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 /* allowRestoreAction= */ false);
     }
 
-    // A brief "Done" completion line shown cross-app after a chain finishes, then the
-    // resting notification is restored. Resting title, completion body, no restore action.
-    private Notification buildCompletionNotification(boolean hidden, String doneText) {
-        return buildOngoing(
-                getString(R.string.overlay_notification_title),
-                doneText,
-                /* allowRestoreAction= */ false);
+    // A brief completion notification shown cross-app after a chain finishes, then the
+    // resting notification is restored. "Done" headline, the actual result as the body,
+    // no restore action.
+    private Notification buildCompletionNotification(String title, String body) {
+        return buildOngoing(title, body, /* allowRestoreAction= */ false);
     }
 
     // Shared builder for the ongoing overlay notification. allowRestoreAction adds the
@@ -527,7 +525,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return;
         }
         stopHandlePulse();
-        postCompletionNotification(); // added in Task 4
+        postCompletionNotification(message);
     }
 
     // Brings up the pulsing teal handle as the cross-app operating surface, tucking away
@@ -543,19 +541,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         operatingCueShown = true;
     }
 
-    // How long the brief "Done" line stays before the resting notification returns.
+    // How long the completion line stays before the resting notification returns.
     private static final long OPERATING_DONE_REVERT_MS = 2500L;
 
-    // Flashes a short completion line so the result is visible cross-app (TTS-independent),
-    // then settles back to the resting notification (unless a new operation started meanwhile).
-    private void postCompletionNotification() {
+    // Longest result body shown in the completion notification before it is elided.
+    private static final int COMPLETION_BODY_MAX_CHARS = 80;
+
+    // Flashes a "Done" completion line carrying the chain's result so it's visible
+    // cross-app (TTS-independent), then settles back to the resting notification (unless a
+    // new operation started meanwhile). Falls back to a bare "Done" when there's no message.
+    private void postCompletionNotification(@Nullable String message) {
         NotificationManager nm =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) {
             return;
         }
+        String body = OperatingNotificationText.completionBody(message, COMPLETION_BODY_MAX_CHARS);
         nm.notify(NOTIFICATION_ID,
-                buildCompletionNotification(collapsedToHandle, getString(R.string.notif_operating_done)));
+                buildCompletionNotification(getString(R.string.notif_operating_done), body));
         // Cancel a previous completion's still-pending revert so it can't fire during THIS
         // "Done" flash and cut it short on rapid back-to-back operations.
         if (pendingCompletionRevert != null) {

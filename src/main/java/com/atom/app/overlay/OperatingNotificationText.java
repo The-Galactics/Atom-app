@@ -17,4 +17,21 @@ public final class OperatingNotificationText {
         }
         return base + " · " + actionLabel.trim();
     }
+
+    /**
+     * Body for the brief cross-app completion notification: the chain's final result
+     * message, trimmed and truncated to {@code maxChars} (last char becomes an ellipsis
+     * when it overflows), or empty when there is no message — the "Done" title then
+     * stands alone. Keeps the result readable in a single notification line.
+     */
+    public static String completionBody(String message, int maxChars) {
+        if (message == null) {
+            return "";
+        }
+        String trimmed = message.trim();
+        if (trimmed.isEmpty() || maxChars <= 0 || trimmed.length() <= maxChars) {
+            return trimmed;
+        }
+        return trimmed.substring(0, maxChars - 1).trim() + "…";
+    }
 }

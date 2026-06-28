@@ -51,6 +51,13 @@ public class ChatViewModel extends ViewModel {
     // A spoken confirmation question to voice + capture; one-shot Event. The Activity
     // speaks it, re-opens the mic, and feeds the transcript via submitSpokenConfirmation.
     private MutableLiveData<Event<String>> voiceConfirmationRequested = new MutableLiveData<>();
+    // One-shot signal that an autonomous chain COMPLETED (not aborted). The Activity uses
+    // it to confirm the finish tangibly — a distinct success sub-label + a confirmation
+    // haptic — so the user knows the task is done even when not watching the orb. Separate
+    // from chatResponse (which also fires for ordinary chat replies) so only real task
+    // completions get the affordance, and from the OperatingCueBus (whose one-shot Events
+    // the overlay service already consumes) to avoid a second Event consumer.
+    private MutableLiveData<Event<String>> taskCompleted = new MutableLiveData<>();
     // Hands the spoken reply back to the blocked loop thread (capacity 1).
     private final BlockingQueue<String> spokenConfirmation = new ArrayBlockingQueue<>(1);
     // How long the loop waits for the spoken reply before treating it as no answer.
@@ -83,6 +90,7 @@ public class ChatViewModel extends ViewModel {
     public LiveData<Event<Boolean>> getSessionExpired() { return sessionExpired; }
     public LiveData<Boolean> getAutomationActive() { return automationActive; }
     public LiveData<Event<String>> getVoiceConfirmationRequested() { return voiceConfirmationRequested; }
+    public LiveData<Event<String>> getTaskCompleted() { return taskCompleted; }
 
     /** Free-form conversational message (token-streamed via StreamChat). */
     public void sendMessage(String prompt) {
@@ -198,6 +206,9 @@ public class ChatViewModel extends ViewModel {
                 operatingCueBus.finished(finalMessage, false);
                 conversationRepository.saveAssistantMessage(finalMessage);
                 chatResponse.setValue(finalMessage);
+                // Fire AFTER chatResponse so the Activity's success affordance (sub-label +
+                // haptic) lands on top of the ordinary showResponse render, not before it.
+                taskCompleted.setValue(new Event<>(finalMessage));
             }
 
             @Override
