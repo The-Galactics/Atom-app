@@ -1,10 +1,14 @@
 package com.atom.app.ui.main;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.Looper;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.atom.app.settings.AtomPreferences;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
@@ -46,6 +50,7 @@ public final class SpeechRecognitionCoordinator {
 
     private AndroidSpeechRecognizer speechRecognizer;
     private boolean isListening;
+    private BroadcastReceiver handoffReceiver;
 
     public SpeechRecognitionCoordinator(AppCompatActivity activity,
                                         AtomPreferences preferences, Host host) {
@@ -73,11 +78,22 @@ public final class SpeechRecognitionCoordinator {
         // The always-on wake word holds the mic; ask it to release first, then give
         // it a moment to free the AudioRecord before we start capturing.
         if (preferences.isWakeWordEnabled()) {
+            final MicHandoffGate gate = new MicHandoffGate();
+            handoffReceiver = new BroadcastReceiver() {
+                @Override public void onReceive(Context ctx, Intent intent) {
+                    if (gate.fire()) {
+                        startListeningIfReady();
+                    }
+                }
+            };
+            ContextCompat.registerReceiver(activity, handoffReceiver,
+                    new IntentFilter(WakeWordService.ACTION_MIC_RELEASED),
+                    ContextCompat.RECEIVER_NOT_EXPORTED);
             activity.sendBroadcast(new Intent(WakeWordService.ACTION_WAKE_PAUSE)
                     .setPackage(activity.getPackageName()));
             handoffHandler.postDelayed(() -> {
-                if (isListening && speechRecognizer != null) {
-                    speechRecognizer.startListening();
+                if (gate.fire()) {
+                    startListeningIfReady();
                 }
             }, MIC_HANDOFF_DELAY_MS);
         } else {
@@ -91,6 +107,7 @@ public final class SpeechRecognitionCoordinator {
      */
     public void cancel() {
         handoffHandler.removeCallbacksAndMessages(null);
+        unregisterHandoffReceiver();
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
             speechRecognizer = null;
@@ -102,9 +119,24 @@ public final class SpeechRecognitionCoordinator {
     /** Cleans up the recognizer on Activity destroy; safe to call when not listening. */
     public void destroy() {
         handoffHandler.removeCallbacksAndMessages(null);
+        unregisterHandoffReceiver();
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
             speechRecognizer = null;
+        }
+    }
+
+    private void startListeningIfReady() {
+        unregisterHandoffReceiver();
+        if (isListening && speechRecognizer != null) {
+            speechRecognizer.startListening();
+        }
+    }
+
+    private void unregisterHandoffReceiver() {
+        if (handoffReceiver != null) {
+            try { activity.unregisterReceiver(handoffReceiver); } catch (IllegalArgumentException ignored) {}
+            handoffReceiver = null;
         }
     }
 
