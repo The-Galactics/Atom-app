@@ -28,8 +28,8 @@ android {
         applicationId = "ai.atom"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.1.3"
+        versionCode = 10
+        versionName = "1.1.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

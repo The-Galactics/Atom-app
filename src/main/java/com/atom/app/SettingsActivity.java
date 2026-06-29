@@ -144,16 +144,16 @@ public class SettingsActivity extends AppCompatActivity {
             preferences.setUserName(etUserName.getText().toString());
             preferences.setAssistantName(etAiName.getText().toString());
 
-            // The assistant name IS the wake word. Reconfigure in place when the
-            // listener is already running (no stop->start FGS churn); only do a
-            // full start when enabling from a stopped state.
-            boolean wasEnabled = preferences.isWakeWordEnabled();
+            // The assistant name IS the wake word: keep a running listener in sync
+            // with a possibly-changed name, but RESPECT the user's on/off choice.
+            // The enable switch is the single source of truth — Save must NOT force
+            // it on (that bug made the wake word impossible to turn off). When it is
+            // enabled, reconfigure handles both the running case and a (re)start from
+            // stopped, since ACTION_RECONFIGURE falls through to a normal start when
+            // the service isn't configured yet.
             preferences.setWakeWordName(preferences.getAssistantName());
-            preferences.setWakeWordEnabled(true);
-            if (wasEnabled) {
+            if (preferences.isWakeWordEnabled()) {
                 reconfigureWakeService();
-            } else {
-                startWakeService();
             }
 
             toast(getString(R.string.settings_saved));
