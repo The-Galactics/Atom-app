@@ -77,6 +77,20 @@ class ChatViewModelRoutingTest {
         vm.sendOrder("borra todo");
 
         verify(chat, never()).askAtom(any(), any());
-        assertThat(vm.getChatResponse().getValue()).isNotEqualTo("¿Confirmas?");
+        assertThat(vm.getChatResponse().getValue()).isNull();
+    }
+
+    @Test
+    void conversationalTurn_emptyOutMessage_fallsBackToStreamChat() {
+        doAnswer(inv -> {
+            CommandRepository.CommandCallback cb = inv.getArgument(1);
+            cb.onResolved(ResolvedAction.conversation(""));
+            return null;
+        }).when(commands).recognize(eq("hola"), any());
+
+        vm.sendOrder("hola");
+
+        verify(chat).askAtom(eq("hola"), any());
+        assertThat(vm.getChatResponse().getValue()).isNotEqualTo("");
     }
 }

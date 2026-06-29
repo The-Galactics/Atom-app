@@ -126,11 +126,16 @@ public class ChatViewModel extends ViewModel {
             @Override
             public void onResolved(ResolvedAction action) {
                 if (!action.isExecutable() && !action.awaitingConfirmation()) {
-                    // Slice 2: ExecuteCommand now returns the real grounded chat answer in
-                    // outMessage(), so surface it directly — no second StreamChat round-trip.
+                    String reply = action.outMessage();
+                    if (reply == null || reply.trim().isEmpty()) {
+                        // Rare: backend returned no grounded answer — fall back to the
+                        // StreamChat path rather than show a blank bubble.
+                        sendMessage(order);
+                        return;
+                    }
                     isLoading.setValue(false);
-                    conversationRepository.saveAssistantMessage(action.outMessage());
-                    chatResponse.setValue(action.outMessage());
+                    conversationRepository.saveAssistantMessage(reply);
+                    chatResponse.setValue(reply);
                     return;
                 }
                 isLoading.setValue(false);
