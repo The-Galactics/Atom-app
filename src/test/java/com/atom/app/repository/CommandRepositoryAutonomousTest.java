@@ -49,6 +49,7 @@ class CommandRepositoryAutonomousTest {
         useCase = mock(ExecuteCommandPortIn.class);
         executorPort = mock(ActionExecutorPortOut.class);
         authUseCase = mock(AuthPortIn.class);
+        when(authUseCase.shouldRefresh()).thenReturn(true);
     }
 
     private static ResolvedAction action(ActionType type, boolean taskComplete) {

@@ -47,6 +47,8 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
     public static final String ACTION_RECONFIGURE = "com.atom.app.wake.RECONFIGURE";
     /** App/bubble is about to use the mic manually: release it until LISTEN_DONE. */
     public static final String ACTION_WAKE_PAUSE = "com.atom.app.wake.PAUSE";
+    /** Broadcast to listeners the moment the engine has stopped and freed the mic. */
+    public static final String ACTION_MIC_RELEASED = "com.atom.app.wake.MIC_RELEASED";
 
     private static final String CHANNEL_ID = "atom_wake_word";
     private static final int NOTIF_ID = 4711;
@@ -278,6 +280,7 @@ public class WakeWordService extends Service implements WakeWordEngine.Listener 
         }
         handingOff = true;
         engine.stop();
+        sendBroadcast(new Intent(ACTION_MIC_RELEASED).setPackage(getPackageName()));
         mainHandler.removeCallbacks(resumeFallback);
         mainHandler.postDelayed(resumeFallback, RESUME_FALLBACK_MS);
     }
