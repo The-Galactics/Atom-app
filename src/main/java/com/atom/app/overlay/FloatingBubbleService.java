@@ -1187,7 +1187,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 // it must enter the autonomous loop so the voice gate speaks the question
                 // and captures the spoken sí/no. Only true non-executable turns go to chat.
                 if (!action.isExecutable() && !action.awaitingConfirmation()) {
-                    askAtom(prompt, status, null);
+                    // Slice 2: use the real grounded answer ExecuteCommand now returns,
+                    // instead of a second StreamChat round-trip.
+                    respond(action.outMessage(), status);
                     return;
                 }
                 // Accessibility-powered actions need the service enabled first.
