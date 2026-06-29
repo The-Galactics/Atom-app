@@ -5,6 +5,7 @@ import android.os.Looper;
 import android.util.Log;
 
 import com.atom.app.model.ResponseModel;
+import com.atom.app.telemetry.LatencyTimer;
 import com.atom.application.port.in.StreamChatPortIn;
 import com.atom.application.port.in.security.AuthPortIn;
 
@@ -40,18 +41,24 @@ public class ChatRepository {
 
     public void askAtom(String prompt, final ChatCallback callback) {
         executor.execute(() -> {
+            long t0 = System.nanoTime();
             try {
                 // Refresh-ahead off the call path (US-E3 chat follow-up): the gRPC
                 // interceptor is cache-only, so prime a fresh token here (on the
                 // background executor) before the protected chat RPC. Mirrors the same
                 // pattern used in CommandRepository#executeAutonomous.
                 authUseCase.refreshIfNeeded();
+                long tAfterRefresh = System.nanoTime();
                 String text;
                 try (Stream<String> tokens =
                              streamChatUseCase.messageChat(sessionUserId, sessionChatId, prompt)) {
                     text = tokens.collect(Collectors.joining());
                 }
-
+                long tEnd = System.nanoTime();
+                Log.i("AtomLatency", LatencyTimer.formatLine("askAtom",
+                        LatencyTimer.toMillis(t0, tAfterRefresh),
+                        LatencyTimer.toMillis(tAfterRefresh, tEnd),
+                        LatencyTimer.toMillis(t0, tEnd)));
                 ResponseModel response = new ResponseModel();
                 response.setResponseText(text);
                 response.setStatus("OK");

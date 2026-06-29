@@ -6,6 +6,8 @@ import android.util.Log;
 
 import androidx.annotation.VisibleForTesting;
 
+import com.atom.app.telemetry.LatencyTimer;
+
 import com.atom.application.port.in.ExecuteCommandPortIn;
 import com.atom.application.port.in.security.AuthPortIn;
 import com.atom.application.port.out.ActionExecutorPortOut;
@@ -98,6 +100,7 @@ public class CommandRepository {
     /** Recognize an order. The callback runs on the main thread. */
     public void recognize(String order, final CommandCallback callback) {
         executor.execute(() -> {
+            long t0 = System.nanoTime();
             try {
                 // Refresh-ahead OFF the call path (US-E3): the gRPC interceptor is now
                 // cache-only, so prime a fresh token here (on the background executor)
@@ -106,12 +109,18 @@ public class CommandRepository {
                 if (authUseCase != null) {
                     authUseCase.refreshIfNeeded();
                 }
+                long tAfterRefresh = System.nanoTime();
                 // Routing pre-flight only: used for routing decisions, never carried into the
                 // loop. Uses a throwaway session id so it doesn't pollute the backend's ReAct
                 // history (a shared id would offset the loop's steps and trip a premature
                 // task_complete).
                 UUID preflightOrderId = UUID.randomUUID();
                 ResolvedAction action = executeCommandUseCase.execute(sessionUserId, preflightOrderId, order);
+                long tEnd = System.nanoTime();
+                Log.i("AtomLatency", LatencyTimer.formatLine("recognize",
+                        LatencyTimer.toMillis(t0, tAfterRefresh),
+                        LatencyTimer.toMillis(tAfterRefresh, tEnd),
+                        LatencyTimer.toMillis(t0, tEnd)));
                 post(() -> callback.onResolved(action));
             } catch (Exception e) {
                 Log.e(TAG, "recognize failed for order=\"" + order + "\"", e);
