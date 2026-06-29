@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/input_bar_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_pill_input"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/input_bar_height"
+    android:orientation="horizontal"
+    android:paddingStart="@dimen/space_m"
+    android:paddingEnd="@dimen/space_xs">
+
+    <EditText
+        android:id="@+id/input_edit_text"
+        style="@style/Widget.Atom.Input"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:hint="@string/input_hint"
+        android:imeOptions="actionSend"
+        android:paddingHorizontal="@dimen/space_s"
+        android:paddingVertical="@dimen/space_s" />
+
+    <!-- Filled accent send disc. -->
+    <ImageButton
+        android:id="@+id/input_send"
+        android:layout_width="@dimen/touch_target"
+        android:layout_height="@dimen/touch_target"
+        android:layout_marginEnd="@dimen/space_xs"
+        android:background="@drawable/bg_send_button"
+        android:contentDescription="@string/cd_send"
+        android:padding="@dimen/space_s"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_send"
+        app:tint="@color/on_accent" />
+
+</LinearLayout>

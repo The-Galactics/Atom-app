@@ -1,37 +1,37 @@
-HELP.md
+# Build artifacts
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+/captures
+*.apk
+*.aar
+*.ap_
+*.dex
+*.class
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
+# Android Specific
+local.properties
+/src/main/assets/google-services.json
+/src/main/res/xml/google_services.xml
+*.jks
+*.keystore
 
-### IntelliJ IDEA ###
+# IDE - IntelliJ / Android Studio
 .idea
-*.iws
 *.iml
+*.iws
 *.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+cmake-build-*/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+# Vosk wake-word model (large; fetched via scripts/fetch-wakeword-model.sh)
+src/main/assets/model-es/
 
-### VS Code ###
-.vscode/
+# Debug files resources
+src/debug/
+
+# Local tooling / skill docs (not part of the app)
+docs/superpowers/
+keystore.properties

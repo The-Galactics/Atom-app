@@ -1,50 +1,169 @@
+import java.util.Properties
+
 plugins {
-    java
-    id("org.springframework.boot") version "4.0.6"
-    id("io.spring.dependency-management") version "1.1.7"
+    id("com.android.application") version "8.7.3"
+    id("com.google.protobuf") version "0.9.4"
 }
 
-group = "com.Atom.app"
-version = "0.0.1-SNAPSHOT"
-description = "Atom_app"
+// Cargar local.properties para leer variables de entorno
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+// Release signing config — credentials live in keystore.properties (gitignored),
+// never committed. Absent the file (e.g. CI without secrets), release stays unsigned.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
+android {
+    namespace = "com.atom.app"
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "ai.atom"
+        minSdk = 26
+        targetSdk = 35
+        versionCode = 10
+        versionName = "1.1.5"
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+
+            // Embed native debug symbols (BoringSSL/gRPC .so) into the bundle so
+            // Play Console can symbolicate native crashes/ANRs — no separate upload.
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
+
+            val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
+            val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
+            buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
+            buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            buildConfigField("boolean", "GRPC_TLS", grpcTls)
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        }
+        debug {
+            val grpcHost = localProperties.getProperty("GRPC_HOST") ?: "10.0.2.2"
+            val grpcPort = localProperties.getProperty("GRPC_PORT") ?: "50051"
+            val grpcTls = localProperties.getProperty("GRPC_TLS") ?: "false"
+            buildConfigField("String", "GRPC_HOST", "\"$grpcHost\"")
+            buildConfigField("int", "GRPC_PORT", "$grpcPort")
+            buildConfigField("boolean", "GRPC_TLS", grpcTls)
+            val googleWebClientId = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID") ?: ""
+            buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
+        }
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    testOptions {
+        // Tests use JUnit 5 (Jupiter); AGP runs them on the JUnit Platform.
+        unitTests.all { it.useJUnitPlatform() }
+        // android.jar stubs return defaults instead of throwing, so happy-path
+        // android.util.Log calls in code under test are no-ops in unit tests.
+        unitTests.isReturnDefaultValues = true
     }
 }
 
-repositories {
-    mavenCentral()
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.25.3"
+    }
+    plugins {
+        create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:1.62.2"
+        }
+    }
+    generateProtoTasks {
+        all().forEach { task ->
+            task.builtins {
+                create("java") {
+                    option("lite")
+                }
+            }
+            task.plugins {
+                create("grpc") {
+                    option("lite")
+                }
+            }
+        }
+    }
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.2.1")
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-livedata:2.10.0")
 
-tasks.withType<Test> {
-    useJUnitPlatform()
-}
+    // Conversation history UI: a scrolling transcript list and the multi-step onboarding pager.
+    implementation("androidx.recyclerview:recyclerview:1.4.0")
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
 
-tasks.register<Copy>("installGitHooks") {
-    description = "Install git hooks"
+    // Room: on-device persistence for the conversation transcript (Java uses annotationProcessor).
+    implementation("androidx.room:room-runtime:2.6.1")
+    annotationProcessor("androidx.room:room-compiler:2.6.1")
 
-    from(file("${rootProject.projectDir}/scripts/commit-msg"))
-    into(file("${rootProject.projectDir}/.git/hooks"))
+    // Encrypted storage for the session tokens (HU-27): EncryptedSharedPreferences.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    // Testing (JUnit 5 + Mockito + AssertJ; grpc-testing pinned to the gRPC version below).
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.14.2")
+    testImplementation("org.assertj:assertj-core:3.27.3")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("io.grpc:grpc-testing:1.62.2")
+    testImplementation("io.grpc:grpc-inprocess:1.62.2") // InProcess{Server,Channel}Builder
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 
-    filePermissions {
-        unix("rwxr-xr-x")
-    }
+    // Credential Manager + Google Identity Services (Google Sign-In, gated by GOOGLE_WEB_CLIENT_ID).
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
-    doFirst {
-        println("Installing Git Hooks...")
-    }
-}
+    // Wake word — Vosk on-device keyword spotting (any typed name, no model file).
+    implementation("com.alphacephei:vosk-android:0.3.47")
 
-tasks.named("compileJava") {
-    dependsOn("installGitHooks")
+    // gRPC
+    implementation("io.grpc:grpc-okhttp:1.62.2")
+    implementation("io.grpc:grpc-protobuf-lite:1.62.2")
+    implementation("io.grpc:grpc-stub:1.62.2")
+    implementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    implementation("javax.annotation:javax.annotation-api:1.3.2")
 }

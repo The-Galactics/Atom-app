@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package com.atom.proto;
+
+// When the protoc read the .proto file, can make multiple java files, for easier manage.
+option java_multiple_files = true;
+
+// Route to generate the contract files.
+option java_package = "com.atom.infrastructure.adapter.grpc";
+
+// Main class responsible for containing gRPC metadata.
+option java_outer_classname = "AiProto";
+
+// Service to handle requests sent from Java to Python.
+// Source of truth: Atom-agent/proto/atom_agent.proto (Python backend).
+service AtomAgentService {
+
+  // --- Auth (HU-27): these RPCs do NOT require an access token ---
+  rpc Register               (RegisterRequest)   returns (AuthResponse);
+  rpc Login                  (LoginRequest)      returns (AuthResponse);
+  rpc AuthenticateWithGoogle (GoogleAuthRequest) returns (AuthResponse);
+  rpc RefreshToken           (RefreshRequest)    returns (AuthResponse);
+
+  // Conversational AI (Unary call)
+  rpc ExecuteCommand (CommandRequest) returns (CommandResponse);
+
+  // Conversational AI (Streaming response)
+  rpc StreamChat (MessageRequest) returns (stream MessageResponse);
+
+  // Voice: Speech-to-Text (Unary call)
+  rpc Transcribe (TranscribeRequest) returns (TranscribeResponse);
+
+  // Voice: Text-to-Speech (Streaming response)
+  rpc Synthesize (SynthesizeRequest) returns (stream SynthesizeResponse);
+
+}
+
+// --- Auth Messages (HU-27 / ATOM-54) ---
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;         // plaintext only over TLS; hashed (Argon2id) server-side
+  string display_name = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// OIDC ID token issued by Google (verified server-side: signature, aud, exp, email_verified).
+message GoogleAuthRequest {
+  string id_token = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message AuthResponse {
+  string access_token = 1;     // short-lived signed JWT
+  string refresh_token = 2;    // opaque, revocable (single-use rotation)
+  int64 expires_in = 3;        // access-token lifetime in seconds
+  string user_id = 4;
+}
+
+// --- Chat Messages ---
+
+// One on-screen node captured by the Android accessibility service, typed so the
+// model reasons over screen structure without text-parsing overhead.
+message ScreenElement {
+  string text = 1;        // visible text or content description
+  string role = 2;        // short widget class: Button, EditText, TextView, ...
+  bool clickable = 3;
+  bool focusable = 4;
+  bool editable = 5;
+  bool scrollable = 6;
+  int32 index = 7;        // stable ordinal for unambiguous target resolution
+}
+
+// Messages to ExecuteCommand method.
+message CommandRequest {
+  // DEPRECATED: ignored by the server, which derives the identity from the
+  // verified access token (Authorization metadata). Kept for back-compat.
+  string user_id = 1 [deprecated = true];
+  string command = 2;
+  // Current on-screen map; empty when the accessibility service is disabled.
+  repeated ScreenElement screen_elements = 3;
+  // Client-generated id scoping ONE ReAct task/order across its turns (incl. the
+  // confirmation question + the user's "sí/no" reply). A new id => fresh trace.
+  // Optional; empty falls back to the user identity (legacy behavior).
+  string order_id = 4;
+}
+
+message CommandResponse {
+  bool success = 1;
+  // Natural-language reply for the user (spoken via TTS / shown on screen).
+  string out_message = 2;
+  // Resolved action the Android client must execute, e.g. "OPEN_APP",
+  // "MAKE_CALL". "NONE" means the turn was conversational (no action).
+  string action_type = 3;
+  // JSON object with the action slots, e.g. {"app_name": "whatsapp"}.
+  string parameters_json = 4;
+  // Recognition confidence in [0.0, 1.0]. 0.0 for conversational turns.
+  float confidence = 5;
+  // When true the client should confirm with the user before executing
+  // (sensitive actions such as calling or sending a message).
+  bool requires_confirmation = 6;
+  // True when the ReAct task is finished; the client stops looping.
+  bool task_complete = 7;
+  // Current ReAct step index for this session (telemetry/debug).
+  int32 step = 8;
+  // True on the turn that HOLDS a sensitive action and asks the user to confirm
+  // out loud (action_type is NONE, task_complete is false, question in
+  // out_message). The client speaks it, captures the spoken "sí/no", and sends
+  // that as the next command with the same order_id.
+  bool awaiting_confirmation = 9;
+}
+
+// Messages to StreamChat method.
+message MessageRequest {
+  // DEPRECATED: ignored by the server, which derives the identity from the
+  // verified access token (Authorization metadata). Kept for back-compat.
+  string user_id = 1 [deprecated = true];
+  string chat_id = 2;
+  string message = 3;
+  bool enable_web_search = 4;
+}
+
+message MessageResponse {
+  string script_token = 1;
+  string status = 2;
+  bool finished = 3;
+}
+
+// --- Voice STT Messages ---
+
+message TranscribeRequest {
+  bytes audio_bytes = 1;
+  string mime_type = 2;
+  string language = 3;
+  string format = 4;
+  int32 beam_size = 5;
+}
+
+message TranscribeResponse {
+  string text = 1;
+  string language = 2;
+  float duration_seconds = 3;
+  float confidence = 4;
+  string provider = 5;
+}
+
+// --- Voice TTS Messages ---
+
+message SynthesizeRequest {
+  string text = 1;
+  string voice = 2;
+  string language = 3;
+  string format = 4;
+  float speed = 5;
+}
+
+message SynthesizeResponse {
+  bytes audio_bytes = 1;
+  string mime_type = 2;
+  string format = 3;
+}

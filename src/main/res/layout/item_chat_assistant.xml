@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Assistant turn: left-aligned, surface_2-tinted bubble. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="start"
+    android:paddingHorizontal="@dimen/space_m"
+    android:paddingVertical="@dimen/space_xs">
+
+    <TextView
+        android:id="@+id/chat_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="@dimen/chat_bubble_max_width"
+        android:background="@drawable/bg_chat_bubble_assistant"
+        android:paddingHorizontal="@dimen/space_m"
+        android:paddingVertical="@dimen/space_s"
+        android:textAppearance="@style/TextAppearance.Atom.Body"
+        android:textColor="@color/on_surface_high" />
+
+</LinearLayout>

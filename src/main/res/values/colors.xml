@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Brand base (unchanged identity) -->
+    <color name="deep_onyx">#0A0A0C</color>
+    <color name="purple_lavender">#BF94FF</color>
+    <color name="white">#FFFFFF</color>
+
+    <!-- Surface elevation ramp (OLED-friendly, each step lighter) -->
+    <color name="surface_1">#121214</color>         <!-- cards / input wells -->
+    <color name="surface_2">#191920</color>         <!-- raised cards, overlay panel -->
+    <color name="surface_border">#1AFFFFFF</color>  <!-- hairline border (10% white) -->
+
+    <!-- Accent ramp + gradient pair (for the core glow and the mic FAB) -->
+    <color name="accent">#BF94FF</color>            <!-- = purple_lavender -->
+    <color name="accent_bright">#D6B8FF</color>     <!-- gradient highlight end -->
+    <color name="accent_deep">#8C5CF0</color>       <!-- gradient deep end -->
+    <color name="accent_glow_soft">#0DBF94FF</color><!-- 5% accent (radial glow outer) -->
+
+    <!-- On-surface text tints (white at decreasing emphasis) -->
+    <color name="on_surface_high">#FFFFFFFF</color>   <!-- 100% — primary text -->
+    <color name="on_surface_medium">#B3FFFFFF</color> <!-- 70% — secondary text -->
+    <color name="on_surface_label">#80FFFFFF</color>  <!-- 50% — labels -->
+    <color name="on_surface_disabled">#61FFFFFF</color><!-- 38% — disabled / hint -->
+    <color name="on_surface_faint">#4DFFFFFF</color>  <!-- 30% — faint hint -->
+
+    <!-- On-accent (text/icons sitting on the lavender FAB) -->
+    <color name="on_accent">#0A0A0C</color>          <!-- = deep_onyx -->
+
+    <!-- Status colors (subtle, dark-mode tuned) -->
+    <color name="status_error">#FF8A80</color>
+
+    <!-- Ripple -->
+    <color name="ripple_accent">#33BF94FF</color>
+    <color name="ripple_light">#1FFFFFFF</color>
+
+    <!-- Operating accent: signals Atom is actively driving the device. -->
+    <color name="accent_teal">#FF35E0D8</color>
+
+</resources>

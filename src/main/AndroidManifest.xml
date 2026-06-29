@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ============================================================= -->
+    <!-- Permissions                                                   -->
+    <!-- ============================================================= -->
+
+    <!-- Network -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Foreground services (wake-word listener, floating bubble). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Always-on wake word ("Hey Atom") runs as a microphone foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Floating bubble overlay runs as a "special use" foreground service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Audio / microphone -->
+    <!-- Speech-to-text: capture microphone audio for voice orders. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Telephony / contacts (action catalog).
+         MAKE_CALL: ACTION_CALL needs CALL_PHONE (falls back to the dialer when
+         not granted). TOGGLE_SETTING/do_not_disturb needs notification-policy
+         access. Flashlight (CameraManager.setTorchMode) needs no permission.
+         SET_ALARM/SET_TIMER use AlarmClock intents (no perm). SEND_MESSAGE opens
+         the SMS composer via ACTION_SENDTO (no perm). -->
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- Notifications / system UI -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Overlay / "super position": draw the assistant UI on top of other apps. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- ============================================================= -->
+    <!-- Package visibility (Android 11+)                              -->
+    <!-- ============================================================= -->
+
+    <!-- OPEN_APP must see other apps' launch intents under package visibility.
+         We only need to resolve launchable activities. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <!-- Speech: the TTS engine and the speech-recognition service must be
+         visible under package visibility. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <!-- OEM autostart screens targeted by OemSettingsRouter.autostartCandidates. -->
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.coloros.safecenter" />
+        <package android:name="com.oppo.safe" />
+        <package android:name="com.oneplus.security" />
+        <package android:name="com.vivo.permissionmanager" />
+        <package android:name="com.iqoo.secure" />
+    </queries>
+
+    <application
+        android:name=".AtomApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AtomApp">
+
+        <!-- ========================================================= -->
+        <!-- Activities                                                -->
+        <!-- ========================================================= -->
+
+        <!-- Launcher entry point. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".SettingsActivity" />
+
+        <!-- Conversation transcript screen. -->
+        <activity android:name=".HistoryActivity" />
+
+        <!-- First-run onboarding (name + assistant name + permissions intro). -->
+        <activity android:name=".OnboardingActivity" />
+
+        <!-- First-run permission setup screen (shown once after onboarding). -->
+        <activity android:name=".PermissionSetupActivity" />
+
+        <!-- Login / register screen. -->
+        <activity android:name=".LoginActivity" android:exported="false" />
+
+        <!-- ========================================================= -->
+        <!-- Services                                                  -->
+        <!-- ========================================================= -->
+
+        <!-- Accessibility service: enabled by the user from system Settings. -->
+        <service
+            android:name="com.atom.infrastructure.adapter.accessibility.AtomAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Always-on wake-word listener (Vosk), microphone foreground service. -->
+        <service
+            android:name="com.atom.infrastructure.adapter.wake.WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- Floating "bubble" assistant overlay (draw over other apps). -->
+        <service
+            android:name="com.atom.app.overlay.FloatingBubbleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent floating assistant the user invokes to ask Atom on top of other apps." />
+        </service>
+    </application>
+
+</manifest>

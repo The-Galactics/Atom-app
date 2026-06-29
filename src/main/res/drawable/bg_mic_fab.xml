@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Plain oval gradient fill for the mic FAB. Kept as a bare <shape> (not a ripple)
+  on purpose: a masked RippleDrawable renders as a rounded-rectangle when the view
+  is scaled up by the listening pulse, which made the circle look like a squircle.
+  A plain oval scales as a true circle at any pulse scale. Touch feedback is provided
+  separately by a borderless ripple foreground on the button plus the press-settle.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="linear"
+        android:angle="135"
+        android:startColor="@color/accent_bright"
+        android:centerColor="@color/accent"
+        android:endColor="@color/accent_deep" />
+</shape>

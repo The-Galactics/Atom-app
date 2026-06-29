@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hidden-state edge handle, Game Turbo style: a thin glowing lavender line pinned to
+     the screen border. The visible line (handle_bar) is only handle_width wide, but the
+     touchable root is a transparent handle_touch_width grab zone around it, so the
+     restore tap lands reliably without sitting only in the system edge-gesture strip.
+     FloatingBubbleService flips the bar to the docked side via applyHandleSide; it is
+     draggable like the bubble and dimmed while untouched. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/handle_touch_width"
+    android:layout_height="@dimen/handle_height"
+    android:background="@android:color/transparent"
+    android:contentDescription="@string/cd_show_bubble">
+
+    <View
+        android:id="@+id/handle_bar"
+        android:layout_width="@dimen/handle_width"
+        android:layout_height="@dimen/handle_bar_height"
+        android:layout_gravity="start|center_vertical"
+        android:background="@drawable/bg_edge_handle" />
+
+</FrameLayout>

@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Atom</string>
+    <string name="accessibility_service_description">Permite que Atom vea el contenido en pantalla y actúe en tu nombre para ayudarte en todas las apps.</string>
+
+    <!-- Wordmark / pantalla principal -->
+    <string name="wordmark">ATOM</string>
+    <string name="status_idle">Listo</string>
+    <string name="status_listening">Escuchando</string>
+    <string name="status_thinking">Pensando</string>
+    <string name="status_error">Algo salió mal</string>
+    <string name="sub_status_tap_mic">Toca el micrófono o escribe para empezar</string>
+    <string name="sub_status_muted">Micrófono silenciado — mantén pulsado el micrófono para reactivarlo</string>
+    <string name="mic_muted_hint">El micrófono está silenciado. Mantén pulsado para reactivar.</string>
+    <string name="sub_status_thinking">Conectando con el núcleo de Atom</string>
+    <string name="sub_status_responded">Atom respondió</string>
+    <string name="sub_status_task_done">✓ Tarea completada</string>
+
+    <!-- Descripciones de contenido -->
+    <string name="cd_history">Historial</string>
+    <string name="cd_settings">Ajustes</string>
+    <string name="cd_mic">Empezar a escuchar</string>
+    <string name="cd_mic_muted">Micrófono silenciado, mantén pulsado para reactivar</string>
+    <string name="cd_keyboard">Escribir un mensaje</string>
+    <string name="cd_volume">Volumen</string>
+    <string name="cd_send">Enviar</string>
+    <string name="cd_close">Cerrar</string>
+    <string name="cd_back">Atrás</string>
+    <string name="cd_atom_bubble">Asistente flotante de Atom</string>
+    <string name="cd_hide">Ocultar mientras usas otras apps</string>
+    <string name="cd_show_bubble">Mostrar la burbuja de Atom</string>
+    <string name="cd_dismiss_bubble">Arrastra aquí para descartar</string>
+    <string name="cd_chat_user">Tú dijiste: %1$s</string>
+    <string name="cd_chat_assistant">Atom dijo: %1$s</string>
+
+    <!-- Barra de entrada -->
+    <string name="input_hint">Pregúntale a Atom…</string>
+    <string name="input_empty">Escribe un mensaje primero</string>
+
+    <!-- Ajustes -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_profile">Perfil</string>
+    <string name="settings_your_name">Tu nombre</string>
+    <string name="settings_assistant_name">Nombre del asistente</string>
+    <string name="settings_voice_output">Salida de voz</string>
+    <string name="settings_tts_toggle">Leer las respuestas en voz alta</string>
+    <string name="settings_tts_voice">Voz</string>
+    <string name="settings_tts_voice_auto">Automática (la mejor disponible)</string>
+    <string name="settings_tts_preview">Probar voz</string>
+    <string name="settings_tts_speed">Velocidad del habla</string>
+
+    <!-- Palabra de activación -->
+    <string name="wake_channel_name">Palabra de activación de Atom</string>
+    <string name="wake_notification_title">Atom está escuchando</string>
+    <string name="wake_notification_text">Di tu palabra de activación para llamar a Atom.</string>
+
+    <string name="settings_your_name_hint">Escribe tu nombre</string>
+    <string name="settings_assistant_name_hint">Atom</string>
+
+    <string name="settings_membership">Suscripción</string>
+    <string name="settings_plan_free">Gratis</string>
+    <string name="settings_plan_free_desc">Funciones básicas</string>
+    <string name="settings_plan_free_price">$0</string>
+    <string name="settings_plan_pro">Pro</string>
+    <string name="settings_plan_pro_desc">IA avanzada, respuestas más rápidas</string>
+    <string name="settings_plan_pro_price">$9.99</string>
+    <string name="settings_assistant_access">Acceso del asistente</string>
+    <string name="settings_assistant_access_desc">Concede los permisos que Atom necesita para ayudarte en otras apps y luego activa la burbuja flotante.</string>
+    <string name="settings_enable_bubble">Activar burbuja flotante</string>
+    <string name="settings_disable_bubble">Desactivar burbuja flotante</string>
+    <string name="settings_save">Guardar cambios</string>
+    <string name="settings_saved">Ajustes guardados</string>
+    <string name="settings_bubble_needs_overlay">Concede \"Mostrar sobre otras apps\" primero</string>
+    <string name="settings_bubble_started">Burbuja flotante activada</string>
+    <string name="settings_bubble_stopped">Burbuja flotante desactivada</string>
+
+    <!-- Confirmación de acción -->
+    <string name="action_confirm_no">Cancelar</string>
+    <string name="action_permission_denied">Permiso denegado — acción cancelada</string>
+    <!-- Progreso del bucle autónomo -->
+    <string name="automation_operating">Atom está operando…</string>
+
+    <!-- Notificación en primer plano "operando" en vivo (Atom está controlando otras apps). -->
+    <string name="notif_operating_title">Atom está operando</string>
+    <string name="notif_operating_step">Paso %1$d</string>
+    <string name="notif_task_complete">✓ Tarea completada</string>
+    <string name="notif_complete_channel_name">Tareas completadas</string>
+    <string name="action_verb_open_app">Abriendo una app</string>
+    <string name="action_verb_make_call">Haciendo una llamada</string>
+    <string name="action_verb_send_message">Enviando un mensaje</string>
+    <string name="action_verb_set_alarm">Poniendo una alarma</string>
+    <string name="action_verb_set_timer">Poniendo un temporizador</string>
+    <string name="action_verb_toggle_setting">Cambiando un ajuste</string>
+    <string name="action_verb_navigate">Navegando</string>
+    <string name="action_verb_scroll">Desplazando</string>
+    <string name="action_verb_read_screen">Leyendo la pantalla</string>
+    <string name="action_verb_tap_element">Tocando</string>
+    <string name="action_verb_type_text">Escribiendo</string>
+
+    <!-- Superposición flotante -->
+    <string name="overlay_notification_title">Atom está flotando</string>
+    <string name="overlay_notification_text">Toca la burbuja para preguntarle a Atom desde cualquier app.</string>
+    <string name="overlay_notification_text_hidden">Oculto. Toca para mostrar Atom sobre tus apps.</string>
+    <string name="overlay_action_show">Mostrar</string>
+    <string name="overlay_action_stop">Desactivar</string>
+    <string name="overlay_channel_name">Asistente flotante de Atom</string>
+    <string name="overlay_panel_hint">Pregúntale a Atom…</string>
+    <string name="overlay_sending">Enviando a Atom…</string>
+    <string name="overlay_listening">Escuchando…</string>
+    <string name="overlay_thinking">Pensando…</string>
+    <string name="overlay_mic_denied">Concede primero el permiso de micrófono en la app de Atom.</string>
+    <string name="overlay_voice_unavailable">El reconocimiento de voz no está disponible en este dispositivo.</string>
+    <string name="overlay_voice_error">No te entendí — inténtalo de nuevo.</string>
+
+    <!-- Historial -->
+    <string name="history_title">Historial</string>
+    <string name="history_empty">Aún no hay conversaciones</string>
+    <string name="cd_clear_history">Borrar historial</string>
+    <string name="history_clear_title">¿Borrar el historial?</string>
+    <string name="history_clear_message">Esto elimina permanentemente tu conversación guardada.</string>
+    <string name="history_clear_confirm">Borrar</string>
+
+    <!-- Introducción inicial -->
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_get_started">Empezar</string>
+    <string name="onboarding_welcome_title">Bienvenido a Atom</string>
+    <string name="onboarding_welcome_body">Tu asistente por voz. Vamos a configurarlo en unos pasos rápidos.</string>
+    <string name="onboarding_user_name_title">Tu nombre</string>
+    <string name="onboarding_user_name_body">¿Cómo debería llamarte Atom?</string>
+    <string name="onboarding_assistant_name_title">Nombra a tu asistente</string>
+    <string name="onboarding_assistant_name_body">Esta es también la palabra de activación que dirás para llamarlo.</string>
+    <string name="onboarding_permissions_title">Algunos permisos</string>
+    <string name="onboarding_permissions_body">Para ayudarte en otras apps, Atom necesita el micrófono, la superposición y el acceso de accesibilidad. Puedes concederlos en Ajustes cuando quieras.</string>
+
+    <!-- Panel de permisos -->
+    <string name="settings_permissions">Permisos</string>
+    <string name="settings_perm_overlay">Mostrar sobre otras apps</string>
+    <string name="settings_perm_accessibility">Accesibilidad</string>
+    <string name="settings_perm_microphone">Micrófono</string>
+    <string name="settings_perm_notifications">Notificaciones</string>
+    <string name="settings_perm_fix">Arreglar</string>
+    <string name="settings_perm_granted">Concedido</string>
+    <string name="settings_perm_not_granted">No concedido</string>
+    <string name="cd_fix_overlay">Corregir permiso de superposición</string>
+    <string name="cd_fix_accessibility">Corregir permiso de accesibilidad</string>
+    <string name="cd_fix_microphone">Corregir permiso de micrófono</string>
+    <string name="cd_fix_notifications">Arreglar permiso de notificaciones</string>
+
+    <!-- Ajustes de la palabra de activación -->
+    <string name="settings_wake_word">Palabra de activación</string>
+    <string name="settings_wake_enable">Activar palabra de activación</string>
+    <string name="settings_wake_screen_on">Escuchar solo con la pantalla encendida</string>
+
+    <!-- Idioma -->
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_system">Predeterminado del sistema</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_spanish">Español</string>
+
+    <!-- Escucha en vivo / reintentar -->
+    <string name="sub_status_retry">Toca para intentar de nuevo</string>
+
+    <!-- Chips de acción rápida -->
+    <string name="chip_timer">Poner un temporizador</string>
+    <string name="chip_call">Llamar…</string>
+    <string name="chip_message">Enviar un mensaje</string>
+    <string name="chip_wifi">Wi-Fi</string>
+    <string name="chip_flashlight">Linterna</string>
+    <string name="chip_phrase_timer">Pon un temporizador de </string>
+    <string name="chip_phrase_call">Llama a </string>
+    <string name="chip_phrase_message">Envía un mensaje a </string>
+    <string name="chip_phrase_wifi">Cambiar el Wi-Fi</string>
+    <string name="chip_phrase_flashlight">Cambiar la linterna</string>
+
+    <!-- Mensajes del ejecutor de acciones (visibles para el usuario). -->
+    <string name="action_failed">No pude completar la acción: %1$s</string>
+    <string name="action_open_app_unknown">No entendí qué aplicación abrir.</string>
+    <string name="action_open_app_not_found">No encontré la aplicación \'%1$s\'.</string>
+    <string name="action_open_app_failed">No pude abrir \'%1$s\'.</string>
+    <string name="action_opening_app">Abriendo %1$s.</string>
+    <string name="action_call_unknown">No entendí a quién llamar.</string>
+    <string name="action_calling">Llamando a %1$s.</string>
+    <string name="contact_not_found">No encontré ese contacto en tu agenda</string>
+    <string name="action_message_unknown">No entendí a quién enviar el mensaje.</string>
+    <string name="action_message_preparing">Preparando un mensaje para %1$s.</string>
+    <string name="action_whatsapp_search_fallback">Abriendo WhatsApp para buscar a %1$s…</string>
+    <string name="action_telegram_opening">Abriendo Telegram para enviar tu mensaje.</string>
+    <string name="action_alarm_unknown">No entendí la hora de la alarma.</string>
+    <string name="action_alarm_invalid_time">No entendí la hora de la alarma.</string>
+    <string name="action_alarm_set">Alarma puesta a las %1$s.</string>
+    <string name="action_timer_unknown">No entendí la duración del temporizador.</string>
+    <string name="action_timer_invalid_duration">No entendí la duración del temporizador.</string>
+    <string name="action_timer_invalid">La duración del temporizador no es válida.</string>
+    <string name="action_timer_started">Temporizador iniciado.</string>
+    <string name="action_setting_unknown">No entendí qué ajuste cambiar.</string>
+    <string name="action_setting_unsupported">Ajuste no soportado: %1$s.</string>
+    <string name="action_torch_unavailable">Este dispositivo no tiene linterna controlable.</string>
+    <string name="action_torch_none">No encontré una linterna en este dispositivo.</string>
+    <string name="action_torch_failed">No pude cambiar la linterna: %1$s.</string>
+    <string name="action_torch_on">Linterna encendida.</string>
+    <string name="action_torch_off">Linterna apagada.</string>
+    <string name="action_opening_settings">Abriendo ajustes de %1$s.</string>
+    <string name="action_type_unknown">No entendí qué escribir.</string>
+    <string name="action_typed">Escribí \'%1$s\'.</string>
+    <string name="action_type_failed">No encontré un campo de texto donde escribir.</string>
+    <!-- Etiquetas de botón de envío de respaldo (ver values/strings.xml para el orden y motivo). -->
+    <string-array name="search_submit_labels">
+        <item>buscar</item>
+        <item>ir</item>
+        <item>enviar</item>
+        <item>aceptar</item>
+        <item>intro</item>
+    </string-array>
+    <string name="setting_label_wifi">Wi-Fi</string>
+    <string name="setting_label_bluetooth">Bluetooth</string>
+    <string name="setting_label_dnd">No molestar</string>
+
+    <!-- Voz (STT) -->
+    <string name="sub_status_listening">Escuchando… habla ahora</string>
+    <string name="mic_permission_rationale">Atom necesita el micrófono para oírte. Toca el micrófono para permitir el acceso.</string>
+    <string name="mic_permission_title">Se necesita el micrófono</string>
+    <string name="mic_permission_settings">El acceso al micrófono está desactivado. Actívalo en Ajustes para usar la voz.</string>
+    <string name="mic_permission_open_settings">Abrir ajustes</string>
+    <string name="stt_unavailable">El reconocimiento de voz no está disponible en este dispositivo</string>
+    <string name="stt_error">Lo siento, no te entendí</string>
+
+    <!-- Auth / login screen -->
+    <string name="auth_login_title">Iniciar sesión</string>
+    <string name="auth_register_title">Crear cuenta</string>
+    <string name="auth_email_hint">Email</string>
+    <string name="auth_password_hint">Contraseña</string>
+    <string name="auth_login_button">Entrar</string>
+    <string name="auth_register_button">Registrarme</string>
+    <string name="auth_switch_to_register">¿No tienes cuenta? Regístrate</string>
+    <string name="auth_switch_to_login">¿Ya tienes cuenta? Inicia sesión</string>
+    <string name="auth_google_button">Continuar con Google</string>
+    <string name="auth_logout">Cerrar sesión</string>
+    <string name="auth_fields_required">Completa todos los campos.</string>
+
+    <!-- Configuración de permisos (primer inicio) -->
+    <string name="permsetup_title">Configurar permisos</string>
+    <string name="permsetup_subtitle">Atom los necesita para escuchar, ver la pantalla y actuar por ti.</string>
+    <string name="permsetup_continue">Continuar</string>
+    <string name="permsetup_continue_blocked">Concede %1$d más para continuar</string>
+    <string name="permsetup_grant">Conceder</string>
+    <string name="permsetup_open">Abrir</string>
+    <string name="permsetup_done">Ya lo activé</string>
+    <string name="permsetup_overlay_title">Mostrar sobre otras apps</string>
+    <string name="permsetup_overlay_body">Mostrar Atom encima de otras aplicaciones.</string>
+    <string name="permsetup_accessibility_title">Accesibilidad</string>
+    <string name="permsetup_accessibility_body">Permite que Atom lea la pantalla y actúe entre apps.</string>
+    <string name="permsetup_mic_title">Micrófono</string>
+    <string name="permsetup_mic_body">Escuchar tus comandos de voz.</string>
+    <string name="permsetup_notifications_title">Notificaciones</string>
+    <string name="permsetup_notifications_body">Mostrar el progreso y los resultados de las tareas.</string>
+    <string name="permsetup_battery_title">Exención de batería</string>
+    <string name="permsetup_battery_body">Mantener Atom funcionando en segundo plano.</string>
+    <string name="permsetup_autostart_title">Inicio automático</string>
+    <string name="permsetup_autostart_body">Permite que Atom se inicie en segundo plano (necesario en este dispositivo).</string>
+    <string name="settings_perm_battery">Exención de batería</string>
+    <string name="settings_perm_autostart">Inicio automático</string>
+    <string name="settings_perm_action_needed">Acción necesaria</string>
+    <string name="cd_fix_battery">Corregir exención de batería</string>
+    <string name="cd_fix_autostart">Corregir inicio automático</string>
+</resources>

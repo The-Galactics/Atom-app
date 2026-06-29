@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    tools:context=".MainActivity">
+
+    <ImageButton
+        android:id="@+id/btn_history"
+        style="@style/Widget.Atom.IconButton.Ghost"
+        android:layout_marginStart="@dimen/space_s"
+        android:layout_marginTop="@dimen/space_s"
+        android:contentDescription="@string/cd_history"
+        android:src="@drawable/ic_history"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/wordmark"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/wordmark"
+        android:textAppearance="@style/TextAppearance.Atom.Wordmark"
+        app:layout_constraintBottom_toBottomOf="@+id/btn_history"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/btn_history" />
+
+    <ImageButton
+        android:id="@+id/btn_settings"
+        style="@style/Widget.Atom.IconButton.Ghost"
+        android:layout_marginTop="@dimen/space_s"
+        android:layout_marginEnd="@dimen/space_s"
+        android:contentDescription="@string/cd_settings"
+        android:src="@drawable/ic_settings"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guide_core_center"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        app:layout_constraintGuide_percent="0.42" />
+
+    <!-- The atmosphere glow is owned solely by AtomCoreView.drawBackgroundGlow (it breathes
+         with the animation and brightens with energy). The former standalone core_glow View
+         was folded away to drop the hero's 3-4x overdraw to one glow owner (Epic 1.3). -->
+
+    <com.atom.app.ui.AtomCoreView
+        android:id="@+id/atom_core_animation"
+        android:layout_width="@dimen/core_size"
+        android:layout_height="@dimen/core_size"
+        app:layout_constraintBottom_toBottomOf="@+id/guide_core_center"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/status_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_xl"
+        android:gravity="center"
+        android:text="@string/status_idle"
+        android:textAppearance="@style/TextAppearance.Atom.Status"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/atom_core_animation" />
+
+    <TextView
+        android:id="@+id/sub_status_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_s"
+        android:gravity="center"
+        android:text="@string/sub_status_tap_mic"
+        android:textAppearance="@style/TextAppearance.Atom.Overline"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/status_text" />
+
+    <!-- Quick-action chips: a horizontally scrollable row of starter commands,
+         pinned just above the control row and below the core animation so it never
+         overlaps the 280dp core. -->
+    <HorizontalScrollView
+        android:id="@+id/quick_actions_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/space_m"
+        android:fillViewport="true"
+        android:paddingHorizontal="@dimen/space_m"
+        android:scrollbars="none"
+        app:layout_constraintBottom_toTopOf="@+id/control_row"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/quick_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:singleLine="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_timer"
+                style="@style/Widget.Atom.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_timer" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_call"
+                style="@style/Widget.Atom.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_call" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_message"
+                style="@style/Widget.Atom.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_message" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_wifi"
+                style="@style/Widget.Atom.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_wifi" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_flashlight"
+                style="@style/Widget.Atom.Chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/chip_flashlight" />
+        </com.google.android.material.chip.ChipGroup>
+    </HorizontalScrollView>
+
+    <!-- No android:id on <include> — an include id would override the root's id. -->
+    <include
+        layout="@layout/view_input_bar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_m"
+        android:layout_marginEnd="@dimen/space_m"
+        android:layout_marginBottom="@dimen/space_m"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/quick_actions_scroll"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <LinearLayout
+        android:id="@+id/control_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/space_xl"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:gravity="center"
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ImageButton
+            android:id="@+id/btn_keyboard"
+            style="@style/Widget.Atom.IconButton.Ghost"
+            android:layout_marginEnd="@dimen/space_xl"
+            android:contentDescription="@string/cd_keyboard"
+            android:src="@drawable/ic_keyboard"
+            android:tint="@color/on_surface_label" />
+
+        <!-- Touch cell larger than the disc so the pulse-grown circle stays fully tappable. -->
+        <FrameLayout
+            android:layout_width="@dimen/mic_touch_size"
+            android:layout_height="@dimen/mic_touch_size"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <!--
+              MicButton gives the FAB a circular hitbox that tracks the pulse animation.
+              No ripple (background or foreground) on purpose: a RippleDrawable renders
+              as a rounded-rect/squircle while the view is scaled up by the listening
+              pulse. The background is a plain oval that scales as a true circle, and tap
+              feedback comes from the press-settle scale dip in MicAnimations.
+            -->
+            <com.atom.app.ui.MicButton
+                android:id="@+id/btn_mic"
+                android:layout_width="@dimen/mic_fab_size"
+                android:layout_height="@dimen/mic_fab_size"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_mic_fab"
+                android:contentDescription="@string/cd_mic"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_mic"
+                app:tint="@color/on_accent" />
+        </FrameLayout>
+
+        <ImageButton
+            android:id="@+id/btn_volume"
+            style="@style/Widget.Atom.IconButton.Ghost"
+            android:layout_marginStart="@dimen/space_xl"
+            android:contentDescription="@string/cd_volume"
+            android:src="@drawable/ic_volume"
+            android:tint="@color/on_surface_label" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

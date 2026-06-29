@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/bubble_root"
+    android:layout_width="@dimen/bubble_touch_size"
+    android:layout_height="@dimen/bubble_touch_size">
+
+    <!-- Visible disc stays 44dp; the surrounding window pads to a 48dp touch target. -->
+    <ImageView
+        android:id="@+id/bubble_icon"
+        android:layout_width="@dimen/bubble_size"
+        android:layout_height="@dimen/bubble_size"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_bubble"
+        android:contentDescription="@string/cd_atom_bubble"
+        android:padding="12dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_atom_glyph"
+        app:tint="@color/white" />
+
+</FrameLayout>

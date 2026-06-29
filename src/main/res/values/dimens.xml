@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Spacing scale (4dp base grid) -->
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_s">8dp</dimen>
+    <dimen name="space_m">16dp</dimen>
+    <dimen name="space_l">24dp</dimen>
+    <dimen name="space_xl">32dp</dimen>
+
+    <!-- Corner radii -->
+    <dimen name="radius_card">16dp</dimen>
+    <dimen name="radius_pill">28dp</dimen>
+    <dimen name="radius_button">16dp</dimen>
+    <dimen name="radius_sheet">28dp</dimen>       <!-- overlay bottom-sheet top corners -->
+
+    <!-- Component sizing -->
+    <dimen name="core_size">280dp</dimen>
+    <dimen name="touch_target">48dp</dimen>
+    <dimen name="mic_fab_size">68dp</dimen>
+    <dimen name="mic_touch_size">88dp</dimen>     <!-- touch cell: headroom so the pulsed disc stays tappable -->
+    <dimen name="input_bar_height">56dp</dimen>
+    <dimen name="bubble_size">44dp</dimen>          <!-- visible disc: compact, low-intrusion -->
+    <dimen name="bubble_touch_size">48dp</dimen>    <!-- touchable window: a11y-friendly target around the disc -->
+    <dimen name="bubble_edge_margin">8dp</dimen>     <!-- resting gap from the screen edge -->
+    <dimen name="handle_width">11dp</dimen>          <!-- hidden-state edge line (Game Turbo style): thin & visible -->
+    <dimen name="handle_bar_height">67dp</dimen>     <!-- visible length of the edge line -->
+    <dimen name="handle_touch_width">36dp</dimen>    <!-- invisible grab zone around the line so the tap lands -->
+    <dimen name="handle_height">96dp</dimen>         <!-- height of the grab zone -->
+
+    <!-- History chat bubbles: cap width so long turns wrap instead of edge-to-edge. -->
+    <dimen name="chat_bubble_max_width">280dp</dimen>
+
+    <!-- Overlay panel transcript: cap height so the sheet stays compact and scrolls. -->
+    <dimen name="overlay_transcript_max_height">260dp</dimen>
+
+    <!-- Drag-to-dismiss drop zone shown while dragging the bubble. -->
+    <dimen name="dismiss_target_size">56dp</dimen>
+    <dimen name="dismiss_target_margin">32dp</dimen>      <!-- gap above the bottom edge -->
+    <dimen name="dismiss_capture_radius">96dp</dimen>     <!-- bubble-center distance that counts as a hit -->
+
+    <!-- Type scale (sp) -->
+    <dimen name="text_wordmark">26sp</dimen>      <!-- ATOM wordmark -->
+    <dimen name="text_display">30sp</dimen>       <!-- large serif status -->
+    <dimen name="text_status">22sp</dimen>        <!-- main status line -->
+    <dimen name="text_title">20sp</dimen>         <!-- screen / section serif title -->
+    <dimen name="text_body">16sp</dimen>          <!-- body / input text -->
+    <dimen name="text_label">14sp</dimen>         <!-- buttons / list labels -->
+    <dimen name="text_caption">12sp</dimen>       <!-- sub-status / field labels -->
+    <dimen name="text_overline">11sp</dimen>      <!-- ALL-CAPS micro labels -->
+
+</resources>
