@@ -49,6 +49,7 @@ class CommandSessionIdTest {
 
         ActionExecutorPortOut executor = mock(ActionExecutorPortOut.class);
         AuthPortIn authMock = mock(AuthPortIn.class);
+        when(authMock.shouldRefresh()).thenReturn(true);
 
         UUID shared = UUID.randomUUID();
         // Full @VisibleForTesting constructor: sessionUserId injected, synchronous poster.

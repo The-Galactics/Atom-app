@@ -58,9 +58,13 @@ import com.atom.app.repository.CommandRepository;
 import com.atom.app.repository.VoiceRepository;
 import com.atom.app.settings.AtomPreferences;
 import com.atom.app.ui.InputBarUtils;
+import com.atom.app.viewmodel.Event;
 import com.atom.app.ui.MicAnimations;
+import com.atom.app.ui.motion.StatusCrossfader;
+import com.atom.domain.action.ActionType;
 import com.atom.domain.action.DestructiveActionPolicy;
 import com.atom.domain.action.ResolvedAction;
+import com.atom.app.overlay.OperatingNotificationText;
 import com.atom.infrastructure.adapter.voice.AndroidSpeechRecognizer;
 import com.atom.infrastructure.adapter.voice.AndroidTextToSpeech;
 import com.atom.infrastructure.adapter.wake.WakeWordService;
@@ -77,9 +81,16 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     public static final String ACTION_SHOW = "com.atom.app.overlay.SHOW";
     /** Opens the panel and starts voice capture — fired by the wake-word service. */
     public static final String ACTION_LISTEN = "com.atom.app.overlay.LISTEN";
+    public static final String ACTION_PREPARE_OPERATING = "com.atom.app.overlay.PREPARE_OPERATING";
 
     private static final int NOTIFICATION_ID = 0xA70;
     private static final String CHANNEL_ID = "atom_floating_assistant";
+
+    // Separate high-importance channel + id for the cross-app completion banner, so it
+    // pops as a heads-up over the current app while the ongoing overlay notification
+    // (CHANNEL_ID, IMPORTANCE_LOW) stays quiet.
+    private static final int COMPLETION_NOTIFICATION_ID = 0xA71;
+    private static final String COMPLETION_CHANNEL_ID = "atom_task_complete";
 
     // Motion tuning for the bubble. Kept in code (behaviour, not layout).
     // Mic press/pulse tuning now lives in the shared MicAnimations helper.
@@ -87,6 +98,10 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private static final float PUSH_OFF_FRACTION = 0.4f;    // drag this far past an edge to hide
     private static final float HANDLE_IDLE_ALPHA = 0.5f;    // dimmed handle when untouched
     private static final long STATUS_RESET_MS = 4000;       // settle status back to the resting hint
+
+    // The panel is height-capped (overlay_transcript_max_height); a recent-window keeps
+    // the always-on service from retaining/diffing the entire history.
+    private static final int OVERLAY_TRANSCRIPT_LIMIT = 50;
 
     private WindowManager windowManager;
     private LayoutInflater inflater;
@@ -130,8 +145,28 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private View handleView;          // edge tab shown while the bubble is hidden
     private WindowManager.LayoutParams handleParams;
     private ValueAnimator handleSettle; // handle edge snap / fade-to-idle glide
+    private android.animation.ValueAnimator handlePulse; // teal pulse while operating
     private boolean collapsedToHandle; // bubble is tucked away to the edge handle
     private boolean lastBubbleOnLeft;  // which edge the bubble last rested on
+
+    // Operating cue bridged from the chat path (main-app-initiated actions). The bubble
+    // path drives the cue inline and does NOT publish here, so there is no double-drive.
+    private OperatingCueBus operatingCueBus;
+    private final Observer<Event<OperatingCueBus.Cue>> operatingCueObserver = event -> {
+        OperatingCueBus.Cue cue = event.getContentIfNotHandled();
+        if (cue == null) {
+            return;
+        }
+        if (cue.kind == OperatingCueBus.Cue.Kind.STARTED) {
+            onOperatingStarted(cue.actionType, cue.step);
+        } else {
+            onOperatingFinished(cue.message, cue.aborted);
+        }
+    };
+    private boolean operatingFromApp;     // an app-initiated action chain is running
+    private boolean operatingCueShown;    // the cross-app handle/notification is up for it
+    @Nullable private ActionType lastOperatingType;
+    private int lastOperatingStep;
     private int lastBubbleY = -1;      // last bubble Y, reused to place the handle
 
     private AtomApp app;
@@ -150,6 +185,25 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private final android.os.Handler mainHandler =
             new android.os.Handler(android.os.Looper.getMainLooper());
 
+    // Drag coalescing: a touch stream emits ACTION_MOVE faster than the display refreshes,
+    // so a per-event updateViewLayout does redundant relayouts. Instead we mutate the
+    // params synchronously and schedule a single Choreographer-aligned flush per frame, so
+    // the window manager is told the new position at most once per vsync (Epic 3.1).
+    private boolean bubbleLayoutScheduled;
+    private final Runnable bubbleLayoutFlush = () -> {
+        bubbleLayoutScheduled = false;
+        if (bubbleView != null && bubbleView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(bubbleView, bubbleParams);
+        }
+    };
+    private boolean handleLayoutScheduled;
+    private final Runnable handleLayoutFlush = () -> {
+        handleLayoutScheduled = false;
+        if (handleView != null && handleView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(handleView, handleParams);
+        }
+    };
+
     // Keeps the panel mic icon in sync when mute is toggled from the main screen.
     private final SharedPreferences.OnSharedPreferenceChangeListener muteListener =
             (sp, key) -> {
@@ -166,7 +220,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (panelView != null) {
             TextView status = panelView.findViewById(R.id.overlay_status);
             if (status != null && status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_panel_hint);
+                StatusCrossfader.swap(status, getString(R.string.overlay_panel_hint));
             }
         }
     };
@@ -196,11 +250,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         preferences.registerChangeListener(muteListener);
         seedBubblePosition(); // restore last resting position on restart
         // Observe transcript for the whole service lifetime; removed in onDestroy.
-        transcriptSource = conversationRepository.observeAll();
+        transcriptSource = conversationRepository.observeRecent(OVERLAY_TRANSCRIPT_LIMIT);
         transcriptSource.observeForever(transcriptObserver);
         tts = new AndroidTextToSpeech(this, preferences.getTtsVoice(), preferences.getTtsRate());
         voiceRepository = new VoiceRepository(this, app.getAppContainer().getSynthesizeSpeechUseCase());
         app.setForegroundListener(this);
+        operatingCueBus = app.getAppContainer().getOperatingCueBus();
+        operatingCueBus.cues().observeForever(operatingCueObserver);
     }
 
     @Override
@@ -223,6 +279,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             return START_NOT_STICKY;
         }
         overlayEnabled = true;
+        if (ACTION_PREPARE_OPERATING.equals(action)) {
+            // Come up silently to host the cross-app operating cue. Show nothing while the
+            // app's own UI is foreground (decision 1) — onAppBackground() surfaces the
+            // pulsing handle once Atom navigates away, gated by operatingFromApp.
+            startForegroundWithNotification();
+            return START_STICKY;
+        }
         if (ACTION_SHOW.equals(action)) {
             // Brought back from the notification after a hide.
             startForegroundWithNotification();
@@ -310,12 +373,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     @Override
     public void onAppForeground() {
         hideOverlayViews();
+        // The cross-app cue surface is gone while our own UI is foreground; clear the flag so a
+        // completion that lands now won't flash a "Done" line over the app (decision 1: the cue
+        // is cross-app only). If Atom backgrounds again mid-action, onAppBackground re-surfaces
+        // the handle and re-sets this flag.
+        operatingCueShown = false;
     }
 
     @Override
     public void onAppBackground() {
         if (!overlayEnabled
                 || bubbleView != null || panelView != null || handleView != null) {
+            return;
+        }
+        // Atom went cross-app mid-action (decision 1): surface the pulsing handle and the
+        // live operating notification, not the resting bubble.
+        if (operatingFromApp) {
+            showOperatingHandle();
+            updateOperatingNotification(lastOperatingType, lastOperatingStep);
             return;
         }
         // Come back in whichever state the user left us: tucked to the handle, or open.
@@ -348,19 +423,48 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void ensureNotificationChannel() {
         NotificationManager nm =
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null
-                && nm.getNotificationChannel(CHANNEL_ID) == null) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    getString(R.string.overlay_channel_name),
-                    NotificationManager.IMPORTANCE_LOW);
-            nm.createNotificationChannel(channel);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
+            if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+                NotificationChannel channel = new NotificationChannel(
+                        CHANNEL_ID,
+                        getString(R.string.overlay_channel_name),
+                        NotificationManager.IMPORTANCE_LOW);
+                nm.createNotificationChannel(channel);
+            }
+            if (nm.getNotificationChannel(COMPLETION_CHANNEL_ID) == null) {
+                // IMPORTANCE_HIGH => heads-up banner + default vibration when posted.
+                NotificationChannel done = new NotificationChannel(
+                        COMPLETION_CHANNEL_ID,
+                        getString(R.string.notif_complete_channel_name),
+                        NotificationManager.IMPORTANCE_HIGH);
+                done.enableVibration(true);
+                nm.createNotificationChannel(done);
+            }
         }
     }
 
     // The ongoing notification doubles as the way back from a hide: tapping it
     // (or the "Show" action) re-displays the bubble; "Turn off" stops the overlay.
     private Notification buildNotification(boolean hidden) {
+        return buildOngoing(
+                getString(R.string.overlay_notification_title),
+                getString(hidden ? R.string.overlay_notification_text_hidden
+                                  : R.string.overlay_notification_text),
+                /* allowRestoreAction= */ hidden);
+    }
+
+    // operatingText != null => live "operating" body (title + step/action), keeps Stop.
+    private Notification buildNotification(boolean hidden, String operatingText) {
+        return buildOngoing(
+                getString(R.string.notif_operating_title),
+                operatingText,
+                /* allowRestoreAction= */ false);
+    }
+
+    // Shared builder for the ongoing overlay notification. allowRestoreAction adds the
+    // "Show" action (only meaningful for the resting hidden state).
+    private Notification buildOngoing(String title, String body,
+                                      boolean allowRestoreAction) {
         int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
                 ? PendingIntent.FLAG_IMMUTABLE : 0;
         Intent showIntent = new Intent(this, FloatingBubbleService.class).setAction(ACTION_SHOW);
@@ -369,20 +473,151 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         PendingIntent stopPending = PendingIntent.getService(this, 0, stopIntent, flag);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(getString(R.string.overlay_notification_title))
-                .setContentText(getString(hidden
-                        ? R.string.overlay_notification_text_hidden
-                        : R.string.overlay_notification_text))
+                .setContentTitle(title)
+                .setContentText(body)
                 .setSmallIcon(R.drawable.ic_mic)
                 .setOngoing(true)
                 .setContentIntent(showPending);
-        if (hidden) {
+        if (allowRestoreAction) {
             builder.addAction(R.drawable.ic_atom_glyph,
                     getString(R.string.overlay_action_show), showPending);
         }
         builder.addAction(R.drawable.ic_close,
                 getString(R.string.overlay_action_stop), stopPending);
         return builder.build();
+    }
+
+    // A heads-up, auto-cancel completion banner shown cross-app on the high-importance
+    // channel so the result pops over the current app (the ongoing overlay notification
+    // stays quiet). Tapping it opens Atom.
+    private Notification buildCompletionBanner(String body) {
+        int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_IMMUTABLE : 0;
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        PendingIntent openPending = open != null
+                ? PendingIntent.getActivity(this, 2, open, flag) : null;
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, COMPLETION_CHANNEL_ID)
+                .setContentTitle(getString(R.string.notif_task_complete))
+                .setSmallIcon(R.drawable.ic_atom_glyph)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(false);
+        if (body != null && !body.isEmpty()) {
+            builder.setContentText(body);
+        }
+        if (openPending != null) {
+            builder.setContentIntent(openPending);
+        }
+        return builder.build();
+    }
+
+    // Tactile "done" cross-app via the overlay surface (no VIBRATE permission needed).
+    // Belt-and-suspenders with the IMPORTANCE_HIGH channel's own default vibration.
+    private void performCompletionHaptic() {
+        View v = handleView != null ? handleView
+                : (bubbleView != null ? bubbleView : panelView);
+        if (v == null) {
+            return;
+        }
+        int feedback = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? HapticFeedbackConstants.CONFIRM
+                : HapticFeedbackConstants.LONG_PRESS;
+        v.performHapticFeedback(feedback);
+    }
+
+    /** Pushes a live operating-state notification (step + action verb). */
+    private void updateOperatingNotification(ResolvedAction action, int step) {
+        ActionType type = action != null && action.isExecutable() ? action.type() : null;
+        updateOperatingNotification(type, step);
+    }
+
+    /** Same, keyed off the action type alone (the bus carries a type, not a ResolvedAction). */
+    private void updateOperatingNotification(ActionType type, int step) {
+        String label = getString(R.string.notif_operating_step); // template "Step %1$d"
+        String verb = type != null ? getString(verbResIdFor(type)) : null;
+        String text = OperatingNotificationText.compose(label, step, verb);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            nm.notify(NOTIFICATION_ID, buildNotification(collapsedToHandle, text));
+        }
+    }
+
+    // An app-initiated action started/advanced. While Atom's own UI is foreground we keep
+    // the overlay hidden (the on-screen core already signals operating, decision 1); once
+    // Atom has gone cross-app we surface the pulsing edge handle + live operating notification.
+    private void onOperatingStarted(@Nullable ActionType type, int step) {
+        operatingFromApp = true;
+        lastOperatingType = type;
+        lastOperatingStep = step;
+        if (!overlayEnabled || app.isAppInForeground()) {
+            return; // surfaced later by onAppBackground() once Atom navigates away
+        }
+        showOperatingHandle();
+        updateOperatingNotification(type, step);
+    }
+
+    // An app-initiated chain finished. Only if we actually showed the cross-app cue do we
+    // stop the pulse and flash a brief completion line (decision 4: no cue, no completion
+    // flash, for purely in-app actions that never backgrounded the app).
+    private void onOperatingFinished(@Nullable String message, boolean aborted) {
+        operatingFromApp = false;
+        boolean hadCue = operatingCueShown;
+        operatingCueShown = false;
+        lastOperatingType = null;
+        lastOperatingStep = 0;
+        if (!hadCue) {
+            return;
+        }
+        stopHandlePulse();
+        // Settle the ongoing overlay notification back to its resting state.
+        updateNotification(collapsedToHandle);
+        if (aborted) {
+            return; // no success banner / haptic for a cancelled chain
+        }
+        // Announce completion saliently: a heads-up banner carrying the result on the
+        // high-importance channel (pops over the current app + vibrates), plus a haptic,
+        // so the user knows it finished without returning to Atom.
+        NotificationManager nm =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm != null) {
+            String body = OperatingNotificationText.completionBody(message, COMPLETION_BODY_MAX_CHARS);
+            nm.notify(COMPLETION_NOTIFICATION_ID, buildCompletionBanner(body));
+        }
+        performCompletionHaptic();
+    }
+
+    // Brings up the pulsing teal handle as the cross-app operating surface, tucking away
+    // any open bubble/panel first so it never covers Atom's taps.
+    private void showOperatingHandle() {
+        if (bubbleView != null || panelView != null) {
+            hideToHandle();          // sets collapsedToHandle, shows the handle, resting notif
+        } else if (handleView == null) {
+            collapsedToHandle = true;
+            showHandle();
+        }
+        startHandlePulse();
+        operatingCueShown = true;
+    }
+
+    // Longest result body shown in the completion notification before it is elided.
+    private static final int COMPLETION_BODY_MAX_CHARS = 80;
+
+    private int verbResIdFor(ActionType type) {
+        switch (type) {
+            case OPEN_APP:       return R.string.action_verb_open_app;
+            case MAKE_CALL:      return R.string.action_verb_make_call;
+            case SEND_MESSAGE:   return R.string.action_verb_send_message;
+            case SET_ALARM:      return R.string.action_verb_set_alarm;
+            case SET_TIMER:      return R.string.action_verb_set_timer;
+            case TOGGLE_SETTING: return R.string.action_verb_toggle_setting;
+            case NAVIGATE:       return R.string.action_verb_navigate;
+            case SCROLL:         return R.string.action_verb_scroll;
+            case READ_SCREEN:    return R.string.action_verb_read_screen;
+            case TAP_ELEMENT:    return R.string.action_verb_tap_element;
+            case TYPE_TEXT:      return R.string.action_verb_type_text;
+            default:             return R.string.notif_operating_title; // unused (NONE not executable)
+        }
     }
 
     private void updateNotification(boolean hidden) {
@@ -458,6 +693,24 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     }
 
     // The handle drags around the screen like the bubble; a tap (no drag) restores it.
+    /** Schedules at most one bubble relayout per frame; coalesces a burst of ACTION_MOVEs. */
+    private void scheduleBubbleLayout() {
+        if (bubbleLayoutScheduled || bubbleView == null) {
+            return;
+        }
+        bubbleLayoutScheduled = true;
+        bubbleView.postOnAnimation(bubbleLayoutFlush);
+    }
+
+    /** Schedules at most one handle relayout per frame; coalesces a burst of ACTION_MOVEs. */
+    private void scheduleHandleLayout() {
+        if (handleLayoutScheduled || handleView == null) {
+            return;
+        }
+        handleLayoutScheduled = true;
+        handleView.postOnAnimation(handleLayoutFlush);
+    }
+
     private final class HandleTouchListener implements View.OnTouchListener {
         private int initialX, initialY;
         private float touchX, touchY;
@@ -484,7 +737,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     }
                     handleParams.x = initialX + dx;
                     handleParams.y = initialY + dy;
-                    windowManager.updateViewLayout(handleView, handleParams);
+                    scheduleHandleLayout();
                     return true;
                 case MotionEvent.ACTION_UP:
                     if (dragging) {
@@ -576,8 +829,47 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         }
     }
 
+    private void startHandlePulse() {
+        if (handleView == null) {
+            return;
+        }
+        stopHandlePulse();   // cancel any prior animator and reset the bar to idle FIRST
+        // Now apply the operating teal so the reset above cannot wipe it.
+        View handleBar = handleView.findViewById(R.id.handle_bar);
+        if (handleBar != null) {
+            // Teal variant of the same capsule shape (NOT setBackgroundColor, which would
+            // flatten the rounded edge-line into a sharp teal rectangle).
+            handleBar.setBackgroundResource(R.drawable.bg_edge_handle_teal);
+        }
+        handlePulse = android.animation.ValueAnimator.ofFloat(HANDLE_IDLE_ALPHA, 1f);
+        handlePulse.setDuration(900);
+        handlePulse.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        handlePulse.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        handlePulse.addUpdateListener(a -> {
+            if (handleView != null) {
+                handleView.setAlpha((float) a.getAnimatedValue());
+            }
+        });
+        handlePulse.start();
+    }
+
+    private void stopHandlePulse() {
+        if (handlePulse != null) {
+            handlePulse.cancel();
+            handlePulse = null;
+        }
+        if (handleView != null) {
+            handleView.setAlpha(HANDLE_IDLE_ALPHA);
+            View handleBar = handleView.findViewById(R.id.handle_bar);
+            if (handleBar != null) {
+                handleBar.setBackgroundResource(R.drawable.bg_edge_handle);
+            }
+        }
+    }
+
     // Removes the edge tab and re-displays the bubble where it was tucked away.
     private void restoreBubble() {
+        stopHandlePulse();   // stop pulse before nulling handleView so reset can still reach it
         removeView(handleView);
         handleView = null;
         handleParams = null;
@@ -661,7 +953,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                     }
                     bubbleParams.x = initialX + dx;
                     bubbleParams.y = initialY + dy;
-                    windowManager.updateViewLayout(bubbleView, bubbleParams);
+                    scheduleBubbleLayout();
                     if (dragging) {
                         updateDismissHighlight();
                     }
@@ -817,7 +1109,8 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             applyOverlayMicMuted(mic, muted);
             v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             MicAnimations.playPressSettle(mic);
-            status.setText(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint);
+            StatusCrossfader.swap(status,
+                    getString(muted ? R.string.mic_muted_hint : R.string.overlay_panel_hint));
             return true;
         });
 
@@ -859,7 +1152,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void dispatchPrompt(EditText editText, TextView status) {
         String text = editText.getText().toString().trim();
         if (text.isEmpty()) {
-            status.setText(R.string.input_empty);
+            StatusCrossfader.swap(status, getString(R.string.input_empty));
             return;
         }
         // Silence any reply still being spoken so it doesn't talk over the next turn.
@@ -867,7 +1160,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             tts.stop();
         }
         status.removeCallbacks(statusResetRunnable);
-        status.setText(R.string.overlay_sending);
+        StatusCrossfader.swap(status, getString(R.string.overlay_sending));
         editText.setText("");
         handlePrompt(text, status);
     }
@@ -890,8 +1183,16 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         commandRepository.recognize(prompt, new CommandRepository.CommandCallback() {
             @Override
             public void onResolved(ResolvedAction action) {
-                if (!action.isExecutable()) {
-                    askAtom(prompt, status, null);
+                // A held action (NONE turn with awaitingConfirmation) is still an order:
+                // it must enter the autonomous loop so the voice gate speaks the question
+                // and captures the spoken sí/no. Only true non-executable turns go to chat.
+                if (!action.isExecutable() && !action.awaitingConfirmation()) {
+                    String reply = action.outMessage();
+                    if (reply == null || reply.trim().isEmpty()) {
+                        askAtom(prompt, status, null);   // fall back to StreamChat on empty answer
+                        return;
+                    }
+                    respond(reply, status);
                     return;
                 }
                 // Accessibility-powered actions need the service enabled first.
@@ -908,7 +1209,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             @Override
             public void onError(String error) {
                 if (status.isAttachedToWindow()) {
-                    status.setText(error);
+                    StatusCrossfader.swap(status, error);
                     scheduleStatusReset(status);
                 }
             }
@@ -928,16 +1229,22 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
                 if (bubbleView != null || panelView != null) {
                     hideToHandle();
                 }
+                updateOperatingNotification(action, step);
+                startHandlePulse();
             }
 
             @Override
             public void onComplete(String finalMessage) {
+                stopHandlePulse();
+                updateNotification(collapsedToHandle);
                 reExpandAfterAutomation();
                 respondFromAutomation(finalMessage);
             }
 
             @Override
             public void onAborted(String message) {
+                stopHandlePulse();
+                updateNotification(collapsedToHandle);
                 reExpandAfterAutomation();
                 if (message != null && !message.trim().isEmpty()) {
                     respondFromAutomation(message);
@@ -967,7 +1274,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
      */
     private void promptEnableAccessibility(TextView status) {
         if (status.isAttachedToWindow()) {
-            status.setText(R.string.action_accessibility_disabled);
+            StatusCrossfader.swap(status, getString(R.string.action_accessibility_disabled));
             scheduleStatusReset(status);
         }
         startActivity(PermissionCoordinator.accessibilitySettingsIntent()
@@ -1065,13 +1372,13 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void startVoiceCapture(TextView status, View mic) {
         // Respect the app-wide mute: a muted mic can't dictate from the bubble either.
         if (preferences.isMicMuted()) {
-            status.setText(R.string.mic_muted_hint);
+            StatusCrossfader.swap(status, getString(R.string.mic_muted_hint));
             failConfirmationCapture();
             return;
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
-            status.setText(R.string.overlay_mic_denied);
+            StatusCrossfader.swap(status, getString(R.string.overlay_mic_denied));
             failConfirmationCapture();
             return;
         }
@@ -1152,14 +1459,17 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         @Override
         public void onReadyForSpeech() {
             if (status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_listening);
+                StatusCrossfader.swap(status, getString(R.string.overlay_listening));
             }
         }
 
         @Override
         public void onPartialResult(String text) {
-            // Live transcript in the overlay status line as the user speaks.
+            // Live transcript: set directly (no crossfade) so the fast, frequent
+            // partials don't queue janky crossfades. Mirrors MainActivity.onPartialResult.
             if (status.isAttachedToWindow() && text != null && !text.trim().isEmpty()) {
+                status.animate().cancel();
+                status.setAlpha(1f);
                 status.setText(text);
             }
         }
@@ -1168,7 +1478,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         public void onEndOfSpeech() {
             micAnimations.stopMicPulse(mic);
             if (status.isAttachedToWindow()) {
-                status.setText(R.string.overlay_thinking);
+                StatusCrossfader.swap(status, getString(R.string.overlay_thinking));
             }
         }
 
@@ -1185,7 +1495,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             }
             if (text == null || text.trim().isEmpty()) {
                 if (status.isAttachedToWindow()) {
-                    status.setText(R.string.overlay_voice_error);
+                    StatusCrossfader.swap(status, getString(R.string.overlay_voice_error));
                     scheduleStatusReset(status);
                 }
                 return;
@@ -1206,9 +1516,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             if (!status.isAttachedToWindow()) {
                 return;
             }
-            status.setText("unavailable".equals(message)
+            StatusCrossfader.swap(status, getString("unavailable".equals(message)
                     ? R.string.overlay_voice_unavailable
-                    : R.string.overlay_voice_error);
+                    : R.string.overlay_voice_error));
             scheduleStatusReset(status);
         }
     }
@@ -1231,7 +1541,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         // Record Atom's reply in the shared transcript before showing/speaking it.
         conversationRepository.saveAssistantMessage(text);
         if (status != null && status.isAttachedToWindow()) {
-            status.setText(text);
+            StatusCrossfader.swap(status, text);
         }
         if (text == null || text.trim().isEmpty() || !preferences.isTtsEnabled()) {
             return;
@@ -1260,7 +1570,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             public void onError(String error) {
                 micAnimations.stopMicPulse(mic);
                 if (status.isAttachedToWindow()) {
-                    status.setText(error);
+                    StatusCrossfader.swap(status, error);
                     scheduleStatusReset(status);
                 }
             }
@@ -1412,6 +1722,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
     private void cancelAnimations() {
         cancelBubbleSettle();
         cancelHandleSettle();
+        stopHandlePulse();
         if (bubbleView != null) {
             bubbleView.animate().cancel();
         }
@@ -1486,6 +1797,9 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
         if (transcriptSource != null) {
             transcriptSource.removeObserver(transcriptObserver);
         }
+        if (operatingCueBus != null) {
+            operatingCueBus.cues().removeObserver(operatingCueObserver);
+        }
         destroyRecognizer();
         if (tts != null) {
             tts.shutdown();
@@ -1496,6 +1810,7 @@ public class FloatingBubbleService extends Service implements AtomApp.Foreground
             voiceRepository = null;
         }
         cancelAnimations();
+        mainHandler.removeCallbacksAndMessages(null);
         hideDismissTarget();
         removeView(bubbleView);
         removeView(panelView);

@@ -5,6 +5,7 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 import com.atom.app.data.ConversationRepository;
 import com.atom.app.model.ResponseModel;
+import com.atom.app.overlay.OperatingCueBus;
 import com.atom.app.permission.PermissionCoordinator;
 import com.atom.app.repository.ChatRepository;
 import com.atom.app.repository.CommandRepository;
@@ -16,9 +17,14 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
 public class ChatViewModel extends ViewModel {
     private final ChatRepository repository;
     private final CommandRepository commandRepository;
+    // Bridges this path's autonomous loop to the overlay's cross-app operating cue.
+    private final OperatingCueBus operatingCueBus;
     // Reports whether Atom's accessibility service is enabled. Kept as a
     // supplier so the ViewModel stays free of an Android Context and unit-testable.
     private final BooleanSupplier accessibilityEnabled;
@@ -34,11 +40,24 @@ public class ChatViewModel extends ViewModel {
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
     // Emitted when an action needs the accessibility service but it is disabled.
     private MutableLiveData<Event<ResolvedAction>> accessibilityRequired = new MutableLiveData<>();
+    // One-shot signal that the session is no longer valid: a pre-flight recognize()
+    // RPC came back gRPC UNAUTHENTICATED (the access/refresh token is rejected). The
+    // Activity observes this and redirects to Login instead of letting the dead
+    // session surface as a transient, auto-recovering error. This funnels into the
+    // same secure re-login pipeline as AtomApp.onSessionExpired() (SessionListener).
+    private MutableLiveData<Event<Boolean>> sessionExpired = new MutableLiveData<>();
     // True while the loop runs; the UI freezes input and shows progress until it ends.
     private MutableLiveData<Boolean> automationActive = new MutableLiveData<>(false);
     // A spoken confirmation question to voice + capture; one-shot Event. The Activity
     // speaks it, re-opens the mic, and feeds the transcript via submitSpokenConfirmation.
     private MutableLiveData<Event<String>> voiceConfirmationRequested = new MutableLiveData<>();
+    // One-shot signal that an autonomous chain COMPLETED (not aborted). The Activity uses
+    // it to confirm the finish tangibly — a distinct success sub-label + a confirmation
+    // haptic — so the user knows the task is done even when not watching the orb. Separate
+    // from chatResponse (which also fires for ordinary chat replies) so only real task
+    // completions get the affordance, and from the OperatingCueBus (whose one-shot Events
+    // the overlay service already consumes) to avoid a second Event consumer.
+    private MutableLiveData<Event<String>> taskCompleted = new MutableLiveData<>();
     // Hands the spoken reply back to the blocked loop thread (capacity 1).
     private final BlockingQueue<String> spokenConfirmation = new ArrayBlockingQueue<>(1);
     // How long the loop waits for the spoken reply before treating it as no answer.
@@ -52,11 +71,13 @@ public class ChatViewModel extends ViewModel {
 
     public ChatViewModel(ChatRepository repository, CommandRepository commandRepository,
                          ConversationRepository conversationRepository,
-                         BooleanSupplier accessibilityEnabled) {
+                         BooleanSupplier accessibilityEnabled,
+                         OperatingCueBus operatingCueBus) {
         this.repository = repository;
         this.commandRepository = commandRepository;
         this.conversationRepository = conversationRepository;
         this.accessibilityEnabled = accessibilityEnabled;
+        this.operatingCueBus = operatingCueBus;
         // The backend holds sensitive actions and asks out loud mid-loop; this gate
         // speaks the question and captures the spoken "sí/no" (hands-free).
         commandRepository.setConfirmationGate(new VoiceConfirmationGate());
@@ -66,8 +87,10 @@ public class ChatViewModel extends ViewModel {
     public LiveData<Boolean> getIsLoading() { return isLoading; }
     public LiveData<String> getErrorMessage() { return errorMessage; }
     public LiveData<Event<ResolvedAction>> getAccessibilityRequired() { return accessibilityRequired; }
+    public LiveData<Event<Boolean>> getSessionExpired() { return sessionExpired; }
     public LiveData<Boolean> getAutomationActive() { return automationActive; }
     public LiveData<Event<String>> getVoiceConfirmationRequested() { return voiceConfirmationRequested; }
+    public LiveData<Event<String>> getTaskCompleted() { return taskCompleted; }
 
     /** Free-form conversational message (token-streamed via StreamChat). */
     public void sendMessage(String prompt) {
@@ -102,10 +125,17 @@ public class ChatViewModel extends ViewModel {
         commandRepository.recognize(order, new CommandRepository.CommandCallback() {
             @Override
             public void onResolved(ResolvedAction action) {
-                if (!action.isExecutable()) {
-                    // Not a command -> conversational chat path (StreamChat) keeps
-                    // in-session context. isLoading stays true until it returns.
-                    sendMessage(order);
+                if (!action.isExecutable() && !action.awaitingConfirmation()) {
+                    String reply = action.outMessage();
+                    if (reply == null || reply.trim().isEmpty()) {
+                        // Rare: backend returned no grounded answer — fall back to the
+                        // StreamChat path rather than show a blank bubble.
+                        sendMessage(order);
+                        return;
+                    }
+                    isLoading.setValue(false);
+                    conversationRepository.saveAssistantMessage(reply);
+                    chatResponse.setValue(reply);
                     return;
                 }
                 isLoading.setValue(false);
@@ -126,7 +156,36 @@ public class ChatViewModel extends ViewModel {
                 isLoading.setValue(false);
                 errorMessage.setValue(error);
             }
+
+            @Override
+            public void onError(String error, Throwable cause) {
+                isLoading.setValue(false);
+                if (isUnauthenticated(cause)) {
+                    // Dead session: don't swallow it as a transient error. Surface a
+                    // one-shot event so the UI redirects to Login (secure pipeline).
+                    sessionExpired.setValue(new Event<>(Boolean.TRUE));
+                } else {
+                    // Non-auth failures keep the existing generic error behavior.
+                    errorMessage.setValue(error);
+                }
+            }
         });
+    }
+
+    /**
+     * True when {@code cause} (or any throwable it wraps) is a gRPC call that failed
+     * with {@link Status.Code#UNAUTHENTICATED} — i.e. the access/refresh token is no
+     * longer accepted and the user must re-authenticate. Walks the cause chain so a
+     * status wrapped by an intermediate layer is still detected.
+     */
+    private static boolean isUnauthenticated(Throwable cause) {
+        for (Throwable t = cause; t != null; t = t.getCause()) {
+            if (t instanceof StatusRuntimeException) {
+                return ((StatusRuntimeException) t).getStatus().getCode()
+                        == Status.Code.UNAUTHENTICATED;
+            }
+        }
+        return false;
     }
 
     /**
@@ -139,19 +198,26 @@ public class ChatViewModel extends ViewModel {
         commandRepository.executeAutonomous(order, new CommandRepository.AutomationCallback() {
             @Override
             public void onActionStarted(ResolvedAction action, int step) {
-                // Per-step progress; the boolean state already drives the indicator.
+                // Bridge to the overlay's cross-app cue (pulsing handle + live notification).
+                // The on-screen core (driven by automationActive) still covers the foreground.
+                operatingCueBus.started(action != null ? action.type() : null, step);
             }
 
             @Override
             public void onComplete(String finalMessage) {
                 automationActive.setValue(false);
+                operatingCueBus.finished(finalMessage, false);
                 conversationRepository.saveAssistantMessage(finalMessage);
                 chatResponse.setValue(finalMessage);
+                // Fire AFTER chatResponse so the Activity's success affordance (sub-label +
+                // haptic) lands on top of the ordinary showResponse render, not before it.
+                taskCompleted.setValue(new Event<>(finalMessage));
             }
 
             @Override
             public void onAborted(String message) {
                 automationActive.setValue(false);
+                operatingCueBus.finished(message, true);
                 if (message != null && !message.trim().isEmpty()) {
                     errorMessage.setValue(message);
                 }

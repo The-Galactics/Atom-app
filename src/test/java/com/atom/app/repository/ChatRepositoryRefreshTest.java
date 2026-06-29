@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.atom.app.model.ResponseModel;
@@ -34,6 +36,7 @@ class ChatRepositoryRefreshTest {
     @DisplayName("Refreshes the token before the chat RPC so a post-expiry send does not use a stale token")
     void refreshesTokenBeforeChatRpc() throws InterruptedException {
         AuthPortIn authUseCase = mock(AuthPortIn.class);
+        when(authUseCase.shouldRefresh()).thenReturn(true);
         StreamChatPortIn streamChat = mock(StreamChatPortIn.class);
 
         // Use a latch triggered inside the messageChat mock so we can await the
@@ -65,5 +68,36 @@ class ChatRepositoryRefreshTest {
         InOrder inOrder = inOrder(authUseCase, streamChat);
         inOrder.verify(authUseCase).refreshIfNeeded();
         inOrder.verify(streamChat).messageChat(any(UUID.class), any(UUID.class), any(String.class));
+    }
+
+    @Test
+    @DisplayName("Skips refreshIfNeeded when shouldRefresh returns false; chat still succeeds")
+    void skipsRefreshWhenNotNeeded() throws InterruptedException {
+        AuthPortIn authUseCase = mock(AuthPortIn.class);
+        when(authUseCase.shouldRefresh()).thenReturn(false);
+        StreamChatPortIn streamChat = mock(StreamChatPortIn.class);
+
+        CountDownLatch messageChatCalled = new CountDownLatch(1);
+        when(streamChat.messageChat(any(UUID.class), any(UUID.class), any(String.class)))
+                .thenAnswer(inv -> {
+                    messageChatCalled.countDown();
+                    return Stream.empty();
+                });
+
+        ChatRepository repo = new ChatRepository(
+                streamChat,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                authUseCase);
+
+        repo.askAtom("hola", new ChatRepository.ChatCallback() {
+            @Override public void onSuccess(ResponseModel response) {}
+            @Override public void onError(String error) {}
+        });
+
+        assertThat(messageChatCalled.await(5, TimeUnit.SECONDS))
+                .as("streamChat.messageChat was called within 5 s").isTrue();
+
+        verify(authUseCase, never()).refreshIfNeeded();
     }
 }

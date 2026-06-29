@@ -16,7 +16,6 @@
 
     <!-- Component sizing -->
     <dimen name="core_size">280dp</dimen>
-    <dimen name="core_glow_size">360dp</dimen>
     <dimen name="touch_target">48dp</dimen>
     <dimen name="mic_fab_size">68dp</dimen>
     <dimen name="mic_touch_size">88dp</dimen>     <!-- touch cell: headroom so the pulsed disc stays tappable -->

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Operating-state variant of bg_edge_handle: the SAME rounded edge-line shape (soft
+     outer glow + inset rounded core line, identical corners/insets), tinted teal so the
+     handle keeps its capsule form while Atom is driving the device. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#4035E0D8" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <item
+        android:left="2dp"
+        android:top="2dp"
+        android:right="2dp"
+        android:bottom="2dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/accent_teal" />
+            <corners android:radius="6dp" />
+        </shape>
+    </item>
+</layer-list>

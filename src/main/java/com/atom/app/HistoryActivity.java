@@ -64,4 +64,10 @@ public class HistoryActivity extends AppCompatActivity {
                 .setNegativeButton(R.string.action_confirm_no, null)
                 .show();
     }
+
+    @Override
+    public void finish() {
+        super.finish();
+        com.atom.app.ui.NavTransitions.apply(this);
+    }
 }

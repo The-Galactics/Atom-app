@@ -18,6 +18,8 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.atom.app.settings.AtomPreferences;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.tabs.TabLayoutMediator;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -64,6 +66,11 @@ public class OnboardingActivity extends AppCompatActivity {
         pager = findViewById(R.id.onboarding_pager);
         nextButton = findViewById(R.id.onboarding_next);
         pager.setAdapter(new OnboardingAdapter());
+
+        TabLayout indicator = findViewById(R.id.onboarding_indicator);
+        new TabLayoutMediator(indicator, pager, (tab, position) -> {
+            // Dots are non-interactive position markers; no label/click behaviour.
+        }).attach();
 
         // Update the action button label as the last page comes into view.
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
@@ -127,8 +134,8 @@ public class OnboardingActivity extends AppCompatActivity {
         preferences.setWakeWordName(preferences.getAssistantName());
         preferences.setOnboardingComplete(true);
 
-        // Route on to the main screen and close onboarding so back doesn't return here.
-        startActivity(new Intent(this, MainActivity.class));
+        // Route on to the first-run permission setup and close onboarding so back doesn't return here.
+        startActivity(new Intent(this, PermissionSetupActivity.class));
         finish();
     }
 

@@ -61,7 +61,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
+                android:background="@drawable/bg_card_input"
                 android:hint="@string/settings_your_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
@@ -79,7 +79,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/input_bar_height"
                 android:layout_marginTop="@dimen/space_s"
-                android:background="@drawable/bg_surface_card"
+                android:background="@drawable/bg_card_input"
                 android:hint="@string/settings_assistant_name_hint"
                 android:inputType="textPersonName"
                 android:paddingHorizontal="@dimen/space_m" />
@@ -110,7 +110,8 @@
                 <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/switch_tts"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/settings_tts_toggle" />
             </LinearLayout>
 
             <TextView
@@ -126,7 +127,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_s"
                 android:background="@drawable/bg_surface_card"
-                android:padding="@dimen/space_s" />
+                android:padding="@dimen/space_s"
+                android:contentDescription="@string/settings_tts_voice" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_preview_voice"
@@ -159,7 +161,8 @@
                     android:max="100"
                     android:progressDrawable="@drawable/volume_track"
                     android:thumb="@drawable/volume_thumb"
-                    android:splitTrack="false" />
+                    android:splitTrack="false"
+                    android:contentDescription="@string/settings_tts_speed" />
 
                 <TextView
                     android:id="@+id/tv_speed_value"
@@ -219,7 +222,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minWidth="0dp"
-                        android:text="@string/settings_perm_fix" />
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_overlay" />
                 </LinearLayout>
 
                 <!-- Accessibility row -->
@@ -256,7 +260,8 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minWidth="0dp"
-                        android:text="@string/settings_perm_fix" />
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_accessibility" />
                 </LinearLayout>
 
                 <!-- Microphone row -->
@@ -293,7 +298,123 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:minWidth="0dp"
-                        android:text="@string/settings_perm_fix" />
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_microphone" />
+                </LinearLayout>
+
+                <!-- Notifications row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_notifications"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_notifications_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_notifications"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_notifications" />
+                </LinearLayout>
+
+                <!-- Battery row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_battery"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_battery_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_battery"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/settings_perm_fix"
+                        android:contentDescription="@string/cd_fix_battery" />
+                </LinearLayout>
+
+                <!-- Autostart row (hidden on skins without an autostart concept) -->
+                <LinearLayout
+                    android:id="@+id/row_autostart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_m"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_perm_autostart"
+                            android:textAppearance="@style/TextAppearance.Atom.Label" />
+
+                        <TextView
+                            android:id="@+id/chip_autostart_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/space_xs"
+                            android:textAppearance="@style/TextAppearance.Atom.Overline" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_fix_autostart"
+                        style="@style/Widget.Atom.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minWidth="0dp"
+                        android:text="@string/permsetup_done"
+                        android:contentDescription="@string/cd_fix_autostart" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -329,7 +450,8 @@
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_wake_enable"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/settings_wake_enable" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -350,7 +472,8 @@
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switch_wake_screen_on"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/settings_wake_screen_on" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -368,7 +491,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/space_m"
                 android:background="@drawable/bg_surface_card"
-                android:padding="@dimen/space_s" />
+                android:padding="@dimen/space_s"
+                android:contentDescription="@string/settings_language" />
 
             <TextView
                 android:layout_width="wrap_content"

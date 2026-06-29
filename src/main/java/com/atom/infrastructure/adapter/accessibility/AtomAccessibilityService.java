@@ -30,7 +30,8 @@ import java.util.Locale;
  * <p>The OS owns this service's lifecycle (enabled by the user in Settings), so
  * the action layer reaches the live instance via {@link #getInstance()}.
  */
-public class AtomAccessibilityService extends AccessibilityService {
+public class AtomAccessibilityService extends AccessibilityService implements
+        com.atom.infrastructure.adapter.accessibility.capture.WindowSource {
 
     private static final String TAG = "AtomA11yService";
 
@@ -67,6 +68,10 @@ public class AtomAccessibilityService extends AccessibilityService {
     @Nullable
     private static volatile AtomAccessibilityService instance;
 
+    private volatile long lastMutationAtMs = 0L;
+    private volatile com.atom.infrastructure.adapter.accessibility.capture.ResilientScreenCapturer capturer;
+    private volatile com.atom.infrastructure.adapter.accessibility.oem.OemCompatibilityAdapter oemAdapter;
+
     /** The running service, or {@code null} when the user has not enabled it. */
     @Nullable
     public static AtomAccessibilityService getInstance() {
@@ -87,6 +92,32 @@ public class AtomAccessibilityService extends AccessibilityService {
         }
         instance = this;
         Log.i(TAG, "Atom accessibility service connected.");
+        // OEM detection can shell out to `getprop` if the SystemProperties reflection
+        // path fails, so run it off the main thread (ANR/StrictMode safe). Until it
+        // finishes, captureScreenResult() falls back to a single-pass legacy walk.
+        new Thread(this::initOemCapture, "atom-oem-detect").start();
+    }
+
+    /** Detects the OEM skin and builds the resilient capturer off the main thread. */
+    private void initOemCapture() {
+        try {
+            com.atom.infrastructure.adapter.accessibility.oem.PropertyReader props =
+                    new com.atom.infrastructure.adapter.accessibility.oem.SystemPropertyReader();
+            com.atom.infrastructure.adapter.accessibility.oem.OemFingerprint fingerprint =
+                    com.atom.infrastructure.adapter.accessibility.oem.OemDetector.detect(
+                            android.os.Build.MANUFACTURER, android.os.Build.BRAND, props);
+            com.atom.infrastructure.adapter.accessibility.oem.OemCompatibilityAdapter adapter =
+                    ((AtomApp) getApplication()).getAppContainer()
+                            .getOemAdapterRegistry().adapterFor(fingerprint);
+            this.capturer = new com.atom.infrastructure.adapter.accessibility.capture.ResilientScreenCapturer(
+                    this,
+                    new com.atom.infrastructure.adapter.accessibility.capture.ScreenCleaningPipeline(),
+                    new com.atom.infrastructure.adapter.accessibility.capture.UptimeClock());
+            this.oemAdapter = adapter; // published last: capture path requires BOTH non-null
+            Log.i(TAG, "OEM skin detected: " + fingerprint.skin());
+        } catch (Throwable t) {
+            Log.w(TAG, "OEM capture init failed; using legacy capture fallback.", t);
+        }
     }
 
     /** Opaque, fail-closed runtime security verdict (cached, computed off the main thread). */
@@ -101,7 +132,18 @@ public class AtomAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // FUTURE WORK: inspect the active window for node-targeted actions.
+        if (event == null) {
+            return;
+        }
+        switch (event.getEventType()) {
+            case AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED:
+            case AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED:
+            case AccessibilityEvent.TYPE_WINDOWS_CHANGED:
+                lastMutationAtMs = android.os.SystemClock.uptimeMillis();
+                break;
+            default:
+                break;
+        }
     }
 
     @Override
@@ -116,6 +158,24 @@ public class AtomAccessibilityService extends AccessibilityService {
         }
         Log.i(TAG, "Atom accessibility service unbound.");
         return super.onUnbind(intent);
+    }
+
+    // --- WindowSource implementation ----------------------------------------
+
+    @Override
+    public boolean isConnected() {
+        return instance == this;
+    }
+
+    @Override
+    public long lastMutationAtMs() {
+        return lastMutationAtMs;
+    }
+
+    @Override
+    public com.atom.infrastructure.adapter.accessibility.capture.WindowSession openSession() {
+        return new com.atom.infrastructure.adapter.accessibility.capture.AtomWindowSession(
+                this, lastMutationAtMs);
     }
 
     // --- global-action helpers (used by the action layer) -------------------
@@ -207,12 +267,22 @@ public class AtomAccessibilityService extends AccessibilityService {
         return sb.toString().trim();
     }
 
-    /**
-     * Walks the active window once and returns a structured map of nodes that
-     * carry signal (have text/contentDescription, or are clickable/editable/
-     * scrollable). Empty when no window is available.
-     */
+    /** Resilient, OEM-aware capture. Returns status + cleaned nodes. */
+    public com.atom.infrastructure.adapter.accessibility.capture.CaptureResult captureScreenResult() {
+        if (capturer == null || oemAdapter == null) {
+            // Not yet connected/configured: fall back to a single best-effort walk.
+            List<ScreenNode> nodes = legacyCaptureScreen();
+            return com.atom.infrastructure.adapter.accessibility.capture.CaptureResult.ready(nodes);
+        }
+        return capturer.capture(oemAdapter);
+    }
+
     public List<ScreenNode> captureScreen() {
+        return captureScreenResult().nodes();
+    }
+
+    /** Original single-pass walk, retained as a fallback before the capturer exists. */
+    private List<ScreenNode> legacyCaptureScreen() {
         List<ScreenNode> nodes = new ArrayList<>();
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) {

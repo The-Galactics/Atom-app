@@ -67,6 +67,14 @@ public class AppContainer {
     // dialogue through the same instance.
     private final ConversationRepository conversationRepository;
 
+    // App-scoped bridge from the chat path's autonomous loop to the overlay's cross-app
+    // operating cue. Built here so the chat ViewModel and the overlay share one instance.
+    private final com.atom.app.overlay.OperatingCueBus operatingCueBus =
+            new com.atom.app.overlay.OperatingCueBus();
+
+    // OEM-aware accessibility capture registry (stateless singleton adapters).
+    private final com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry oemAdapterRegistry;
+
     // Application context, retained for process-scoped permission/state checks
     // (e.g. whether the accessibility service the user must enable is running).
     private final Context appContext;
@@ -151,6 +159,10 @@ public class AppContainer {
         // Conversation transcript store. Uses the application context internally,
         // so holding it on this process-scoped container leaks nothing.
         this.conversationRepository = new ConversationRepository(context);
+
+        // OEM-aware capture registry. Stateless singletons; safe to build on any thread.
+        this.oemAdapterRegistry =
+                com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry.createDefault();
     }
 
     public StreamChatPortIn getExternalMessageUseCase() {
@@ -181,6 +193,11 @@ public class AppContainer {
         return inputValidationUsecase;
     }
 
+    /** Resolves the OEM-specific capture adapter for the device's detected skin. */
+    public com.atom.infrastructure.adapter.accessibility.oem.OemAdapterRegistry getOemAdapterRegistry() {
+        return oemAdapterRegistry;
+    }
+
     /** True if Atom's accessibility service is currently enabled by the user. */
     public boolean isAccessibilityEnabled() {
         return PermissionCoordinator.isAccessibilityServiceEnabled(appContext);
@@ -188,6 +205,10 @@ public class AppContainer {
 
     public ConversationRepository getConversationRepository() {
         return conversationRepository;
+    }
+
+    public com.atom.app.overlay.OperatingCueBus getOperatingCueBus() {
+        return operatingCueBus;
     }
 
     /** Returns the stored UUID for {@code key}, creating and persisting one if absent. */

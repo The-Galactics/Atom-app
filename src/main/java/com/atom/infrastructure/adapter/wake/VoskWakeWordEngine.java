@@ -27,8 +27,13 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
     private static final int SAMPLE_RATE = 16000;
     // Reject low-confidence / too-short detections — these are the noise blips
     // that cause random false triggers, while a real spoken name scores high.
-    private static final double MIN_CONF = 0.85;
-    private static final double MIN_DURATION_S = 0.20;
+    // Grammar mode inflates confidence (audio is forced onto the keyword or
+    // [unk]), so the bar is set high to cut false wakes during conversation.
+    private static final double MIN_CONF = 0.92;
+    // A name said on purpose lasts a beat; conversational blips are shorter.
+    private static final double MIN_DURATION_S = 0.30;
+    // Ignore repeat hits within this window (also damps bursts of false wakes).
+    private static final long DEBOUNCE_MS = 3000;
 
     private final Model model;        // owned by the caller (service)
     private final String keyword;     // normalized (lowercase, no accents)
@@ -150,7 +155,7 @@ public class VoskWakeWordEngine implements WakeWordEngine, RecognitionListener {
                 return; // too weak / too short → noise, ignore
             }
             long now = System.currentTimeMillis();
-            if (now - lastHitMs < 2000) {
+            if (now - lastHitMs < DEBOUNCE_MS) {
                 return; // debounce
             }
             lastHitMs = now;
