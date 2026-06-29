@@ -47,7 +47,9 @@ public class ChatRepository {
                 // interceptor is cache-only, so prime a fresh token here (on the
                 // background executor) before the protected chat RPC. Mirrors the same
                 // pattern used in CommandRepository#executeAutonomous.
-                authUseCase.refreshIfNeeded();
+                if (authUseCase.shouldRefresh()) {
+                    authUseCase.refreshIfNeeded();
+                }
                 long tAfterRefresh = System.nanoTime();
                 String text;
                 try (Stream<String> tokens =

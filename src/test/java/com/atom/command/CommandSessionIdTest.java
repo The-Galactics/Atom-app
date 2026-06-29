@@ -8,6 +8,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 import com.atom.app.repository.CommandRepository;
 import com.atom.application.port.in.ExecuteCommandPortIn;
@@ -49,6 +50,7 @@ class CommandSessionIdTest {
 
         ActionExecutorPortOut executor = mock(ActionExecutorPortOut.class);
         AuthPortIn authMock = mock(AuthPortIn.class);
+        when(authMock.shouldRefresh()).thenReturn(true);
 
         UUID shared = UUID.randomUUID();
         // Full @VisibleForTesting constructor: sessionUserId injected, synchronous poster.

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 import com.atom.app.model.ResponseModel;
 import com.atom.application.port.in.StreamChatPortIn;
@@ -34,6 +35,7 @@ class ChatRepositoryRefreshTest {
     @DisplayName("Refreshes the token before the chat RPC so a post-expiry send does not use a stale token")
     void refreshesTokenBeforeChatRpc() throws InterruptedException {
         AuthPortIn authUseCase = mock(AuthPortIn.class);
+        when(authUseCase.shouldRefresh()).thenReturn(true);
         StreamChatPortIn streamChat = mock(StreamChatPortIn.class);
 
         // Use a latch triggered inside the messageChat mock so we can await the

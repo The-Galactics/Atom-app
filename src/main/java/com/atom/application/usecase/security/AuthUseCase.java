@@ -18,6 +18,9 @@ public class AuthUseCase implements AuthPortIn {
     private final LongSupplier clockEpochSeconds;
     private final SessionListener sessionListener;
 
+    // In-memory mirror of the token expiry so shouldRefresh() needs no crypto read.
+    private volatile long cachedExpiresAtSeconds;
+
     public AuthUseCase(AuthGatewayPortOut gateway, TokenStore tokenStore,
                        LongSupplier clockEpochSeconds) {
         this(gateway, tokenStore, clockEpochSeconds, SessionListener.NONE);
@@ -29,6 +32,7 @@ public class AuthUseCase implements AuthPortIn {
         this.tokenStore = tokenStore;
         this.clockEpochSeconds = clockEpochSeconds;
         this.sessionListener = sessionListener;
+        this.cachedExpiresAtSeconds = tokenStore.getExpiresAtEpochSeconds();
     }
 
     @Override
@@ -92,6 +96,7 @@ public class AuthUseCase implements AuthPortIn {
             return refreshed.getAccessToken();
         } catch (AuthException e) {
             tokenStore.clear();
+            this.cachedExpiresAtSeconds = 0L;
             // The session is gone server-side (UNAUTHENTICATED): signal the UI to
             // redirect to Login now, not only on the next launch (US-10.3).
             if (e.getReason() == AuthException.Reason.SESSION_EXPIRED) {
@@ -104,10 +109,23 @@ public class AuthUseCase implements AuthPortIn {
     private TokenPair persist(TokenPair pair) {
         tokenStore.save(pair.getAccessToken(), pair.getRefreshToken(),
                 pair.getExpiresAtEpochSeconds());
+        this.cachedExpiresAtSeconds = pair.getExpiresAtEpochSeconds();
         if (pair.getUserId() != null && !pair.getUserId().isEmpty()) {
             tokenStore.saveUserId(pair.getUserId());
         }
         return pair;
+    }
+
+    /** Pure decision: refresh when expiry is unknown (&lt;= 0) or within the margin. */
+    public static boolean shouldRefresh(long nowSeconds, long cachedExpiresAtSeconds, long marginSeconds) {
+        return cachedExpiresAtSeconds <= 0L
+                || nowSeconds + marginSeconds >= cachedExpiresAtSeconds;
+    }
+
+    /** In-memory only (no EncryptedSharedPreferences read, no RPC). */
+    @Override
+    public synchronized boolean shouldRefresh() {
+        return shouldRefresh(clockEpochSeconds.getAsLong(), cachedExpiresAtSeconds, REFRESH_MARGIN_SECONDS);
     }
 
     /** The server-verified user id from the last successful auth, or null pre-auth. */

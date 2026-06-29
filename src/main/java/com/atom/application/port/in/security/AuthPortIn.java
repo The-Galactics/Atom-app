@@ -25,4 +25,8 @@ public interface AuthPortIn {
 
     /** The server-verified user id from the last successful auth, or {@code null} pre-auth. */
     String getServerUserId();
+
+    /** In-memory fast-path: true when the token is unknown or within the refresh margin.
+     *  No EncryptedSharedPreferences read, no RPC. */
+    boolean shouldRefresh();
 }

@@ -106,7 +106,7 @@ public class CommandRepository {
                 // cache-only, so prime a fresh token here (on the background executor)
                 // before the first protected RPC. A refresh failure surfaces through the
                 // shared catch below as a normal error outcome.
-                if (authUseCase != null) {
+                if (authUseCase != null && authUseCase.shouldRefresh()) {
                     authUseCase.refreshIfNeeded();
                 }
                 long tAfterRefresh = System.nanoTime();

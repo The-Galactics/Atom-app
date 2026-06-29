@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -49,6 +50,7 @@ class CommandRepositoryAutonomousTest {
         useCase = mock(ExecuteCommandPortIn.class);
         executorPort = mock(ActionExecutorPortOut.class);
         authUseCase = mock(AuthPortIn.class);
+        when(authUseCase.shouldRefresh()).thenReturn(true);
     }
 
     private static ResolvedAction action(ActionType type, boolean taskComplete) {
