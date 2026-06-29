@@ -17,6 +17,6 @@
 ## Technical Restrictions:
 
  1. **WI-FI :** Siempre debe haber conectividad a internet por consumo de API keys externas.
- 2. **Operative System:** Android 10 o superior por compatibilidad de librerias.
+ 2. **Operative System:** Android 8.0 Oreo (API 26) o superior por compatibilidad de librerias.
  3. **Minimum Hardware:** 4GB o superior por la potencia de la AI y el segundo plano.
-4. **Base Language:** Java 21 and Python 3.13.
+4. **Base Language:** Java 21 and Python 3.12.

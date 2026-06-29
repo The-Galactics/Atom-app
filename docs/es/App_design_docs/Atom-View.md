@@ -43,7 +43,7 @@ La identidad visual se ancla en el sistema de diseño Aether, optimizado para pa
 - **Capa frontend (la app):** **Android nativo** desarrollado en **Java 21**. Este repositorio contiene solo la UI/UX y la lógica del lado del cliente.
 - **Consumo de API:** **gRPC** (server-streaming `StreamChat` sobre `ai.proto`) para alcanzar el agente de IA en Python. _(Originalmente Retrofit 2 + OkHttp contra la API REST de Spring Boot; el transporte del chat se migró a gRPC — ver ADR-001 §6.)_
 - **Framework de UI:** **Material Design 3** con layouts XML personalizados para lograr la estética "Aether" (gradientes, glassmorphism y la animación del núcleo Atom).
-- **Carga de imágenes/animaciones:** **Lottie** para la animación pulsante del "núcleo Atom" y **Glide** para el procesamiento de imágenes.
+- **Animaciones:** **Vistas de Android personalizadas dibujadas a mano** (`AtomCoreView`, dibujo en Canvas con gradientes radiales/sweep y `BlurMaskFilter`) para la animación pulsante del "núcleo Atom", sin librerías externas (sin Lottie ni Glide). Los iconos se resuelven como vector drawables/mipmaps.
 - **Herramienta de build:** Gradle (configuración específica de Android).
 - **Landing page:** Un punto de entrada separado y de alta conversión desarrollado en **TypeScript** por el experto en TS (hospedado de forma independiente).
 

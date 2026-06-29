@@ -21,4 +21,4 @@
 | RNF-02 | UI | It must follow minimalist design principles to reduce cognitive load and have integrated assistive technology. |
 | RNF-03 | Availability | The application must function correctly with a minimum 3G Internet connection. |
 | RNF-04 | Performance | The response time between the request and the action must not exceed 4 seconds. |
-| RNF-05 | Security | The application must encrypt passwords to protect privacy (AES-256). |
+| RNF-05 | Security | The application must hash passwords to protect privacy (Argon2id). |

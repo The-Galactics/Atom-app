@@ -90,7 +90,7 @@ families through size, tracking and weight only. Styles live in `styles.xml`.
 
 | Drawable | Purpose |
 |---|---|
-| `bg_core_glow` | Radial lavender halo rendered behind the Lottie core |
+| `bg_core_glow` | Radial lavender halo rendered behind the Atom core |
 | `bg_mic_fab` | Filled accent gradient disc + ripple — the mic FAB |
 | `bg_pill_input` | Rounded pill input background with accent **focus** state |
 | `bg_surface_card` / `bg_surface_raised` | Rounded surfaces at elevation 1 / 2 |
@@ -109,7 +109,7 @@ wiring intact).
 filled circular primary action flanked by quiet "ghost" controls, and a pill
 input that slides up from the bottom.
 
-**Atom identity kept:** the Lottie "atom core" remains the protagonist, now seated
+**Atom identity kept:** the "atom core" (`AtomCoreView`) remains the protagonist, now seated
 in a soft radial `bg_core_glow` halo; the serif status line ("Listening", responses)
 keeps the assistant's contemplative voice; deep-onyx canvas and lavender accent are
 untouched.
@@ -207,7 +207,7 @@ Everyday use (on top of any app)
   mic) currently send a fixed smoke-test prompt. Wiring `RECORD_AUDIO` + the
   `transcribeAudio` round-trip (already on `ExternalInteractionPortOut`) is the
   next step; TTS playback via `synthesizeSpeech` follows.
-- **State-reactive core.** Drive distinct Lottie speeds/colors for
+- **State-reactive core.** Drive distinct `AtomCoreView` speeds/colors for
   idle / listening / thinking from the existing observers.
 - **Conversation history** store + screen (the History button is still a
   placeholder).

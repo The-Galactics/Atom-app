@@ -20,13 +20,13 @@ Desarrollar un sistema multi-agent, basado en AI generativa para crear respuesta
  - [ ] Tiempos de respuesta rápidos.
  - [ ] App intuitiva.
 
-### SQL Database:
+### Base de Datos (NoSQL - MongoDB):
 
  - [ ] Registro de usuarios.
  - [ ] Clasificación de usuarios (Pagó).
- - [ ] Implementar cifrado de datos sensibles (AES-256).
+ - [ ] Implementar hashing de credenciales (Argon2id) para datos sensibles.
  - [ ] Optimizar consultas para respuestas menores a 100ms (Sprint 1).
- - [ ] Tabla de perfiles para personalización de la AI (Nombre, Apodo, Personalidad) (Sprint 1).
+ - [ ] Colección de perfiles para personalización de la AI (Nombre, Apodo, Personalidad) (Sprint 1).
  
  ### Vectorial Database:
 
@@ -38,7 +38,7 @@ Desarrollar un sistema multi-agent, basado en AI generativa para crear respuesta
 
 ### AI (Artificial Inteligencia):
 
- - [ ] Conexión con las APIs de Nvidia (Sprint 1).
+ - [ ] Conexión con las APIs de Google Gemini (Sprint 1).
  - [ ] Interpretación de lenguaje natural (Sprint 1).
  - [ ] Creación de documentación para implementación en métodos.
  - [ ] Subida de documentación o método a la nube.
