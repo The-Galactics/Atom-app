@@ -53,6 +53,7 @@ public class AuthUseCase implements AuthPortIn {
     @Override
     public void logout() {
         tokenStore.clear();
+        this.cachedExpiresAtSeconds = 0L;
     }
 
     @Override
@@ -124,7 +125,7 @@ public class AuthUseCase implements AuthPortIn {
 
     /** In-memory only (no EncryptedSharedPreferences read, no RPC). */
     @Override
-    public synchronized boolean shouldRefresh() {
+    public boolean shouldRefresh() {
         return shouldRefresh(clockEpochSeconds.getAsLong(), cachedExpiresAtSeconds, REFRESH_MARGIN_SECONDS);
     }
 

@@ -25,4 +25,9 @@ class AuthRefreshDecisionTest {
     void skipsWhenComfortablyFresh() {
         assertThat(AuthUseCase.shouldRefresh(1000L, 2000L, 60L)).isFalse();
     }
+
+    @Test
+    void refreshesWhenExpiryNegative() {
+        assertThat(AuthUseCase.shouldRefresh(1000L, -1L, 60L)).isTrue();
+    }
 }

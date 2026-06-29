@@ -78,6 +78,7 @@ public final class SpeechRecognitionCoordinator {
         // The always-on wake word holds the mic; ask it to release first, then give
         // it a moment to free the AudioRecord before we start capturing.
         if (preferences.isWakeWordEnabled()) {
+            handoffHandler.removeCallbacksAndMessages(null);
             unregisterHandoffReceiver();
             final MicHandoffGate gate = new MicHandoffGate();
             handoffReceiver = new BroadcastReceiver() {
@@ -129,6 +130,7 @@ public final class SpeechRecognitionCoordinator {
 
     private void startListeningIfReady() {
         unregisterHandoffReceiver();
+        handoffHandler.removeCallbacksAndMessages(null);
         if (isListening && speechRecognizer != null) {
             speechRecognizer.startListening();
         }
