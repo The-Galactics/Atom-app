@@ -126,13 +126,11 @@ public class ChatViewModel extends ViewModel {
             @Override
             public void onResolved(ResolvedAction action) {
                 if (!action.isExecutable() && !action.awaitingConfirmation()) {
-                    // Not a command -> conversational chat path (StreamChat) keeps
-                    // in-session context. isLoading stays true until it returns.
-                    // A held sensitive action arrives as a NONE turn with
-                    // awaitingConfirmation set; that is still an order, so it must
-                    // fall through to the autonomous loop (which speaks the question
-                    // and captures the spoken sí/no), NOT the chat path.
-                    sendMessage(order);
+                    // Slice 2: ExecuteCommand now returns the real grounded chat answer in
+                    // outMessage(), so surface it directly — no second StreamChat round-trip.
+                    isLoading.setValue(false);
+                    conversationRepository.saveAssistantMessage(action.outMessage());
+                    chatResponse.setValue(action.outMessage());
                     return;
                 }
                 isLoading.setValue(false);
